@@ -37,10 +37,8 @@
 
   <script src="assets/toc.js"></script>
   <script>
-    const STORE_KEY = "bc-final-checked";
-    let checked = {};
-    try { checked = JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) {}
-    const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(checked)); } catch (e) {} };
+    let checked = loadChecked();
+    const save = () => saveChecked(checked);
 
     const toc = document.getElementById("toc");
     let total = 0;
@@ -163,6 +161,19 @@
       document.querySelectorAll(".chapter").forEach(updateCount);
       updateProgress();
     });
+
+    // ติ๊กจากหน้าบทแล้วกลับมา (ปุ่มย้อนกลับอาจคืนหน้าเดิมจาก cache) หรือติ๊กจากอีกแท็บ: อ่านสถานะใหม่
+    function refresh() {
+      checked = loadChecked();
+      document.querySelectorAll("#toc input[type=checkbox]").forEach((c) => {
+        c.checked = !!checked[c.dataset.key];
+        c.closest("li").classList.toggle("done", c.checked);
+      });
+      document.querySelectorAll(".chapter").forEach(updateCount);
+      updateProgress();
+    }
+    window.addEventListener("pageshow", (e) => { if (e.persisted) refresh(); });
+    window.addEventListener("storage", (e) => { if (e.key === CHECK_KEY) refresh(); });
 
     updateProgress();
   </script>

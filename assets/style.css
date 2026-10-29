@@ -210,6 +210,27 @@ table.t th { font-weight: 600; background: var(--code-bg); }
 .quiz details summary { cursor: pointer; color: var(--accent); font-size: 15px; }
 .quiz details div { margin-top: 6px; font-size: 15.5px; }
 
+/* ช่องติ๊ก "อ่านหัวข้อนี้แล้ว" ท้ายหัวข้อ (สร้างโดย chapter.js) */
+.mark-read {
+  display: inline-flex; align-items: center; gap: 10px; margin: 20px 0 4px;
+  padding: 8px 16px; border: 1px dashed var(--line); border-radius: 99px;
+  font-size: 15px; color: var(--muted); cursor: pointer; user-select: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.mark-read:hover { border-color: var(--accent); color: var(--ink); }
+.mark-read input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.mark-read .on { display: none; }
+.mark-read:has(input:checked) {
+  border-style: solid; border-color: var(--accent); color: var(--accent); font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.mark-read:has(input:checked) .off { display: none; }
+.mark-read:has(input:checked) .on { display: inline; }
+.mark-read:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mini-toc .read-count { margin-left: 10px; font-size: 13px; color: var(--accent); font-family: var(--mono); }
+.mini-toc li.read a { color: var(--muted); }
+.mini-toc li.read::marker { content: "✓  "; color: var(--accent); font-weight: 700; }
+
 .chapter-nav { display: flex; justify-content: space-between; gap: 12px; margin-top: 48px; flex-wrap: wrap; }
 .chapter-nav a {
   flex: 1 1 240px; text-decoration: none; background: var(--surface);

@@ -250,6 +250,16 @@ const BOOK = [
   },
 ];
 
+// เครื่องหมาย "อ่านแล้ว" ใช้ร่วมกันระหว่างสารบัญและหน้าบท
+// key ของแต่ละหัวข้อคือ "chXX-i" โดย i เริ่มที่ 0 และตรงกับ <section id="s{i+1}"> ในหน้าบท
+const CHECK_KEY = "bc-final-checked";
+function loadChecked() {
+  try { return JSON.parse(localStorage.getItem(CHECK_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveChecked(checked) {
+  try { localStorage.setItem(CHECK_KEY, JSON.stringify(checked)); } catch (e) {}
+}
+
 // ใช้ในหน้าบท: หาบทก่อน/ถัดไป
 function findNeighbors(id) {
   const all = BOOK.flatMap((p) => p.chapters);
