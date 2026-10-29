@@ -176,7 +176,7 @@ const BOOK = [
     desc: "DApp, DAO, โทเคน, Oracle และการเก็บรักษา private key",
     chapters: [
       {
-        id: "ch11", no: 11, status: "todo",
+        id: "ch11", no: 11, status: "ready",
         title: "DApp และ DAO",
         tag: "แอปพลิเคชัน",
         sections: [
@@ -189,20 +189,20 @@ const BOOK = [
         keywords: ["ABI", "provider", "governance token", "proposal", "reentrancy"],
       },
       {
-        id: "ch12", no: 12, status: "todo",
+        id: "ch12", no: 12, status: "ready",
         title: "NFT และ Snapshot",
         tag: "โทเคน",
         sections: [
           "12.1 Fungible กับ Non-fungible: ERC-20, ERC-721 และ ERC-1155",
           "12.2 โครงสร้าง NFT: tokenId, ownerOf, tokenURI และ metadata บน IPFS",
           "12.3 ขั้นตอน Mint, Transfer และ Approve",
-          "12.4 Snapshot: การบันทึกยอดถือครอง ณ บล็อกที่กำหนด เพื่อแจก Airdrop หรือกำหนดสิทธิ์ลงมติ",
+          "12.4 Snapshot: เลือกบล็อกที่ใช้ยอดถือครองเป็นเกณฑ์ เพื่อแจก Airdrop หรือนับสิทธิ์ลงมติ",
           "12.5 Snapshot.org: การลงมติแบบ off-chain โดยไม่เสีย gas",
         ],
         keywords: ["ERC-721", "tokenURI", "IPFS", "mint", "block number", "off-chain voting"],
       },
       {
-        id: "ch13", no: 13, status: "todo",
+        id: "ch13", no: 13, status: "ready",
         title: "Oracle",
         tag: "ข้อมูลภายนอกเชน",
         sections: [
@@ -215,14 +215,14 @@ const BOOK = [
         keywords: ["oracle problem", "Chainlink", "price feed", "VRF", "deterministic"],
       },
       {
-        id: "ch14", no: 14, status: "todo",
+        id: "ch14", no: 14, status: "ready",
         title: "Hardware Wallet",
         tag: "ความปลอดภัย",
         sections: [
           "14.1 สิ่งที่ wallet เก็บคือ private key ไม่ใช่ตัวเหรียญ",
           "14.2 Hot wallet กับ Cold wallet",
           "14.3 Seed phrase (BIP39) และ HD wallet (BIP32 / BIP44)",
-          "14.4 หลักการของ Hardware wallet: ลงนามธุรกรรมภายในอุปกรณ์ โดย key ไม่ออกจากเครื่อง",
+          "14.4 หลักการของ Hardware wallet: ลงลายเซ็นธุรกรรมภายในอุปกรณ์ โดย key ไม่ออกจากเครื่อง",
           "14.5 ภัยที่พบบ่อยและวิธีป้องกัน",
         ],
         keywords: ["cold storage", "seed phrase", "BIP39", "secure element", "offline signing"],

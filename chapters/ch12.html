@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 12 NFT และ Snapshot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p4" data-chapter="ch12">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 4 แอปพลิเคชันและระบบนิเวศ</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 12 · โทเคน</div>
+      <h1>NFT และ Snapshot</h1>
+      <p class="lead">บทที่ 6 แสดงว่า contract เก็บตัวเลขไว้ใน storage และแก้ตัวเลขนั้นตามกติกาในโค้ดได้ โทเคน (token) ทุกชนิดก็คือตัวเลขเหล่านี้ บทนี้เริ่มจากเหตุผลที่โทเคนต้องมีมาตรฐานกลาง และเหตุผลที่ NFT เก็บเพียงเจ้าของกับลิงก์ไปยังข้อมูลนอก chain จากนั้นอธิบายว่าขั้นตอน Mint, Transfer และ Approve ทำงานอย่างไร ช่วงท้ายบทพูดถึงการใช้โทเคนเป็นสิทธิ์ เช่น สิทธิ์รับ Airdrop หรือสิทธิ์ลงมติ (voting) ประเด็นแรกคือทำไมต้องนับยอดจากบล็อกที่กำหนดไว้ล่วงหน้า (snapshot block) ประเด็นที่สองคือทำไมหลายโครงการจึงลงมติแบบ off-chain ผ่าน Snapshot.org</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: ใครก็ออกโทเคนได้ แล้วจะใช้ร่วมกันและนับสิทธิ์อย่างไร</a></li>
+        <li><a href="#s1">Fungible กับ Non-fungible: ERC-20, ERC-721 และ ERC-1155</a></li>
+        <li><a href="#s2">โครงสร้าง NFT: tokenId, ownerOf, tokenURI และ metadata บน IPFS</a></li>
+        <li><a href="#s3">ขั้นตอน Mint, Transfer และ Approve</a></li>
+        <li><a href="#s4">Snapshot: เลือกบล็อกที่ใช้ยอดถือครองเป็นเกณฑ์</a></li>
+        <li><a href="#s5">Snapshot.org: การลงมติแบบ off-chain โดยไม่เสีย gas</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: ใครก็ออกโทเคนได้ แล้วจะใช้ร่วมกันและนับสิทธิ์อย่างไร</h2>
+
+        <p>บน Ethereum ใครก็เขียน contract ที่มี <code>mapping(address =&gt; uint256)</code> สำหรับเก็บยอดคงเหลือ (balance) ของแต่ละ address แล้วเขียนฟังก์ชันโอนเพิ่มเข้าไปได้ เพียงเท่านี้ก็มี "เหรียญ" ของตัวเองแล้ว ไม่ต้องสร้าง blockchain ใหม่เหมือนยุคก่อน Ethereum (บทที่ 5) แต่เมื่อออกเหรียญได้ง่ายขนาดนี้ ก็มีปัญหาสามข้อตามมา</p>
+
+        <ul>
+          <li><strong>เหรียญแต่ละโครงการคุยกันคนละภาษา:</strong> ถ้าโครงการหนึ่งตั้งชื่อฟังก์ชันโอนว่า <code>send</code> แต่อีกโครงการใช้ <code>transferTokens</code> ทั้ง wallet และ exchange ก็ต้องเขียนโค้ดแยกให้ทุกเหรียญ เหรียญใหม่จึงใช้ที่ไหนไม่ได้จนกว่าจะมีคนเขียนโค้ดรองรับ</li>
+          <li><strong>ของบางอย่างแทนกันไม่ได้:</strong> บัตรคอนเสิร์ตที่นั่งแถวหน้ากับแถวหลังมีราคาต่างกัน ไอเท็มในเกมแต่ละชิ้นมีคุณสมบัติต่างกัน ตารางยอดคงเหลือแบบเงินบอกได้เพียงว่าใครมีกี่หน่วย แต่บอกไม่ได้ว่าใครถือชิ้นไหน</li>
+          <li><strong>ยอดถือครองเปลี่ยนทุกบล็อก:</strong> เมื่อโครงการใช้โทเคนเป็นสิทธิ์ เช่น แจกรางวัลให้ผู้ถือ หรือให้ผู้ถือลงมติ ต้องตอบให้ได้ว่า "ถือ" หมายถึงถือ ณ เวลาใด ถ้าไม่กำหนดให้ชัด คนหนึ่งก็โหวตแล้วโอนโทเคนไปให้อีก address เพื่อโหวตซ้ำได้ และถ้าทุกคนต้องจ่าย gas เพื่อโหวต ผู้ถือรายย่อยก็มักไม่โหวตเลย</li>
+        </ul>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำถามที่ตามมา</th><th>คำตอบ</th><th>หัวข้อ</th></tr>
+            <tr><td>ทำอย่างไรให้ wallet และแอปทุกตัวรองรับโทเคนใหม่ได้ทันที</td><td>มาตรฐาน ERC-20, ERC-721, ERC-1155</td><td>12.1</td></tr>
+            <tr><td>ของที่ไม่ซ้ำกันเก็บอะไรไว้บน chain และเก็บภาพไว้ที่ไหน</td><td>tokenId, ownerOf, tokenURI และ metadata บน IPFS</td><td>12.2</td></tr>
+            <tr><td>โทเคนเกิดขึ้น ย้ายมือ และให้ผู้อื่นย้ายแทนได้อย่างไร</td><td>Mint, Transfer, Approve</td><td>12.3</td></tr>
+            <tr><td>นับสิทธิ์จากยอด ณ เวลาใดจึงโกงด้วยการโอนไปมาไม่ได้</td><td>Snapshot block</td><td>12.4</td></tr>
+            <tr><td>ทำอย่างไรให้ผู้ถือรายย่อยลงมติได้โดยไม่ต้องจ่าย gas</td><td>Snapshot.org (off-chain voting)</td><td>12.5</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 12.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">12.1</span>Fungible กับ Non-fungible: ERC-20, ERC-721 และ ERC-1155</h2>
+
+        <h3>ทำไมต้องมีมาตรฐานกลาง</h3>
+        <p>wallet ต้องรู้ว่าจะถามยอดของผู้ใช้ด้วยฟังก์ชันชื่ออะไร และ exchange ต้องรู้ว่าจะสั่งโอนอย่างไร ถ้าทุกโทเคนมีฟังก์ชันชื่อเดียวกันและรับพารามิเตอร์แบบเดียวกัน แอปเขียนโค้ดครั้งเดียวก็ใช้กับโทเคนใหม่ได้ทุกตัว ชุมชน Ethereum จึงตกลงรูปแบบนี้ไว้ในเอกสารที่เรียกว่า <strong>ERC (Ethereum Request for Comments)</strong> ERC เป็น EIP (Ethereum Improvement Proposal) ประเภทหนึ่งที่กำหนด interface ระดับแอปพลิเคชัน ได้แก่ ชื่อฟังก์ชัน พารามิเตอร์ ค่าที่คืน และ event ส่วนกติกาของโปรโตคอลไม่เปลี่ยน โหนดจึงไม่ต้องอัปเกรด ต่างจาก soft fork และ hard fork ในบทที่ 9</p>
+        <p>ไม่มีใครบังคับให้ contract ทำตามมาตรฐาน แต่ถ้า contract ไม่ทำตาม wallet และตลาดซื้อขาย (marketplace) ก็จะไม่รู้จักโทเคนนั้น ผู้ออกโทเคนจึงทำตามมาตรฐานเอง เพราะต้องการให้โทเคนของตนใช้งานได้ทุกที่</p>
+
+        <h3>Fungible token: ERC-20</h3>
+        <p><strong>Fungible</strong> แปลว่าแทนกันได้ ธนบัตร 100 บาทสองใบมีค่าเท่ากัน สลับกันได้โดยไม่มีใครเสียประโยชน์ การแบ่งย่อยเป็นคุณสมบัติอีกข้อหนึ่ง ไม่ได้อยู่ในความหมายของ fungible (ERC-20 แบ่งย่อยได้ตาม <code>decimals</code> ซึ่งอธิบายด้านล่าง) โทเคนที่ใช้เป็นเงิน หุ้น หรือคะแนนจึงต้องการเพียงตารางว่าแต่ละ address มีกี่หน่วย มาตรฐานของโทเคนแบบนี้คือ <strong>ERC-20</strong> ซึ่งมีผู้เสนอไว้ในปี 2015 ปัจจุบันเหรียญส่วนใหญ่บน Ethereum ใช้มาตรฐานนี้ เช่น USDC, LINK และ UNI</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ฟังก์ชัน / event ของ ERC-20</th><th>หน้าที่</th></tr>
+            <tr><td><code>totalSupply()</code></td><td>จำนวนโทเคนทั้งหมดที่มีอยู่</td></tr>
+            <tr><td><code>balanceOf(owner)</code></td><td>ยอดคงเหลือของ address หนึ่ง</td></tr>
+            <tr><td><code>transfer(to, amount)</code></td><td>ผู้เรียกโอนโทเคนของตัวเองให้ <code>to</code></td></tr>
+            <tr><td><code>approve(spender, amount)</code></td><td>อนุญาตให้ <code>spender</code> ใช้โทเคนของผู้เรียกได้ไม่เกิน <code>amount</code> (หัวข้อ 12.3)</td></tr>
+            <tr><td><code>allowance(owner, spender)</code></td><td>วงเงินที่ <code>owner</code> อนุญาตให้ <code>spender</code> เหลืออยู่เท่าใด</td></tr>
+            <tr><td><code>transferFrom(from, to, amount)</code></td><td>ผู้เรียก (ซึ่งต้องเป็น spender ที่ <code>from</code> อนุญาตไว้) โอนโทเคนของ <code>from</code> ไปให้ <code>to</code> แล้ววงเงินลดลงเท่ากับ <code>amount</code></td></tr>
+            <tr><td><code>event Transfer</code>, <code>event Approval</code></td><td><code>Transfer</code> ส่งทุกครั้งที่ยอดเปลี่ยน (รวมตอน mint และ burn) ส่วน <code>Approval</code> ส่งเมื่อเรียก <code>approve</code></td></tr>
+          </table>
+        </div>
+        <p>เมื่อชื่อฟังก์ชันและชนิดพารามิเตอร์ตรงกัน selector ก็ตรงกันด้วย (บทที่ 5) wallet เรียก <code>transfer</code> ด้วย calldata ที่ขึ้นต้นด้วย selector <code>0xa9059cbb</code> ค่านี้คือ 4 ไบต์แรกของ keccak256 ของ <code>transfer(address,uint256)</code> โทเคน ERC-20 ทุกตัวใช้ selector เดียวกัน wallet จึงสร้างธุรกรรมโอนโทเคนที่ไม่เคยรู้จักมาก่อนได้</p>
+        <p>EVM ไม่มีเลขทศนิยม (บทที่ 5) ERC-20 จึงเก็บยอดเป็นจำนวนเต็มในหน่วยที่เล็กที่สุด แล้วบอกแอปผ่านฟังก์ชัน <code>decimals()</code> ว่าต้องหารด้วย 10 ยกกำลังเท่าใด เหรียญส่วนใหญ่ใช้ <code>decimals = 18</code> ตามแบบ ETH กับ wei ยอด 1.5 โทเคนจึงเก็บเป็น 1,500,000,000,000,000,000 แต่บางเหรียญใช้ค่าอื่น เช่น USDC ใช้ 6 แอปที่สมมติว่าทุกเหรียญมีทศนิยม 18 หลักจึงแสดงยอดผิด</p>
+
+        <h3>Non-fungible token: ERC-721</h3>
+        <p><strong>Non-fungible</strong> แปลว่าแทนกันไม่ได้ ของแต่ละชิ้นต้องมีหมายเลขเฉพาะ และตารางที่ต้องเก็บกลับด้านจาก ERC-20 คือ "หมายเลขนี้เป็นของใคร" แทน "address นี้มีกี่หน่วย" มาตรฐาน <strong>ERC-721</strong> ให้โทเคนแต่ละชิ้นมี <code>tokenId</code> (ตัวเลข <code>uint256</code>) และเก็บ <code>mapping(uint256 =&gt; address)</code> จาก tokenId ไปยังเจ้าของ แต่ละ tokenId มีเจ้าของได้คนเดียวและแบ่งย่อยไม่ได้ เกม CryptoKitties ช่วงปลายปี 2017 ทำให้แนวคิดนี้เป็นที่รู้จัก และมีผู้เล่นมากจนเครือข่าย Ethereum แออัดอยู่ช่วงหนึ่ง ERC-721 ได้รับรองเป็นมาตรฐานอย่างเป็นทางการในปี 2018</p>
+
+        <h3>Multi-token: ERC-1155</h3>
+        <p>เกมหนึ่งอาจมีไอเท็มหลายร้อยชนิด บางชนิดมีหลายหน่วยและแทนกันได้ เช่น เหรียญทอง บางชนิดมีชิ้นเดียว เช่น มงกุฎของผู้ชนะ ถ้าใช้ ERC-20 หนึ่ง contract ต่อชนิด ผู้พัฒนาต้อง deploy หลายร้อย contract และผู้เล่นที่ส่งไอเท็มห้าชนิดให้เพื่อนต้องส่งธุรกรรม (transaction) ห้าครั้ง มาตรฐาน <strong>ERC-1155</strong> ซึ่งมีผู้เสนอในปี 2018 และเป็นทางการราวปี 2019 แก้ปัญหานี้ด้วยการเก็บไอเท็มทุกชนิดไว้ใน contract เดียว แต่ละชนิดมี <code>id</code> และมียอดแยกตาม address โดย id ที่มีหลายหน่วยทำหน้าที่เหมือน ERC-20 ส่วน id ที่มีเพียงหน่วยเดียวทำหน้าที่เหมือน NFT ฟังก์ชัน <code>safeBatchTransferFrom</code> ยังโอนหลาย id ได้ในธุรกรรมเดียว จึงประหยัด gas กว่า ข้อแลกเปลี่ยน (trade-off) คือ ERC-1155 ไม่มี <code>ownerOf</code> เพราะ id หนึ่งอาจมีผู้ถือหลายคน แอปที่ต้องการรู้ว่าใครถือ id ใดบ้างต้องรวบรวมจาก event</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 236" role="img" aria-label="เปรียบเทียบสิ่งที่สามมาตรฐานเก็บใน storage ERC-20 เก็บ address ไปยังยอด เช่น Alice 150.5 Bob 20 Carol 0.75 ERC-721 เก็บ tokenId ไปยังเจ้าของ เช่น หมายเลข 1 ของ Alice หมายเลข 2 ของ Bob ERC-1155 เก็บ id และ address ไปยังยอด เช่น ทอง id 1 Alice 500 Bob 120 และมงกุฎ id 7 Bob 1">
+            <g font-size="13" fill="currentColor">
+              <!-- ERC-20 -->
+              <text x="130" y="22" text-anchor="middle" font-weight="700" fill="#1f6e5a">ERC-20 (fungible)</text>
+              <text x="130" y="42" text-anchor="middle" font-size="11.5" fill="#6b655c" font-family="IBM Plex Mono, monospace">mapping(address =&gt; uint256)</text>
+              <rect x="20" y="56" width="220" height="24" fill="#f0ebe1"/>
+              <text x="32" y="73" font-size="12" font-weight="700">address</text>
+              <text x="228" y="73" font-size="12" font-weight="700" text-anchor="end">ยอด</text>
+              <text x="32" y="99">Alice</text><text x="228" y="99" text-anchor="end">150.5</text>
+              <text x="32" y="127">Bob</text><text x="228" y="127" text-anchor="end">20</text>
+              <text x="32" y="155">Carol</text><text x="228" y="155" text-anchor="end">0.75</text>
+              <rect x="20" y="56" width="220" height="108" fill="none" stroke="#e4ddd0"/>
+              <line x1="20" y1="108" x2="240" y2="108" stroke="#e4ddd0"/>
+              <line x1="20" y1="136" x2="240" y2="136" stroke="#e4ddd0"/>
+              <text x="130" y="192" text-anchor="middle" font-size="12">หนึ่งหน่วยของใครก็มีค่าเท่ากัน</text>
+              <text x="130" y="212" text-anchor="middle" font-size="12">แบ่งย่อยได้ตาม decimals</text>
+
+              <line x1="253" y1="10" x2="253" y2="222" stroke="#e4ddd0" stroke-width="1.5"/>
+
+              <!-- ERC-721 -->
+              <text x="380" y="22" text-anchor="middle" font-weight="700" fill="#b0417a">ERC-721 (non-fungible)</text>
+              <text x="380" y="42" text-anchor="middle" font-size="11.5" fill="#6b655c" font-family="IBM Plex Mono, monospace">mapping(uint256 =&gt; address)</text>
+              <rect x="270" y="56" width="220" height="24" fill="#f0ebe1"/>
+              <text x="282" y="73" font-size="12" font-weight="700">tokenId</text>
+              <text x="478" y="73" font-size="12" font-weight="700" text-anchor="end">เจ้าของ</text>
+              <text x="282" y="99">#1</text><text x="478" y="99" text-anchor="end">Alice</text>
+              <text x="282" y="127">#2</text><text x="478" y="127" text-anchor="end">Bob</text>
+              <text x="282" y="155">#3</text><text x="478" y="155" text-anchor="end">Alice</text>
+              <rect x="270" y="56" width="220" height="108" fill="none" stroke="#e4ddd0"/>
+              <line x1="270" y1="108" x2="490" y2="108" stroke="#e4ddd0"/>
+              <line x1="270" y1="136" x2="490" y2="136" stroke="#e4ddd0"/>
+              <text x="380" y="192" text-anchor="middle" font-size="12">แต่ละ tokenId มีเจ้าของคนเดียว</text>
+              <text x="380" y="212" text-anchor="middle" font-size="12">แบ่งย่อยไม่ได้ ไม่มี decimals</text>
+
+              <line x1="507" y1="10" x2="507" y2="222" stroke="#e4ddd0" stroke-width="1.5"/>
+
+              <!-- ERC-1155 -->
+              <text x="630" y="22" text-anchor="middle" font-weight="700" fill="#4a52c0">ERC-1155 (multi-token)</text>
+              <text x="630" y="42" text-anchor="middle" font-size="11.5" fill="#6b655c" font-family="IBM Plex Mono, monospace">id =&gt; (address =&gt; uint256)</text>
+              <rect x="520" y="56" width="220" height="24" fill="#f0ebe1"/>
+              <text x="530" y="73" font-size="12" font-weight="700">id</text>
+              <text x="640" y="73" font-size="12" font-weight="700" text-anchor="middle">address</text>
+              <text x="730" y="73" font-size="12" font-weight="700" text-anchor="end">ยอด</text>
+              <text x="530" y="99">1 ทอง</text><text x="640" y="99" text-anchor="middle">Alice</text><text x="730" y="99" text-anchor="end">500</text>
+              <text x="530" y="127">1 ทอง</text><text x="640" y="127" text-anchor="middle">Bob</text><text x="730" y="127" text-anchor="end">120</text>
+              <rect x="521" y="137" width="218" height="26" fill="#f8ecf3"/>
+              <text x="530" y="155">7 มงกุฎ</text><text x="640" y="155" text-anchor="middle">Bob</text><text x="730" y="155" text-anchor="end">1</text>
+              <rect x="520" y="56" width="220" height="108" fill="none" stroke="#e4ddd0"/>
+              <line x1="520" y1="108" x2="740" y2="108" stroke="#e4ddd0"/>
+              <line x1="520" y1="136" x2="740" y2="136" stroke="#e4ddd0"/>
+              <text x="630" y="192" text-anchor="middle" font-size="12">id ที่มีหลายหน่วยใช้แทนกันได้</text>
+              <text x="630" y="212" text-anchor="middle" font-size="12">id ที่มีหน่วยเดียวทำหน้าที่เหมือน NFT</text>
+            </g>
+          </svg>
+          <figcaption>สามมาตรฐานต่างกันที่รูปแบบตารางใน storage ERC-20 ตอบว่า address นี้มีกี่หน่วย ERC-721 ตอบว่า tokenId นี้เป็นของใคร ERC-1155 ตอบว่า address นี้มี id นี้กี่หน่วย จึงเก็บได้ทั้งของที่แทนกันได้และของชิ้นเดียว</figcaption>
+        </figure>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>ERC-20</th><th>ERC-721</th><th>ERC-1155</th></tr>
+            <tr><td>ประเภท</td><td>Fungible</td><td>Non-fungible</td><td>ทั้งสองแบบใน contract เดียว</td></tr>
+            <tr><td>สิ่งที่เก็บ</td><td>ยอดของแต่ละ address</td><td>เจ้าของของแต่ละ tokenId</td><td>ยอดของแต่ละ address แยกตาม id</td></tr>
+            <tr><td>แบ่งย่อย</td><td>ได้ (<code>decimals</code>)</td><td>ไม่ได้</td><td>ยอดใน contract เป็นจำนวนเต็ม แต่ metadata ของแต่ละ id ระบุ <code>decimals</code> สำหรับการแสดงผลได้ (ไม่บังคับ)</td></tr>
+            <tr><td>ฟังก์ชันอ่านการถือครอง</td><td><code>balanceOf(owner)</code></td><td><code>ownerOf(tokenId)</code></td><td><code>balanceOf(account, id)</code></td></tr>
+            <tr><td>โอนหลายรายการในธุรกรรมเดียว</td><td>ไม่มีในมาตรฐาน</td><td>ไม่มีในมาตรฐาน</td><td><code>safeBatchTransferFrom</code></td></tr>
+            <tr><td>ตัวอย่าง</td><td>stablecoin, governance token</td><td>งานศิลปะ, บัตรเข้างาน, ชื่อโดเมน (ENS)</td><td>ไอเท็มในเกม, ตั๋วหลายประเภท</td></tr>
+          </table>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ: โทเคนไม่ได้อยู่ใน wallet</span>
+          ยอดของโทเคน ERC-20 หรือเจ้าของของ NFT คือค่าใน storage ของ <strong>contract ของโทเคนนั้น</strong> wallet เก็บเพียง private key (บทที่ 14) แล้วเรียก <code>balanceOf</code> มาแสดง เมื่อโอนโทเคน wallet ส่งธุรกรรมไปเรียก contract ให้แก้ตาราง ส่วน ETH ไม่ใช่ ERC-20 เพราะเป็นยอดของบัญชีใน world state โดยตรง แอปที่รับเฉพาะ ERC-20 จึงต้องใช้ WETH (Wrapped ETH) ซึ่งเป็น contract ที่รับ ETH แล้วออก ERC-20 ให้ในจำนวนเท่ากัน
+        </div>
+      </section>
+
+      <!-- ==================== 12.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">12.2</span>โครงสร้าง NFT: tokenId, ownerOf, tokenURI และ metadata บน IPFS</h2>
+
+        <h3>ทำไมไม่เก็บภาพไว้บน chain</h3>
+        <p>ผู้ซื้อ NFT ต้องการรู้ว่าตัวเองเป็นเจ้าของอะไร คำตอบที่ตรงที่สุดคือเก็บภาพไว้ใน contract เลย แต่ storage เป็นที่เก็บที่แพงที่สุดบน Ethereum เพราะทุกโหนดทั่วโลกต้องเก็บข้อมูลนั้นตลอดไป (บทที่ 6) การเขียนค่าลง storage slot ว่างหนึ่ง slot (32 ไบต์) ใช้ประมาณ 20,000 gas ภาพขนาด 1 MB ต้องใช้ 32,768 slot รวมแล้วราว 655 ล้าน gas ตัวเลขนี้มากกว่า gas ที่บล็อกหนึ่งรับได้หลายเท่า จึงใส่ภาพลงในธุรกรรมเดียวไม่ได้ด้วยซ้ำ ถ้า gas price อยู่ที่ 10 Gwei ค่าเก็บภาพนี้จะสูงถึงราว 6.5 ETH NFT ส่วนใหญ่จึงเก็บบน chain เพียงสองอย่าง คือ <strong>ใครเป็นเจ้าของ tokenId ใด</strong> และ <strong>ลิงก์ไปยังรายละเอียด</strong> ส่วนภาพและคำอธิบายเก็บไว้นอก chain</p>
+
+        <h3>สามชั้นของ NFT</h3>
+        <ol>
+          <li><strong>บน chain:</strong> contract เก็บ <code>tokenId</code> กับเจ้าของ และมีฟังก์ชัน <code>tokenURI(tokenId)</code> คืนลิงก์ไปยังไฟล์ metadata</li>
+          <li><strong>metadata:</strong> ไฟล์ JSON ที่บอกชื่อ คำอธิบาย คุณสมบัติ และลิงก์ไปยังภาพ marketplace และ wallet อ่านไฟล์นี้เพื่อแสดง NFT</li>
+          <li><strong>ไฟล์สื่อ:</strong> ภาพ วิดีโอ หรือเสียง ซึ่งมีขนาดใหญ่ที่สุด</li>
+        </ol>
+
+<pre><code>{
+  "name": "Class Badge #7",
+  "description": "เหรียญที่ระลึกสำหรับผู้สอบผ่านวิชา Blockchain",
+  "image": "ipfs://bafybeih.../7.png",
+  "attributes": [
+    { "trait_type": "Year", "value": 2026 },
+    { "trait_type": "Grade", "value": "A" }
+  ]
+}</code></pre>
+        <p>ส่วนขยาย metadata ของ ERC-721 (ไม่บังคับ) กำหนด schema ของ JSON ที่ tokenURI ชี้ไป โดยมี <code>name</code>, <code>description</code> และ <code>image</code> ส่วน <code>attributes</code> เป็นรูปแบบที่ marketplace ใช้กันจนเป็นธรรมเนียม ไม่ได้อยู่ในมาตรฐาน</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 262" role="img" aria-label="NFT สามชั้น ชั้นแรกอยู่บน chain contract ตอบว่า ownerOf 7 คือ address 0xA1c3 และ tokenURI 7 คือ ipfs bafy ทับ 7 ลิงก์นี้ชี้ไปยังไฟล์ metadata บน IPFS ซึ่งมี name description image และ attributes ช่อง image ชี้ต่อไปยังไฟล์ภาพ 7.png บน IPFS">
+            <defs>
+              <marker id="arrNft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <text x="125" y="24" text-anchor="middle" font-weight="700" fill="#b0417a">เก็บบน Ethereum</text>
+              <text x="515" y="24" text-anchor="middle" font-weight="700" fill="#4a52c0">เก็บนอก chain (IPFS)</text>
+
+              <rect x="10" y="38" width="230" height="170" rx="10" fill="#f8ecf3" stroke="#b0417a" stroke-width="1.4"/>
+              <text x="125" y="62" text-anchor="middle" font-weight="700" font-size="12.5">contract ClassBadge</text>
+              <g font-family="IBM Plex Mono, monospace" font-size="11.5">
+                <text x="24" y="92">ownerOf(7)</text>
+                <text x="24" y="110" fill="#1f6e5a">→ 0xA1c3…9F2e</text>
+                <text x="24" y="138">tokenURI(7)</text>
+                <text x="24" y="156" fill="#1f6e5a">→ ipfs://bafy…/7</text>
+              </g>
+              <text x="125" y="192" text-anchor="middle" font-size="11.5" fill="#6b655c">ข้อมูลไม่กี่ไบต์ ทุกโหนดเก็บ</text>
+
+              <line x1="242" y1="152" x2="278" y2="152" stroke="#6b655c" stroke-width="1.3" marker-end="url(#arrNft)"/>
+
+              <rect x="280" y="38" width="240" height="170" rx="10" fill="#fff" stroke="currentColor"/>
+              <text x="400" y="62" text-anchor="middle" font-weight="700" font-size="12.5">metadata ของ #7 (JSON)</text>
+              <g font-family="IBM Plex Mono, monospace" font-size="11">
+                <text x="294" y="92">name: Class Badge #7</text>
+                <text x="294" y="110">description: …</text>
+                <text x="294" y="128" fill="#1f6e5a">image: ipfs://bafy…/7.png</text>
+                <text x="294" y="146">attributes: [ … ]</text>
+              </g>
+              <text x="400" y="192" text-anchor="middle" font-size="11.5" fill="#6b655c">ไฟล์เล็ก ระบุด้วย CID</text>
+
+              <line x1="522" y1="124" x2="558" y2="124" stroke="#6b655c" stroke-width="1.3" marker-end="url(#arrNft)"/>
+
+              <rect x="560" y="38" width="190" height="170" rx="10" fill="#fff" stroke="currentColor"/>
+              <text x="655" y="62" text-anchor="middle" font-weight="700" font-size="12.5">7.png (ภาพ)</text>
+              <circle cx="655" cy="118" r="38" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.5"/>
+              <text x="655" y="128" text-anchor="middle" font-size="28" font-weight="700" fill="#b85a10">7</text>
+              <text x="655" y="192" text-anchor="middle" font-size="11.5" fill="#6b655c">ไฟล์ใหญ่ ระบุด้วย CID</text>
+
+              <text x="380" y="240" text-anchor="middle" font-size="12">แก้ไฟล์ใดแม้หนึ่งไบต์ CID จะเปลี่ยน ลิงก์ที่ contract เก็บไว้จึงชี้ไปยังเนื้อหาเดิมเสมอ</text>
+            </g>
+          </svg>
+          <figcaption>บน chain มีเพียงเจ้าของกับลิงก์ ส่วน metadata และภาพอยู่บน IPFS ลิงก์แต่ละชั้นสร้างจากค่าแฮชของเนื้อหา คล้ายกับที่ block header อ้างถึงธุรกรรมผ่าน Merkle root ในบทที่ 3</figcaption>
+        </figure>
+
+        <h3>ฟังก์ชันของ ERC-721</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ฟังก์ชัน / event</th><th>หน้าที่</th></tr>
+            <tr><td><code>balanceOf(owner)</code></td><td>address นี้ถือ NFT ใน contract นี้กี่ชิ้น</td></tr>
+            <tr><td><code>ownerOf(tokenId)</code></td><td>tokenId นี้เป็นของใคร ถ้า tokenId ยังไม่มีหรือ burn ไปแล้ว ฟังก์ชันจะ revert</td></tr>
+            <tr><td><code>transferFrom</code>, <code>safeTransferFrom</code></td><td>โอน tokenId จาก <code>from</code> ไปยัง <code>to</code> (หัวข้อ 12.3)</td></tr>
+            <tr><td><code>approve</code>, <code>setApprovalForAll</code>, <code>getApproved</code>, <code>isApprovedForAll</code></td><td>ให้และตรวจสิทธิ์โอนแทน (approval) (หัวข้อ 12.3)</td></tr>
+            <tr><td><code>name()</code>, <code>symbol()</code>, <code>tokenURI(tokenId)</code></td><td>ส่วนขยาย metadata (metadata extension) ไม่บังคับ แต่ NFT แทบทุกตัวมี</td></tr>
+            <tr><td><code>supportsInterface(id)</code></td><td>ตามมาตรฐาน ERC-165 แอปใช้ฟังก์ชันนี้ถามว่า contract รองรับ ERC-721 หรือส่วนขยายใด</td></tr>
+            <tr><td><code>Transfer</code>, <code>Approval</code>, <code>ApprovalForAll</code></td><td>event ที่ marketplace และ wallet ใช้ติดตามความเป็นเจ้าของ</td></tr>
+          </table>
+        </div>
+
+        <h3>ทำไม NFT จึงนิยมใช้ลิงก์ IPFS แทน https</h3>
+        <p>ถ้า tokenURI ชี้ไปที่ <code>https://example.com/7.json</code> ผู้ที่คุมเซิร์ฟเวอร์นั้นเปลี่ยนภาพเป็นภาพอื่นได้ทุกเมื่อ และถ้าโครงการเลิกจ่ายค่าโดเมน ลิงก์ก็ใช้ไม่ได้ ผู้ซื้อยังเป็นเจ้าของ tokenId บน chain แต่ tokenId นั้นไม่ได้ชี้ไปยังภาพที่ซื้อมาแล้ว ปัญหานี้เกิดเพราะ URL บอกเพียง <strong>ตำแหน่ง</strong> ของไฟล์ (location addressing) ไม่ได้บอกว่าไฟล์ต้องมีเนื้อหาอะไร</p>
+        <p><strong>IPFS (InterPlanetary File System)</strong> ใช้วิธีตรงข้าม คือระบุไฟล์ด้วย <strong>เนื้อหา</strong> (content addressing) ตัวระบุนี้เรียกว่า <strong>CID (Content Identifier)</strong> CID คำนวณจากค่าแฮชของเนื้อหา ไม่ใช่ชื่อที่ใครตั้งเอง โหนดใดก็ส่งไฟล์ให้ได้ ผู้รับตรวจเองได้ว่าไฟล์ที่ได้มาให้ค่าแฮชตรงกับ CID หรือไม่ ถ้ามีใครแก้ภาพแม้หนึ่งพิกเซล CID ก็เปลี่ยน ลิงก์เดิมใน contract จึงยังชี้ไปยังเนื้อหาเดิมเท่านั้น CID รุ่นแรก (CIDv0) ขึ้นต้นด้วย <code>Qm</code> ส่วนรุ่นใหม่ (CIDv1) ที่พบบ่อยขึ้นต้นด้วย <code>bafy</code></p>
+
+        <h3>ทดลอง: แก้ metadata แล้ว CID ไม่ตรง</h3>
+        <p>สมมติให้ contract เก็บค่าแฮช SHA-256 ของ metadata ด้านล่างไว้ ลองแก้ข้อความแม้ตัวอักษรเดียว เช่น เปลี่ยนเกรดจาก A เป็น B แล้วสังเกตว่าค่าแฮชไม่ตรงกับที่ contract อ้างถึงอีกต่อไป CID จริงมีข้อมูลบอกชนิดของแฮชและรูปแบบ encoding ประกอบอยู่ด้วย และแบ่งไฟล์ใหญ่เป็นก้อน แต่หลักการตรวจเหมือนกัน</p>
+        <div class="hash-demo" id="cidDemo">
+          <label for="cidIn">metadata ที่ได้รับจาก IPFS</label>
+          <input id="cidIn" autocomplete="off" spellcheck="false" value='{"name":"Class Badge #7","image":"ipfs://bafy.../7.png","grade":"A"}'>
+          <label>SHA-256 ที่ contract อ้างถึง</label>
+          <output id="cidRef"></output>
+          <label>SHA-256 ของไฟล์ที่ได้รับ</label>
+          <output id="cidNow"></output>
+          <div class="diff" id="cidMsg"></div>
+        </div>
+
+        <div class="callout warn">
+          <span class="h">IPFS ไม่ได้รับประกันว่าไฟล์จะอยู่ตลอดไป</span>
+          content addressing รับประกันเพียงว่าไฟล์ที่ได้มาเป็นไฟล์เดิม แต่ไม่ได้รับประกันว่าจะมีคนเก็บไฟล์นั้นไว้ โหนด IPFS เก็บเฉพาะไฟล์ที่เลือกเก็บ (pin) ถ้าไม่มีโหนดใด pin ไฟล์ไว้เลย ลิงก์ก็เปิดไม่ได้ โครงการจึงต้องจ่ายค่าบริการ pinning หรือใช้ระบบเก็บไฟล์ที่จ่ายผลตอบแทนให้ผู้เก็บ เช่น Filecoin หรือ Arweave บางโครงการเก็บทุกอย่างไว้บน chain เช่น ให้ contract สร้างภาพ SVG จากโค้ด วิธีนี้แพงกว่า แต่ไม่ต้องพึ่งที่เก็บภายนอก ข้อควรตรวจอีกข้อคือ contract มีฟังก์ชันอย่าง <code>setBaseURI</code> ที่ให้ owner เปลี่ยนลิงก์ภายหลังได้หรือไม่ ถ้ามีและยังไม่ล็อก (freeze) ผู้ถือก็ต้องเชื่อใจ owner เหมือนกรณี https
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ: ซื้อ NFT แล้วได้อะไร</span>
+          ผู้ซื้อได้สิทธิ์ใน tokenId หนึ่งของ contract หนึ่ง ซึ่งบันทึกไว้บน chain และโอนต่อได้ ผู้ซื้อไม่ได้รับไฟล์ภาพมาเก็บเอง และไม่ได้ลิขสิทธิ์ (copyright) ของภาพ เว้นแต่โครงการจะเขียนเงื่อนไขทางกฎหมายมอบให้ ใครก็คัดลอกไฟล์ภาพได้ แต่คัดลอกความเป็นเจ้าของ tokenId บน chain ไม่ได้
+        </div>
+      </section>
+
+      <!-- ==================== 12.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">12.3</span>ขั้นตอน Mint, Transfer และ Approve</h2>
+
+        <h3>Mint: กติกาการสร้างโทเคนอยู่ในโค้ด</h3>
+        <p>โทเคนต้องมีจุดเริ่มต้น ขั้นตอนสร้างโทเคนใหม่และกำหนดเจ้าของคนแรกเรียกว่า <strong>mint</strong> นอก blockchain บริษัทที่ประกาศว่า "ผลิตจำนวนจำกัด 100 ชิ้น" อาจผลิตเพิ่มภายหลังโดยไม่มีใครรู้ บน Ethereum กติกาว่าใคร mint ได้ ราคาเท่าใด และมีได้สูงสุดกี่ชิ้น อยู่ในโค้ดที่ทุกคนอ่านได้ และเมื่อ deploy แล้วก็แก้โค้ดไม่ได้ (บทที่ 5) ผู้ซื้อจึงตรวจเพดานจำนวนได้เอง ตัวอย่างนี้ใช้ไลบรารี OpenZeppelin ซึ่งเขียนส่วนมาตรฐานของ ERC-721 ไว้แล้ว</p>
+
+<pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract ClassBadge is ERC721, Ownable {
+    uint256 public constant MAX_SUPPLY = 100;
+    uint256 public constant PRICE = 0.01 ether;
+    uint256 public nextId = 1;
+
+    constructor() ERC721("Class Badge", "BADGE") Ownable(msg.sender) {}
+
+    function mint() external payable {
+        require(msg.value == PRICE, "wrong price");
+        require(nextId &lt;= MAX_SUPPLY, "sold out");
+        uint256 id = nextId;
+        nextId += 1;                  // แก้ state ก่อนเรียกออกไปภายนอก
+        _safeMint(msg.sender, id);    // emit Transfer(address(0), msg.sender, id)
+    }
+
+    // tokenURI(7) จะได้ "ipfs://bafybeih.../7"
+    function _baseURI() internal pure override returns (string memory) {
+        return "ipfs://bafybeih.../";
+    }
+
+    function withdraw() external onlyOwner {
+        (bool ok, ) = payable(owner()).call{value: address(this).balance}("");
+        require(ok, "withdraw failed");
+    }
+}</code></pre>
+
+        <ul>
+          <li><strong>เพดานและราคา:</strong> <code>require</code> สองบรรทัดแรกทำให้ไม่มีใคร mint โดยจ่ายไม่ตรงราคาหรือ mint เกิน 100 ชิ้นได้ แม้แต่ owner</li>
+          <li><strong>ลำดับการแก้ state:</strong> contract เพิ่ม <code>nextId</code> ก่อนเรียก <code>_safeMint</code> เพราะ <code>_safeMint</code> จะเรียก contract ของผู้รับ (ถ้าผู้รับเป็น contract) ผู้รับจึงมีโอกาสเรียก <code>mint()</code> ซ้ำระหว่างนั้น ถ้า contract เพิ่ม <code>nextId</code> หลังเรียกออกไป การเรียกซ้ำจะตรวจเงื่อนไขด้วยค่าเดิมที่ยังไม่อัปเดต ใน contract ที่มีเงื่อนไขมากกว่านี้ เช่น จำกัดจำนวนต่อ address ผู้โจมตีจึง mint เกินที่กำหนดได้ เมื่อแก้ state ให้เสร็จก่อนเรียกออกไป การเรียกซ้ำจะเห็นค่าล่าสุดเสมอ ลำดับ Checks-Effects-Interactions นี้เป็นหลักเดียวกับที่บทที่ 7 และบทที่ 11 ใช้ป้องกัน reentrancy</li>
+          <li><strong>event ตอน mint:</strong> มาตรฐานกำหนดว่า เมื่อ mint ต้องส่ง <code>Transfer</code> โดย <code>from</code> เป็น <code>address(0)</code> และเมื่อเผาโทเคน (burn) ต้องส่ง <code>Transfer</code> โดย <code>to</code> เป็น <code>address(0)</code> แอปภายนอกจึงใช้กติกาเดียวติดตามได้ครบ ทั้งโทเคนที่เกิดใหม่ ย้ายมือ และหายไป</li>
+          <li><strong>ถอนเงิน:</strong> ETH ที่ผู้ซื้อจ่ายมาเข้าบัญชีของ contract ถ้าไม่เขียน <code>withdraw</code> ไว้ เงินนั้นจะติดอยู่ใน contract ตลอดไป เพราะ contract ไม่มี private key ให้ใครมาถอนแทน</li>
+        </ul>
+
+        <h3>Transfer: ทำไมต้องมี safeTransferFrom</h3>
+        <p>เมื่อโอน contract จะแก้ตาราง <code>tokenId =&gt; เจ้าของ</code> ให้ชี้ไปยังเจ้าของใหม่ ถ้าเจ้าของเดิมเคยให้สิทธิ์ผู้อื่นโอนแทน (approval) สำหรับ tokenId นี้ contract จะล้างสิทธิ์นั้นด้วย ถ้าไม่ล้าง ผู้ที่ได้สิทธิ์จากเจ้าของเดิมจะโอน NFT ออกจากมือเจ้าของใหม่ได้ (รายละเอียดของ approval อยู่ในหัวข้อย่อย Approve ด้านล่าง)</p>
+        <p>ERC-721 มีฟังก์ชันโอนสองแบบ แบบแรกคือ <code>transferFrom</code> ซึ่งแก้ตารางอย่างเดียว ถ้าผู้ส่งพิมพ์ address ปลายทางเป็น contract ที่ไม่มีโค้ดสำหรับส่ง NFT ออก NFT จะติดอยู่ใน contract นั้นตลอดไป ปัญหานี้เกิดกับ ERC-20 มาแล้วจริง ผู้ใช้จำนวนมากโอนโทเคนเข้า address ของ contract โทเคนเองโดยไม่ตั้งใจ และเอาคืนไม่ได้</p>
+        <p><code>safeTransferFrom</code> จึงเพิ่มการตรวจหนึ่งขั้น ถ้าผู้รับเป็น contract ฟังก์ชันจะเรียก <code>onERC721Received</code> ของผู้รับ และผู้รับต้องคืนค่า <code>0x150b7a02</code> (selector ของฟังก์ชันนั้น) เพื่อยืนยันว่ารองรับ NFT ถ้าผู้รับไม่มีฟังก์ชันนี้หรือคืนค่าอื่น การโอนจะ revert ทั้งหมด การโอนไปยัง EOA ไม่ต้องตรวจ เพราะ EOA มี private key ส่งต่อได้เสมอ ข้อแลกเปลี่ยนคือ เมื่อ contract เรียกผู้รับ ผู้รับก็รันโค้ดของตัวเองได้กลางธุรกรรม ผู้เขียน contract จึงต้องระวัง reentrancy ตามที่กล่าวไว้ข้างต้น</p>
+
+        <h3>Approve: ทำไมต้องให้ผู้อื่นโอนแทน</h3>
+        <p>Alice ต้องการขาย NFT #7 ให้ใครก็ได้ในราคา 1 ETH ปัญหาคือการแลกเปลี่ยนต้องเกิดพร้อมกัน ถ้า Alice โอน NFT ก่อน ผู้ซื้ออาจไม่จ่ายเงิน ถ้าผู้ซื้อจ่ายก่อน Alice อาจไม่โอน และ Alice ไม่ได้ออนไลน์รอผู้ซื้อตลอดเวลา ทางหนึ่งคือฝาก NFT ไว้กับ marketplace แต่ระหว่างนั้น NFT ไม่ได้อยู่ในชื่อ Alice และ Alice ต้องเชื่อใจผู้ดูแล marketplace</p>
+        <p>มาตรฐานจึงแยก "สิทธิ์โอน" ออกจาก "ความเป็นเจ้าของ" Alice ยังเป็นเจ้าของ NFT แต่ให้สิทธิ์ marketplace contract โอนแทนได้ เมื่อ Bob มาซื้อ marketplace contract รับเงินจาก Bob โอน NFT ให้ Bob และส่งเงินให้ Alice <strong>ภายในธุรกรรมเดียว</strong> ถ้าขั้นใดล้มเหลว ธุรกรรมจะ revert ทั้งหมด ไม่มีฝ่ายใดเสียเปรียบ</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 352" role="img" aria-label="ลำดับการขาย NFT ผ่าน marketplace ขั้นที่ 1 Alice เรียก setApprovalForAll ให้ Marketplace ใน NFT contract ขั้นที่ 2 Alice ประกาศขาย tokenId 7 ราคา 1 ETH จากนั้นในธุรกรรมเดียวของ Bob ขั้นที่ 3 Bob เรียก buy 7 พร้อมส่ง 1 ETH ขั้นที่ 4 Marketplace เรียก transferFrom Alice Bob 7 ที่ NFT contract ขั้นที่ 5 Marketplace ส่ง ETH ให้ Alice">
+            <defs>
+              <marker id="arrApv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <rect x="40" y="168" width="712" height="142" rx="10" fill="#fbf3f7" stroke="#b0417a" stroke-dasharray="5 4"/>
+              <text x="52" y="186" font-size="12" fill="#b0417a" font-weight="700">ธุรกรรมของ Bob: ขั้น 3–5 สำเร็จพร้อมกัน หรือ revert ทั้งหมด</text>
+
+              <rect x="20" y="14" width="120" height="36" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="80" y="37" text-anchor="middle" font-weight="700" font-size="12.5">Alice (ผู้ขาย)</text>
+              <rect x="225" y="14" width="150" height="36" rx="8" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="300" y="37" text-anchor="middle" font-weight="700" font-size="12.5">Marketplace contract</text>
+              <rect x="455" y="14" width="130" height="36" rx="8" fill="#f8ecf3" stroke="#b0417a"/>
+              <text x="520" y="37" text-anchor="middle" font-weight="700" font-size="12.5">NFT contract</text>
+              <rect x="630" y="14" width="120" height="36" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="690" y="37" text-anchor="middle" font-weight="700" font-size="12.5">Bob (ผู้ซื้อ)</text>
+
+              <g stroke="#c9c1b3" stroke-dasharray="3 4">
+                <line x1="80" y1="50" x2="80" y2="320"/>
+                <line x1="300" y1="50" x2="300" y2="320"/>
+                <line x1="520" y1="50" x2="520" y2="320"/>
+                <line x1="690" y1="50" x2="690" y2="320"/>
+              </g>
+
+              <g stroke="#6b655c" stroke-width="1.3">
+                <line x1="82" y1="92" x2="516" y2="92" marker-end="url(#arrApv)"/>
+                <line x1="82" y1="140" x2="296" y2="140" marker-end="url(#arrApv)"/>
+                <line x1="688" y1="222" x2="304" y2="222" marker-end="url(#arrApv)"/>
+                <line x1="302" y1="258" x2="516" y2="258" marker-end="url(#arrApv)"/>
+                <line x1="298" y1="294" x2="84" y2="294" marker-end="url(#arrApv)"/>
+              </g>
+
+              <g font-size="12">
+                <text x="300" y="84" text-anchor="middle">1) setApprovalForAll(Marketplace, true)</text>
+                <text x="300" y="110" text-anchor="middle" font-size="11" fill="#6b655c">Alice ส่งธุรกรรมครั้งเดียว NFT ยังเป็นของ Alice</text>
+                <text x="190" y="132" text-anchor="middle">2) ประกาศขาย #7 ราคา 1 ETH</text>
+                <text x="495" y="214" text-anchor="middle">3) buy(7) พร้อมส่ง 1 ETH</text>
+                <text x="410" y="250" text-anchor="middle">4) transferFrom(Alice, Bob, 7)</text>
+                <text x="528" y="276" font-size="11" fill="#6b655c">ตรวจสิทธิ์จากขั้น 1</text>
+                <text x="190" y="286" text-anchor="middle">5) ส่ง ETH ให้ Alice</text>
+              </g>
+              <text x="380" y="342" text-anchor="middle" font-size="12">หลังขั้น 4 ตารางใน NFT contract บันทึกว่า #7 เป็นของ Bob แล้ว</text>
+            </g>
+          </svg>
+          <figcaption>Alice ให้สิทธิ์ล่วงหน้าแล้วไม่ต้องออนไลน์รอ เมื่อ Bob ซื้อ การโอน NFT และการจ่ายเงินเกิดในธุรกรรมเดียวกัน ถ้า Bob ส่งเงินไม่ครบ หรือ Alice ยกเลิกสิทธิ์ไปแล้ว ขั้น 3–5 จะ revert ทั้งหมด marketplace จริงหลายแห่งให้ Alice ประกาศขายในขั้น 2 ด้วยลายเซ็น (signature) บนข้อความ ไม่ต้องส่งธุรกรรม จึงไม่เสีย gas</figcaption>
+        </figure>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ฟังก์ชัน</th><th>มาตรฐาน</th><th>ขอบเขตของสิทธิ์</th></tr>
+            <tr><td><code>approve(spender, amount)</code></td><td>ERC-20</td><td>ใช้โทเคนของผู้เรียกได้ไม่เกิน <code>amount</code> วงเงิน (allowance) ลดลงทุกครั้งที่เรียก <code>transferFrom</code> ยกเว้นวงเงินแบบไม่จำกัด (<code>type(uint256).max</code>) ซึ่งหลาย implementation ไม่ลดลงเลย</td></tr>
+            <tr><td><code>approve(to, tokenId)</code></td><td>ERC-721</td><td>โอน tokenId เดียวได้ สิทธิ์หายไปเมื่อ tokenId นั้นเปลี่ยนมือ ให้ได้ทีละหนึ่ง address ต่อ tokenId</td></tr>
+            <tr><td><code>setApprovalForAll(operator, true)</code></td><td>ERC-721, ERC-1155</td><td>โอน <strong>ทุก</strong> NFT ของผู้เรียกใน contract นั้นได้ รวมถึงชิ้นที่ได้มาภายหลัง จนกว่าจะเรียกด้วย <code>false</code></td></tr>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <span class="h">approval คือช่องทางที่ผู้โจมตีใช้บ่อยที่สุด</span>
+          ผู้ที่ได้รับ approval โอนทรัพย์สินออกไปได้โดยไม่ต้องขอลายเซ็นจากเจ้าของอีก แอปจริงหลายตัวก็ขอ approve แบบไม่จำกัดวงเงิน (<code>type(uint256).max</code>) เพื่อให้ผู้ใช้ไม่ต้องเสีย gas ส่ง approve ใหม่ทุกครั้ง ผู้ใช้จึงเคยชินกับการกดยืนยัน เว็บไซต์หลอกลวง (phishing) อาศัยความเคยชินนี้ ขอให้ผู้ใช้กด <code>setApprovalForAll</code> หรือ <code>approve</code> แบบไม่จำกัดวงเงินให้ address ของผู้โจมตี เมื่อผู้ใช้กดยืนยัน ผู้โจมตีก็โอนของออกไปทั้งหมดได้ทันที อีกกรณีหนึ่งคือ contract ที่ได้รับสิทธิ์เป็นของจริง แต่ภายหลังพบช่องโหว่ ผู้โจมตีก็ใช้สิทธิ์ที่ค้างไว้โอนของออกไปได้เช่นกัน วิธีป้องกันคืออ่านว่าธุรกรรมขอสิทธิ์อะไร ให้วงเงินเท่าที่ใช้ และยกเลิกสิทธิ์ (revoke) ที่ไม่ใช้แล้วด้วย <code>approve(spender, 0)</code> หรือ <code>setApprovalForAll(operator, false)</code>
+        </div>
+      </section>
+
+      <!-- ==================== 12.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">12.4</span>Snapshot: เลือกบล็อกที่ใช้ยอดถือครองเป็นเกณฑ์ เพื่อแจก Airdrop หรือนับสิทธิ์ลงมติ</h2>
+
+        <h3>ปัญหา: ยอดถือครองเปลี่ยนตลอดเวลา</h3>
+        <p>DAO ในบทที่ 11 ให้ผู้ถือ governance token ลงมติ โดยหนึ่งโทเคนเท่ากับหนึ่งเสียง ถ้า contract นับสิทธิ์จากยอด <strong>ณ ตอนที่แต่ละคนโหวต</strong> จะเกิดช่องโหว่อย่างน้อยสามแบบ</p>
+        <ul>
+          <li><strong>โหวตซ้ำด้วยโทเคนก้อนเดิม:</strong> Alice ถือ 100 โทเคน โหวตแล้วโอนทั้งหมดไปยัง address ที่สองของตัวเอง แล้วโหวตอีกครั้ง โทเคน 100 หน่วยจึงนับเป็น 200 เสียง ถ้า contract จำว่า address ใดโหวตแล้ว ก็ยังกันไม่ได้ เพราะ Alice สร้าง address ใหม่ได้ไม่จำกัด</li>
+          <li><strong>ยืมโทเคนมาโหวต:</strong> <strong>flash loan</strong> คือการกู้ที่ต้องคืนภายในธุรกรรมเดียวกัน ถ้าไม่คืน ธุรกรรมทั้งหมดจะ revert ผู้ให้กู้จึงไม่มีทางเสียเงิน และไม่ต้องเรียกหลักประกัน (collateral) ใครก็กู้โทเคนจำนวนมหาศาลได้ ผู้โจมตีกู้มาโหวตแล้วคืนในธุรกรรมเดียวกัน โดยเสียเพียงค่าธรรมเนียมเล็กน้อย</li>
+          <li><strong>ซื้อเสียงหลังเห็นข้อเสนอ:</strong> ผู้ที่ไม่เคยถือโทเคนเห็นข้อเสนอ (proposal) ที่ตนได้ประโยชน์ แล้วรีบซื้อโทเคนมาโหวต จากนั้นขายทิ้ง</li>
+        </ul>
+        <p>Airdrop มีปัญหาแบบเดียวกัน ถ้าโครงการประกาศว่า "จะแจกโทเคนให้ผู้ถือ" โดยไม่บอกว่านับ ณ เวลาใด ผู้คนก็แห่ซื้อหรือโอนโทเคนไปมาเพื่อให้ได้ส่วนแบ่งหลายครั้ง และไม่มีใครตรวจรายชื่อผู้ได้รับได้ เพราะแต่ละคนดูยอดในเวลาต่างกัน</p>
+
+        <h3>กลไก: ใช้หมายเลขบล็อกเป็นนาฬิกา</h3>
+        <p>ทางแก้คือประกาศไว้ก่อนว่าจะนับสิทธิ์จากยอดคงเหลือ <strong>ตอนจบบล็อกหมายเลข N</strong> และนับจริงหลังบล็อก N ผ่านไปแล้วเท่านั้น บล็อกนี้เรียกว่า <strong>snapshot block</strong> ที่ใช้หมายเลขบล็อกเป็นเกณฑ์ก็เพราะทุกโหนดเห็นตรงกันว่าหลังบล็อก N world state มีค่าเท่าใด และบล็อกที่ finalized แล้ว (บทที่ 8) ย้อนกลับไม่ได้ ใครจะคำนวณรายชื่อผู้มีสิทธิ์ซ้ำก็ได้ผลเดียวกัน</p>
+        <p>ถ้าประกาศเป็นวันเวลา เช่น "นับยอด ณ เที่ยงคืน" แต่ละคนจะได้ยอดคนละชุด เพราะนาฬิกาของแต่ละเครื่องเดินไม่ตรงกัน และไม่มีใครตอบได้ชัดว่าธุรกรรมที่เข้ามาใกล้เที่ยงคืนนับหรือไม่ หมายเลขบล็อกไม่มีปัญหานี้ ยอดตอนจบบล็อก N มีได้ชุดเดียว (บาง contract ใช้ timestamp ของบล็อกแทนหมายเลขบล็อก ซึ่งใช้ได้เช่นกัน เพราะ timestamp นั้นผูกกับบล็อก)</p>
+        <p>เมื่อกำหนด snapshot block แล้ว จะได้ผลดังนี้</p>
+        <ul>
+          <li>โอนโทเคนหลังบล็อก N ไม่ทำให้ผู้รับได้สิทธิ์เพิ่ม โทเคนก้อนเดิมจึงนับได้ครั้งเดียว</li>
+          <li>flash loan ต้องคืนภายในธุรกรรม ยอดตอนจบบล็อกจึงไม่รวมเงินกู้</li>
+          <li>ถ้า N เป็นบล็อกที่สร้างข้อเสนอหรือบล็อกก่อนหน้า คนที่ซื้อโทเคนหลังเห็นข้อเสนอจะไม่ได้สิทธิ์ แต่ถ้าตั้ง N ไว้หลังจากนั้น อย่างที่ Governor ตั้งไว้ที่บล็อกปัจจุบันบวก voting delay คนที่ซื้อระหว่างช่วงรอก็ยังได้สิทธิ์ (เหตุผลของ voting delay อยู่ในข้อ "Governor ใช้ค่านี้อย่างไร" ด้านล่าง)</li>
+        </ul>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 318" role="img" aria-label="ตารางยอดโทเคนตอนจบบล็อก 100 ถึง 107 proposal ประกาศที่บล็อก 102 ซึ่งเป็น snapshot block Alice มี 100 จนถึงบล็อก 103 และโหวต Yes ที่บล็อก 103 แล้วโอน 100 ให้ Carol ที่บล็อก 104 Carol โหวต Yes ที่บล็อก 105 Dave ยืม 1000 แล้วคืนในบล็อก 106 และโหวต No ยอดตอนจบบล็อกเป็น 0 Bob มี 50 ตลอดและโหวต No ที่บล็อก 107 ที่ snapshot block Alice มี 100 Bob 50 Carol 0 Dave 0">
+            <defs>
+              <marker id="arrSnap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <rect x="244" y="12" width="88" height="240" rx="6" fill="#fdf0e3" stroke="#e2761b" stroke-dasharray="5 4"/>
+
+              <g text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600">
+                <text x="120" y="32">#100</text><text x="204" y="32">#101</text><text x="288" y="32">#102</text><text x="372" y="32">#103</text>
+                <text x="456" y="32">#104</text><text x="540" y="32">#105</text><text x="624" y="32">#106</text><text x="708" y="32">#107</text>
+              </g>
+              <text x="288" y="48" text-anchor="middle" font-size="10.5" fill="#b85a10">ประกาศ proposal</text>
+
+              <g stroke="#e4ddd0">
+                <line x1="10" y1="58" x2="750" y2="58"/>
+                <line x1="10" y1="107" x2="750" y2="107"/>
+                <line x1="10" y1="153" x2="750" y2="153"/>
+                <line x1="10" y1="199" x2="750" y2="199"/>
+                <line x1="10" y1="245" x2="750" y2="245"/>
+              </g>
+
+              <g font-weight="700">
+                <text x="14" y="88">Alice</text>
+                <text x="14" y="134">Carol</text>
+                <text x="14" y="180">Dave</text>
+                <text x="14" y="226">Bob</text>
+              </g>
+
+              <g text-anchor="middle">
+                <text x="120" y="84">100</text><text x="204" y="84">100</text><text x="288" y="84" font-weight="700">100</text><text x="372" y="84">100</text>
+                <text x="456" y="84" fill="#6b655c">0</text><text x="540" y="84" fill="#6b655c">0</text><text x="624" y="84" fill="#6b655c">0</text><text x="708" y="84" fill="#6b655c">0</text>
+
+                <text x="120" y="130" fill="#6b655c">0</text><text x="204" y="130" fill="#6b655c">0</text><text x="288" y="130" font-weight="700">0</text><text x="372" y="130" fill="#6b655c">0</text>
+                <text x="456" y="130">100</text><text x="540" y="130">100</text><text x="624" y="130">100</text><text x="708" y="130">100</text>
+
+                <text x="120" y="176" fill="#6b655c">0</text><text x="204" y="176" fill="#6b655c">0</text><text x="288" y="176" font-weight="700">0</text><text x="372" y="176" fill="#6b655c">0</text>
+                <text x="456" y="176" fill="#6b655c">0</text><text x="540" y="176" fill="#6b655c">0</text><text x="624" y="176" fill="#6b655c">0*</text><text x="708" y="176" fill="#6b655c">0</text>
+
+                <text x="120" y="222">50</text><text x="204" y="222">50</text><text x="288" y="222" font-weight="700">50</text><text x="372" y="222">50</text>
+                <text x="456" y="222">50</text><text x="540" y="222">50</text><text x="624" y="222">50</text><text x="708" y="222">50</text>
+              </g>
+
+              <g text-anchor="middle" font-size="10.5" font-weight="700">
+                <text x="372" y="100" fill="#1f6e5a">โหวต Yes</text>
+                <text x="540" y="146" fill="#1f6e5a">โหวต Yes</text>
+                <text x="624" y="192" fill="#c2412d">โหวต No</text>
+                <text x="708" y="238" fill="#c2412d">โหวต No</text>
+              </g>
+
+              <line x1="476" y1="90" x2="476" y2="118" stroke="#6b655c" stroke-width="1.2" marker-end="url(#arrSnap)"/>
+              <text x="482" y="104" font-size="10.5" fill="#6b655c">โอน</text>
+
+              <text x="288" y="268" text-anchor="middle" font-size="12" font-weight="700" fill="#b85a10">snapshot block</text>
+              <text x="10" y="292" font-size="12">นับสิทธิ์จากคอลัมน์ #102 เท่านั้น: Alice 100, Bob 50, Carol 0, Dave 0 รวม 150 เท่ากับจำนวนโทเคนทั้งหมด</text>
+              <text x="10" y="310" font-size="12" fill="#6b655c">* Dave ยืม 1,000 แล้วคืนภายในธุรกรรมเดียวกันที่ #106 ยอดตอนจบบล็อกจึงเป็น 0</text>
+            </g>
+          </svg>
+          <figcaption>ตัวเลขในแต่ละช่องคือยอดตอนจบบล็อก ถ้านับจากยอด ณ ตอนโหวต Alice กับ Carol ใช้โทเคนก้อนเดียวกันโหวตสองครั้ง และ Dave ได้ 1,000 เสียงจากเงินกู้ ถ้านับจากคอลัมน์ snapshot ทั้งสองช่องโหว่หายไป</figcaption>
+        </figure>
+
+        <h3>ทดลอง: นับคะแนนสองแบบ</h3>
+        <p>ใช้เหตุการณ์เดียวกับแผนภาพ เลือกวิธีนับสิทธิ์แล้วเทียบผล สังเกตว่าคะแนนรวมแบบแรกเกินจำนวนโทเคนที่มีอยู่จริง</p>
+        <div class="hash-demo" id="snapDemo">
+          <label for="snapMode">นับสิทธิ์จาก</label>
+          <select id="snapMode">
+            <option value="live">ยอด ณ ตอนที่แต่ละคนโหวต (ไม่มี snapshot)</option>
+            <option value="snap">ยอดตอนจบบล็อก #102 (snapshot block)</option>
+          </select>
+          <div class="table-wrap" id="snapTable"></div>
+          <div class="stat" id="snapStat"></div>
+          <div class="diff" id="snapMsg"></div>
+        </div>
+
+        <h3>วิธีอ่านยอดย้อนหลัง</h3>
+        <p>contract ปกติเก็บเพียงยอดปัจจุบัน เมื่อแก้ยอดแล้ว ค่าเดิมก็หายไปจาก storage ระบบที่ต้องการยอด ณ บล็อก N จึงใช้วิธีใดวิธีหนึ่งในสองวิธีนี้</p>
+
+        <p><strong>วิธีที่ 1: อ่านจากโหนดนอก chain แล้วส่งผลขึ้น chain</strong> ทีมของโครงการเรียก <code>balanceOf</code> ผ่าน <code>eth_call</code> โดยระบุบล็อก N คำสั่งนี้ต้องใช้ <strong>archive node</strong> เพราะ full node ทั่วไปเก็บ state ย้อนหลังไว้เพียงช่วงสั้น ๆ จากนั้นทีมจึงสร้างรายชื่อผู้มีสิทธิ์</p>
+        <p>เมื่อได้รายชื่อแล้ว ยังต้องส่งโทเคนให้ผู้มีสิทธิ์ และขั้นนี้ก็มีปัญหาของตัวเอง ถ้า Airdrop มีผู้รับหลายแสน address ลูปที่ส่งโทเคนให้ทีละคนจะใช้ gas เกิน block gas limit (บทที่ 7) ส่วนการเก็บรายชื่อทั้งหมดบน chain ก็แพงเกินไป โครงการจึงสร้าง Merkle tree จากรายชื่อ เก็บเพียง Merkle root ขนาด 32 ไบต์ไว้ใน contract แล้วให้ผู้มีสิทธิ์มากดรับ (claim) เอง พร้อมแนบ Merkle proof แบบเดียวกับ SPV ในบทที่ 3 ผู้รับจ่าย gas ของตัวเอง และ contract ตรวจได้ว่าผู้รับอยู่ในรายชื่อจริง</p>
+        <p>ตัวอย่างที่รู้จักกันดีคือ Airdrop ของ Uniswap ในเดือนกันยายน 2020 ทุก address ที่เคยใช้ Uniswap ก่อนวันที่กำหนดได้รับคนละ 400 UNI และกดรับเองพร้อม Merkle proof ส่วนผู้ให้สภาพคล่อง (liquidity provider) ได้ส่วนเพิ่มตามสัดส่วน เกณฑ์ของ Uniswap คือประวัติการใช้งาน ไม่ใช่ยอดถือ แต่ใช้วิธีแจกแบบเดียวกัน</p>
+
+        <p><strong>วิธีที่ 2: ให้ contract บันทึกประวัติเอง (checkpoint)</strong> governance token ที่ทำตาม ERC20Votes ของ OpenZeppelin บันทึก checkpoint ทุกครั้งที่สิทธิ์โหวตของ address เปลี่ยน แต่ละ checkpoint เก็บคู่ (หมายเลขบล็อก, สิทธิ์โหวตใหม่) contract จึงตอบคำถาม "address นี้มีกี่เสียง ณ บล็อก N" ได้เอง โดยไม่ต้องพึ่งข้อมูลนอก chain โค้ดด้านล่างเป็นฉบับย่อที่ใช้หลักการเดียวกัน</p>
+
+<pre><code>struct Checkpoint { uint32 fromBlock; uint224 votes; }
+mapping(address =&gt; Checkpoint[]) private _checkpoints;
+
+function getPastVotes(address account, uint256 blockNumber) public view returns (uint256) {
+    require(blockNumber &lt; block.number, "block not yet mined");
+    Checkpoint[] storage ckpts = _checkpoints[account];
+    // binary search: หาตำแหน่งแรกที่ fromBlock &gt; blockNumber
+    uint256 low = 0;
+    uint256 high = ckpts.length;
+    while (low &lt; high) {
+        uint256 mid = (low + high) / 2;
+        if (ckpts[mid].fromBlock &gt; blockNumber) high = mid;
+        else low = mid + 1;
+    }
+    // checkpoint ก่อนหน้าตำแหน่งนั้นคือค่าล่าสุด ณ blockNumber
+    return high == 0 ? 0 : ckpts[high - 1].votes;
+}</code></pre>
+
+        <ul>
+          <li><strong>ทำไมต้องเป็นบล็อกในอดีต:</strong> <code>require(blockNumber &lt; block.number)</code> ห้ามถามยอดของบล็อกปัจจุบัน เพราะบล็อกปัจจุบันยังไม่จบ ผู้โจมตียังกู้ flash loan มาเพิ่มยอดในบล็อกเดียวกันได้ ยอดของบล็อกที่จบแล้วเท่านั้นที่ไม่มีใครเปลี่ยนได้อีก</li>
+          <li><strong>ทำไมใช้ binary search:</strong> address หนึ่งอาจมี checkpoint หลายพันรายการ ถ้าวนลูปทีละรายการ gas จะเพิ่มตามจำนวน checkpoint และวันหนึ่งอาจเกิน block gas limit (ปัญหาเดียวกับบทที่ 7) จำนวนรอบของ binary search เพิ่มตาม log ของจำนวนรายการ ค่า gas จึงมีขอบเขตชัดเจน</li>
+          <li><strong>ต้อง delegate ก่อนจึงมีสิทธิ์:</strong> ใน ERC20Votes ยอดโทเคนยังไม่นับเป็นเสียงจนกว่าผู้ถือจะเรียก <code>delegate</code> เพื่อมอบสิทธิ์ให้ address หนึ่ง ซึ่งเป็นตัวเองก็ได้ เหตุผลคือ ทุกครั้งที่เขียน checkpoint ต้องเสีย gas ถ้าผู้ถือยังไม่ delegate การโอนก็ไม่ต้องเขียน checkpoint ผู้ที่ไม่สนใจโหวตจึงไม่ต้องจ่าย gas ส่วนนี้ ผลที่ต้องระวังคือ ถ้าผู้ถือยังไม่ delegate ก่อน snapshot block สิทธิ์โหวตจะเป็นศูนย์ แม้มีโทเคนอยู่ในบัญชี</li>
+          <li><strong>Governor ใช้ค่านี้อย่างไร:</strong> เมื่อมีผู้สร้างข้อเสนอ Governor contract จะตั้ง snapshot block ไว้ที่บล็อกปัจจุบันบวก voting delay (บทที่ 11) แล้วนับเสียงของทุกคนด้วย <code>getPastVotes</code> ณ บล็อกนั้น ช่วงรอนี้มีไว้ให้ผู้ถือได้อ่านข้อเสนอและเรียก <code>delegate</code> ให้ทันก่อน snapshot block เพราะผู้ที่ยังไม่ delegate จะมีสิทธิ์เป็นศูนย์ ข้อแลกเปลี่ยนคือ คนที่เห็นข้อเสนอแล้วซื้อโทเคนและ delegate ระหว่างช่วงรอก็ได้สิทธิ์ด้วย แต่ flash loan ยังใช้ไม่ได้ เพราะเงินกู้ต้องคืนก่อนจบบล็อก</li>
+        </ul>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ: snapshot ไม่ได้ล็อกโทเคน</span>
+          snapshot ไม่ได้คัดลอก แช่แข็ง หรือล็อกโทเคนของใคร หลัง snapshot block ผู้ถือยังโอนหรือขายโทเคนได้ตามปกติ snapshot กำหนดเพียงว่าจะใช้ยอดของบล็อกใดเป็นเกณฑ์นับสิทธิ์ ผู้ที่ขายโทเคนหลัง snapshot ยังมีสิทธิ์โหวตหรือรับ Airdrop ตามยอดเดิม ส่วนผู้ซื้อไม่ได้สิทธิ์นั้น
+        </div>
+      </section>
+
+      <!-- ==================== 12.5 ==================== -->
+      <section id="s5">
+        <h2><span class="no">12.5</span>Snapshot.org: การลงมติแบบ off-chain โดยไม่เสีย gas</h2>
+
+        <h3>ปัญหาของการโหวตบน chain</h3>
+        <p>การโหวตผ่าน Governor contract ปลอดภัยเพราะทุกเสียงเป็นธุรกรรมที่ทุกโหนดตรวจ แต่ทุกเสียงก็ต้องจ่าย gas ด้วย ช่วงที่เครือข่ายแออัด ค่า gas ของการโหวตหนึ่งครั้งอาจสูงกว่ามูลค่าโทเคนของผู้ถือรายย่อย ผู้ถือรายย่อยจึงไม่โหวต ผลการลงมติขึ้นกับผู้ถือรายใหญ่ไม่กี่ราย นอกจากนี้ การ deploy Governor และ timelock ก็ยุ่งยากเกินไปสำหรับเรื่องเล็ก เช่น สำรวจความเห็นหรือเลือกโลโก้ใหม่</p>
+
+        <h3>กลไก: ลงลายเซ็นแทนการส่งธุรกรรม</h3>
+        <p><strong>Snapshot.org</strong> (เปิดให้ใช้ในปี 2020) แยกการโหวตออกจาก chain แต่ยังคำนวณสิทธิ์จากยอดบน chain ขั้นตอนเป็นดังนี้</p>
+        <ol>
+          <li>DAO สร้าง <strong>space</strong> ของตัวเอง (มักตั้งชื่อตามชื่อ ENS ของ DAO เช่น <code>mydao.eth</code>) และเลือก <strong>strategy</strong> คือสูตรคำนวณสิทธิ์โหวต เช่น ใช้ยอด ERC-20 ของโทเคนหนึ่ง หรือรวมยอดจากหลายโทเคน</li>
+          <li>ผู้สร้างข้อเสนอกำหนดตัวเลือก ระยะเวลา และ snapshot block</li>
+          <li>ผู้โหวตกดเลือกตัวเลือกบนเว็บ จากนั้น wallet แสดงข้อความตามรูปแบบ <strong>EIP-712</strong> (typed structured data) ให้อ่านว่ากำลังโหวตข้อเสนอใดด้วยตัวเลือกใด แล้วผู้โหวตลงลายเซ็นด้วย private key ในเครื่อง ลายเซ็นนี้ไม่ใช่ธุรกรรม ไม่ได้ส่งเข้า chain จึง<strong>ไม่เสีย gas</strong></li>
+          <li>เซิร์ฟเวอร์ของ Snapshot (hub) ตรวจลายเซ็น คำนวณสิทธิ์ของผู้โหวตจากยอด ณ snapshot block ตาม strategy แล้วเก็บคะแนนไว้ hub ยังสำรองข้อเสนอและคะแนนไว้บน IPFS ด้วย ใครก็ดึงลายเซ็นมาตรวจและนับคะแนนซ้ำได้</li>
+        </ol>
+        <p>ลายเซ็นพิสูจน์ได้ว่าเจ้าของ address โหวตจริง เพราะปลอมลายเซ็นไม่ได้ถ้าไม่มี private key (บทที่ 0) ส่วน snapshot block ทำให้โอนโทเคนไปโหวตซ้ำไม่ได้ตามหลักในหัวข้อ 12.4 ถ้า strategy คำนวณสิทธิ์จากยอดโทเคน การกระจายโทเคนไปไว้หลาย address ก็ไม่ช่วย เพราะยอดรวมยังเท่าเดิม แต่ถ้า space ใช้ strategy แบบหนึ่ง address หนึ่งเสียง ก็ต้องมีวิธีกันการสร้าง address ปลอมแยกต่างหาก</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 256" role="img" aria-label="เปรียบเทียบสองแบบ แบบ on-chain ผู้โหวตส่งธุรกรรม castVote และจ่าย gas ทุกคน Governor contract อ่าน getPastVotes นับคะแนนบน chain เมื่อผ่าน timelock แล้วใครก็เรียก execute ได้ แบบ Snapshot.org ผู้โหวตลงลายเซ็น EIP-712 ไม่เสีย gas Snapshot hub ตรวจลายเซ็นและคำนวณสิทธิ์ตาม strategy เก็บคะแนนนอก chain สำรองบน IPFS แล้ว multisig ของ DAO ส่งธุรกรรมตามผลซึ่งต้องเชื่อใจผู้ถือ multisig">
+            <defs>
+              <marker id="arrVote" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <text x="10" y="22" font-weight="700" fill="#4a52c0">On-chain voting (Governor contract)</text>
+              <g>
+                <rect x="10" y="32" width="170" height="66" rx="9" fill="#eceefb" stroke="#5a63d8"/>
+                <rect x="202" y="32" width="170" height="66" rx="9" fill="#eceefb" stroke="#5a63d8"/>
+                <rect x="394" y="32" width="170" height="66" rx="9" fill="#eceefb" stroke="#5a63d8"/>
+                <rect x="586" y="32" width="170" height="66" rx="9" fill="#eceefb" stroke="#5a63d8"/>
+              </g>
+              <g text-anchor="middle">
+                <text x="95" y="54" font-weight="700" font-size="12.5">ผู้โหวต</text>
+                <text x="95" y="72" font-size="12">ส่งธุรกรรม castVote</text>
+                <text x="95" y="89" font-size="11" fill="#c2412d">จ่าย gas ทุกคน</text>
+                <text x="287" y="54" font-weight="700" font-size="12.5">Governor contract</text>
+                <text x="287" y="72" font-size="12">อ่าน getPastVotes</text>
+                <text x="287" y="89" font-size="11" fill="#6b655c">ณ snapshot block</text>
+                <text x="479" y="54" font-weight="700" font-size="12.5">นับคะแนนบน chain</text>
+                <text x="479" y="72" font-size="12">ทุกโหนดตรวจซ้ำ</text>
+                <text x="479" y="89" font-size="11" fill="#6b655c">ทุกเสียงอยู่ในบล็อก</text>
+                <text x="671" y="54" font-weight="700" font-size="12.5">ใครก็เรียก execute ได้</text>
+                <text x="671" y="72" font-size="12">หลังพ้น timelock</text>
+                <text x="671" y="89" font-size="11" fill="#1f6e5a">ไม่ต้องเชื่อใจใคร</text>
+              </g>
+              <g stroke="#6b655c" stroke-width="1.3">
+                <line x1="181" y1="65" x2="200" y2="65" marker-end="url(#arrVote)"/>
+                <line x1="373" y1="65" x2="392" y2="65" marker-end="url(#arrVote)"/>
+                <line x1="565" y1="65" x2="584" y2="65" marker-end="url(#arrVote)"/>
+              </g>
+
+              <text x="10" y="138" font-weight="700" fill="#b0417a">Off-chain voting (Snapshot.org)</text>
+              <g>
+                <rect x="10" y="148" width="170" height="66" rx="9" fill="#f8ecf3" stroke="#b0417a"/>
+                <rect x="202" y="148" width="170" height="66" rx="9" fill="#f8ecf3" stroke="#b0417a"/>
+                <rect x="394" y="148" width="170" height="66" rx="9" fill="#f8ecf3" stroke="#b0417a"/>
+                <rect x="586" y="148" width="170" height="66" rx="9" fill="#fff" stroke="#b0417a" stroke-dasharray="5 4"/>
+              </g>
+              <g text-anchor="middle">
+                <text x="95" y="170" font-weight="700" font-size="12.5">ผู้โหวต</text>
+                <text x="95" y="188" font-size="12">ลงลายเซ็น EIP-712</text>
+                <text x="95" y="205" font-size="11" fill="#1f6e5a">ไม่เสีย gas</text>
+                <text x="287" y="170" font-weight="700" font-size="12.5">Snapshot hub</text>
+                <text x="287" y="188" font-size="12">ตรวจลายเซ็น</text>
+                <text x="287" y="205" font-size="11" fill="#6b655c">คำนวณสิทธิ์ตาม strategy</text>
+                <text x="479" y="170" font-weight="700" font-size="12.5">เก็บคะแนนนอก chain</text>
+                <text x="479" y="188" font-size="12">สำรองบน IPFS</text>
+                <text x="479" y="205" font-size="11" fill="#6b655c">ใครก็นับซ้ำได้</text>
+                <text x="671" y="170" font-weight="700" font-size="12.5">multisig ของ DAO</text>
+                <text x="671" y="188" font-size="12">ส่งธุรกรรมตามผล</text>
+                <text x="671" y="205" font-size="11" fill="#c2412d">ต้องเชื่อใจผู้ถือ multisig</text>
+              </g>
+              <g stroke="#6b655c" stroke-width="1.3">
+                <line x1="181" y1="181" x2="200" y2="181" marker-end="url(#arrVote)"/>
+                <line x1="373" y1="181" x2="392" y2="181" marker-end="url(#arrVote)"/>
+                <line x1="565" y1="181" x2="584" y2="181" marker-end="url(#arrVote)" stroke-dasharray="4 3"/>
+              </g>
+
+              <text x="380" y="244" text-anchor="middle" font-size="12">ทั้งสองแบบนับสิทธิ์จากยอด ณ snapshot block ต่างกันที่ใครจ่าย gas และใครเป็นผู้ทำตามผล</text>
+            </g>
+          </svg>
+          <figcaption>Snapshot.org ย้ายการโหวตออกไปนอก chain ผู้โหวตจึงไม่ต้องจ่าย gas ทั้งสองแบบต้องมีคนส่งธุรกรรมขั้นสุดท้าย แต่แบบ Governor ใครก็เรียก execute ได้ และ contract ทำได้เฉพาะคำสั่งที่ผ่านมติ ส่วนแบบ Snapshot.org ผู้ถือ multisig ตัดสินใจเองว่าจะส่งหรือไม่ เส้นประจึงแสดงขั้นที่ต้องเชื่อใจคน</figcaption>
+        </figure>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>On-chain (Governor)</th><th>Off-chain (Snapshot.org)</th></tr>
+            <tr><td>ค่าใช้จ่ายของผู้โหวต</td><td>จ่าย gas ทุกเสียง</td><td>ไม่เสีย gas ลงลายเซ็นข้อความเท่านั้น</td></tr>
+            <tr><td>ที่เก็บคะแนน</td><td>ในบล็อก ทุกโหนดเก็บ</td><td>เซิร์ฟเวอร์ของ Snapshot และสำรองบน IPFS</td></tr>
+            <tr><td>การทำตามผล</td><td>ผูกมัด: เมื่อผ่านเกณฑ์และพ้น timelock ใครก็เรียก <code>execute</code> ได้ และ contract ทำตามคำสั่ง (calldata) ที่ผ่านมติเท่านั้น</td><td>ไม่ผูกมัด (non-binding) ต้องมีคนส่งธุรกรรมตามผล</td></tr>
+            <tr><td>สิ่งที่ต้องเชื่อใจ</td><td>โค้ดของ Governor</td><td>ผู้ถือ multisig และความพร้อมของเซิร์ฟเวอร์ Snapshot</td></tr>
+            <tr><td>เหมาะกับ</td><td>เรื่องที่ต้องมีผลบน chain แน่นอน เช่น ย้ายเงินจากคลัง แก้ค่าของโปรโตคอล</td><td>สำรวจความเห็น ข้อเสนอเบื้องต้น และ DAO ที่ยังไม่มี Governor</td></tr>
+          </table>
+        </div>
+
+        <h3>ข้อจำกัดและทางเชื่อมกลับ chain</h3>
+        <p>ผลโหวตบน Snapshot.org ไม่ได้เปลี่ยน state ใด ๆ บน chain ถ้าข้อเสนอให้โอนเงิน 1 ล้าน USDC จากคลัง (treasury) ของ DAO ต้องมีคนส่งธุรกรรมนั้นเอง ผู้ส่งส่วนใหญ่คือกลุ่มผู้ถือ key ของ multisig wallet ของ DAO multisig wallet คือ contract ที่ส่งธุรกรรมได้เมื่อได้ลายเซ็นครบตามจำนวนที่กำหนด เช่น 4 ใน 7 ตัวที่ใช้กันมากคือ Safe ถ้าผู้ถือ key ไม่ทำตามผลโหวต ผู้ถือโทเคนก็บังคับไม่ได้ DAO จึงต้องกลับไปเชื่อใจคนกลุ่มเล็ก ๆ กลุ่มหนึ่ง เครื่องมืออย่าง oSnap พยายามปิดช่องนี้ด้วยการส่งผลโหวตเข้า chain ผ่าน optimistic oracle เมื่อมีผู้ส่งผลเข้ามาแล้ว ใครเห็นว่าผลไม่ตรงกับผลโหวตจริงก็คัดค้านได้ภายในเวลาที่กำหนด ถ้าไม่มีผู้คัดค้านภายในเวลานั้น ใครก็สั่งให้ contract ทำตามผลได้โดยไม่ต้องรอ multisig ผู้ส่งผลและผู้คัดค้านต้องวางเงินประกัน (bond) ฝ่ายที่ผิดจะเสียเงินนั้น จึงไม่มีใครอยากส่งผลปลอมหรือคัดค้านโดยไม่มีเหตุ หลักการของ oracle อยู่ในบทที่ 13</p>
+        <p>ข้อจำกัดอีกข้อคือ space admin เป็นผู้เลือก strategy ถ้า admin เลือกสูตรที่เอื้อต่อกลุ่มหนึ่ง ผลก็เอนเอียงได้ อีกกรณีหนึ่งคือเซิร์ฟเวอร์ของ Snapshot ไม่รับคะแนนบางเสียง ผู้โหวตทำได้เพียงชี้ให้เห็นว่าเสียงหายไป เพราะคะแนนไม่ได้อยู่ในบล็อกที่ทุกโหนดเก็บ</p>
+
+        <div class="callout warn">
+          <span class="h">ไม่เสีย gas ไม่ได้แปลว่าไม่มีความเสี่ยง</span>
+          ลายเซ็นโหวตของ Snapshot.org ไม่ได้ให้สิทธิ์ใดเหนือทรัพย์สิน แต่ลายเซ็น EIP-712 บางประเภทให้สิทธิ์จริง เช่น <code>permit</code> ตาม EIP-2612 คือ approve ของ ERC-20 ที่ทำผ่านลายเซ็น ผู้ที่ได้ลายเซ็นนี้ไปส่งขึ้น chain เองแล้วโอนโทเคนออกไปได้ เว็บไซต์หลอกลวงจึงมักขอลายเซ็นโดยอ้างว่าเป็นการ "เข้าสู่ระบบ" หรือ "โหวต" ก่อนลงลายเซ็นทุกครั้งต้องอ่านฟิลด์ที่ wallet แสดง ถ้าเห็นคำว่า permit, spender หรือ value แปลว่ากำลังให้สิทธิ์ใช้เงิน
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          การโหวตบน Snapshot.org <strong>ไม่ใช่ธุรกรรม</strong> จึงไม่เสีย gas ไม่ล็อกโทเคน และไม่มีบันทึกของแต่ละเสียงในบล็อก สิทธิ์โหวตคำนวณจากยอด ณ snapshot block ผลโหวตไม่ผูกมัด contract โดยอัตโนมัติ ต้องมีผู้ส่งธุรกรรมตามผล
+        </div>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li><strong>โจทย์:</strong> ใครก็ออกโทเคนได้ จึงต้องมีมาตรฐานกลางให้แอปรองรับได้ทันที ของที่แทนกันไม่ได้ต้องมีรูปแบบของตัวเอง และเมื่อใช้โทเคนเป็นสิทธิ์ ต้องกำหนดว่านับยอด ณ บล็อกใด</li>
+          <li><strong>12.1:</strong> ERC เป็นมาตรฐานระดับแอปพลิเคชัน ไม่ต้อง fork ERC-20 เก็บยอดของแต่ละ address (fungible, มี decimals) ERC-721 เก็บเจ้าของของแต่ละ tokenId (non-fungible) ERC-1155 เก็บหลาย id ใน contract เดียวและโอนเป็นชุดได้ โทเคนเป็นค่าใน storage ของ contract ไม่ได้อยู่ใน wallet</li>
+          <li><strong>12.2:</strong> เก็บภาพบน chain แพงเกินไป NFT จึงเก็บเจ้าของกับ <code>tokenURI</code> ซึ่งชี้ไปยัง metadata JSON และภาพ IPFS ระบุไฟล์ด้วย CID ที่คำนวณจากค่าแฮชของเนื้อหา ถ้าเนื้อหาเปลี่ยน ลิงก์ก็เปลี่ยนด้วย แต่ไฟล์ยังต้องมีผู้ pin ไว้</li>
+          <li><strong>12.3:</strong> mint ตามกติกาในโค้ดและส่ง <code>Transfer</code> จาก <code>address(0)</code> <code>safeTransferFrom</code> ตรวจว่า contract ผู้รับรองรับ NFT ด้วย <code>onERC721Received</code> approve แยกสิทธิ์โอนออกจากความเป็นเจ้าของ ทำให้ marketplace แลก NFT กับเงินได้ในธุรกรรมเดียว แต่ผู้โจมตีใช้ approval ที่กว้างเกินไปเป็นช่องทางหลัก</li>
+          <li><strong>12.4:</strong> ถ้านับสิทธิ์จากยอดปัจจุบัน ผู้โจมตีจะโหวตซ้ำด้วยการโอนหรือใช้ flash loan ได้ snapshot block กำหนดให้ใช้ยอดตอนจบบล็อกที่ผ่านไปแล้ว ยอดย้อนหลังอ่านได้จาก archive node (มักใช้ร่วมกับ Merkle airdrop) หรือจาก checkpoint ใน contract (ERC20Votes, <code>getPastVotes</code>) snapshot ไม่ได้ล็อกโทเคน</li>
+          <li><strong>12.5:</strong> Snapshot.org ให้ผู้โหวตลงลายเซ็น EIP-712 แทนการส่งธุรกรรม จึงไม่เสีย gas และคำนวณสิทธิ์จากยอด ณ snapshot block ตาม strategy แต่ผลไม่ผูกมัดบน chain ต้องอาศัย multisig หรือ oracle ส่งผลเข้า chain</li>
+        </ul>
+
+        <h3>คำศัพท์ที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำ</th><th>ความหมาย</th></tr>
+            <tr><td>ERC / EIP</td><td>มาตรฐานระดับแอปพลิเคชัน / ข้อเสนอปรับปรุง Ethereum ทุกประเภท ERC เป็น EIP ประเภทหนึ่ง</td></tr>
+            <tr><td>Fungible / Non-fungible</td><td>หน่วยใดก็มีค่าเท่ากันและสลับกันได้ / แต่ละชิ้นมี tokenId ของตัวเองและสลับกันไม่ได้ (การแบ่งย่อยเป็นอีกเรื่องหนึ่ง ERC-20 แบ่งได้ตาม decimals ส่วน id ใน ERC-1155 นับเป็นจำนวนเต็ม)</td></tr>
+            <tr><td><code>tokenId</code></td><td>หมายเลขเฉพาะของ NFT แต่ละชิ้นภายใน contract หนึ่ง</td></tr>
+            <tr><td><code>tokenURI</code> / metadata</td><td>ลิงก์ที่ contract คืนให้ / ไฟล์ JSON ที่มี name, description, image</td></tr>
+            <tr><td>IPFS, CID, pin</td><td>ระบบเก็บไฟล์แบบ content addressing / ตัวระบุไฟล์ที่คำนวณจากค่าแฮชของเนื้อหา / การเลือกเก็บไฟล์ไว้ในโหนด</td></tr>
+            <tr><td>mint / burn</td><td>สร้างโทเคนใหม่ (Transfer จาก <code>address(0)</code>) / ทำลายโทเคน (Transfer ไปยัง <code>address(0)</code>)</td></tr>
+            <tr><td><code>approve</code> / <code>setApprovalForAll</code> / allowance</td><td>ให้สิทธิ์โอนแทนบางส่วน / ให้สิทธิ์โอน NFT ทุกชิ้น / วงเงินที่เหลือของ ERC-20</td></tr>
+            <tr><td>Airdrop</td><td>การแจกโทเคนให้รายชื่อ address ที่คำนวณจากเกณฑ์ เช่น ยอด ณ snapshot block</td></tr>
+            <tr><td>snapshot block</td><td>บล็อกที่กำหนดล่วงหน้าเพื่อใช้ยอดตอนจบบล็อกนั้นเป็นเกณฑ์นับสิทธิ์</td></tr>
+            <tr><td>flash loan</td><td>การกู้ที่ต้องคืนในธุรกรรมเดียวกัน ไม่ต้องมีหลักประกัน</td></tr>
+            <tr><td>checkpoint, delegate</td><td>บันทึก (บล็อก, สิทธิ์โหวต) ทุกครั้งที่สิทธิ์เปลี่ยน / มอบสิทธิ์โหวตให้ address หนึ่ง รวมถึงตัวเอง</td></tr>
+            <tr><td>archive node</td><td>โหนดที่เก็บ state ของทุกบล็อกย้อนหลัง จึงตอบยอด ณ บล็อกเก่าได้</td></tr>
+            <tr><td>space, strategy (Snapshot.org)</td><td>พื้นที่ของ DAO หนึ่ง / สูตรคำนวณสิทธิ์โหวตจากข้อมูลบน chain</td></tr>
+            <tr><td>EIP-712</td><td>รูปแบบข้อความที่มีโครงสร้าง ให้ wallet แสดงฟิลด์ให้อ่านก่อนลงลายเซ็น</td></tr>
+          </table>
+        </div>
+
+        <h3>ตัวเลขที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>รายการ</th><th>ค่า</th></tr>
+            <tr><td><code>decimals</code> ที่พบบ่อยของ ERC-20</td><td>18 (USDC ใช้ 6)</td></tr>
+            <tr><td>ขนาด storage slot / gas ของการเขียน slot ว่าง</td><td>32 ไบต์ / ประมาณ 20,000 gas</td></tr>
+            <tr><td>address ที่ใช้ใน event ของ mint และ burn</td><td><code>address(0)</code> = <code>0x000…000</code></td></tr>
+            <tr><td>ค่าที่ <code>onERC721Received</code> ต้องคืน</td><td><code>0x150b7a02</code></td></tr>
+            <tr><td>selector ของ <code>transfer(address,uint256)</code> ใน ERC-20</td><td><code>0xa9059cbb</code></td></tr>
+            <tr><td>CIDv0 / CIDv1 ขึ้นต้นด้วย</td><td><code>Qm</code> / <code>bafy</code> (ที่พบบ่อย)</td></tr>
+            <tr><td>ERC-20 / ERC-721 / ERC-1155</td><td>เสนอปี 2015 / เป็นทางการปี 2018 / เป็นทางการราวปี 2019</td></tr>
+            <tr><td>Uniswap airdrop</td><td>กันยายน 2020, 400 UNI ต่อ address</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. เกมหนึ่งมีเหรียญทองที่มีหลายล้านหน่วย และมีดาบในตำนานที่มีเล่มเดียว ผู้พัฒนาต้องการให้ผู้เล่นส่งของหลายชนิดให้เพื่อนในธุรกรรมเดียว มาตรฐานใดเหมาะที่สุด</p>
+          <ol><li>ก. ERC-20</li><li>ข. ERC-721</li><li>ค. ERC-1155</li><li>ง. ERC-165</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> ERC-1155 เก็บทั้ง id ที่มีหลายหน่วย (เหรียญทอง) และ id ที่มีหน่วยเดียว (ดาบ) ไว้ใน contract เดียว และมี <code>safeBatchTransferFrom</code> สำหรับโอนหลาย id ในธุรกรรมเดียว ERC-165 เป็นเพียงมาตรฐานสำหรับถามว่า contract รองรับ interface ใด</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. ทำไม NFT ส่วนใหญ่จึงไม่เก็บภาพไว้ใน contract และทำไม tokenURI แบบ <code>ipfs://</code> จึงน่าเชื่อถือกว่า <code>https://</code></p>
+          <details><summary>ดูเฉลย</summary><div>storage บน Ethereum แพงมาก เพราะทุกโหนดต้องเก็บตลอดไป ภาพ 1 MB ใช้ gas หลายร้อยล้าน ซึ่งเกินที่บล็อกหนึ่งรับได้ NFT จึงเก็บเพียงเจ้าของกับลิงก์ ส่วนลิงก์แบบ <code>https://</code> บอกเพียงตำแหน่งของไฟล์ ผู้คุมเซิร์ฟเวอร์จึงเปลี่ยนไฟล์หรือปล่อยให้ลิงก์ใช้ไม่ได้ ลิงก์แบบ <code>ipfs://</code> ระบุไฟล์ด้วย CID ที่คำนวณจากค่าแฮชของเนื้อหา ถ้าเนื้อหาเปลี่ยน CID ก็เปลี่ยน ลิงก์เดิมจึงชี้ไปยังเนื้อหาเดิมเท่านั้น</div></details>
+        </div>
+
+        <div class="q">
+          <p>3. โครงการ NFT เก็บ metadata บน IPFS แต่ภายหลังเลิกจ่ายค่า pinning และไม่มีโหนดใดเก็บไฟล์ไว้ ผู้ถือ NFT จะเป็นอย่างไร</p>
+          <details><summary>ดูเฉลย</summary><div>ผู้ถือยังเป็นเจ้าของ tokenId ตามที่บันทึกใน contract และยังโอนหรือขายได้ แต่ไม่มีโหนดใดส่งไฟล์ตาม CID ที่ tokenURI ชี้ไปได้ wallet และ marketplace จึงแสดงภาพไม่ได้ content addressing รับประกันว่าไฟล์ที่ได้มาเป็นไฟล์เดิม แต่ไม่ได้รับประกันว่าไฟล์จะยังมีอยู่ ถ้าผู้ถือเก็บสำเนาไฟล์ไว้เอง ก็นำไฟล์กลับขึ้น IPFS ได้ ถ้าใช้ค่าตั้งเดียวกับตอนสร้างครั้งแรก (รุ่นของ CID, hash function และวิธีแบ่งก้อน) จะได้ CID เดิม ลิงก์ใน contract จึงกลับมาใช้ได้</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. เมื่อ mint NFT ใหม่ contract ที่ทำตาม ERC-721 จะส่ง event ใด</p>
+          <ol><li>ก. <code>Mint(to, tokenId)</code></li><li>ข. <code>Transfer(address(0), to, tokenId)</code></li><li>ค. <code>Approval(owner, to, tokenId)</code></li><li>ง. <code>Transfer(to, address(0), tokenId)</code></li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> มาตรฐานไม่มี event ชื่อ <code>Mint</code> เมื่อ mint contract ส่ง <code>Transfer</code> โดย <code>from</code> เป็น address ศูนย์ แอปจึงติดตามได้ครบทั้งตอน mint ตอนโอน และตอน burn ด้วย event เดียว ข้อ ง คือ event ตอน burn</div></details>
+        </div>
+
+        <div class="q">
+          <p>5. ทำไม marketplace ของ NFT จึงให้ผู้ขายเรียก <code>setApprovalForAll</code> แทนการให้ผู้ขายโอน NFT มาฝากไว้ และผู้ใช้ควรระวังอะไร</p>
+          <details><summary>ดูเฉลย</summary><div>approval ทำให้ NFT ยังอยู่ในชื่อผู้ขาย ผู้ขายไม่ต้องเชื่อใจผู้ดูแล marketplace และไม่ต้องออนไลน์รอ เมื่อมีผู้ซื้อ marketplace contract รับเงิน โอน NFT และจ่ายผู้ขายในธุรกรรมเดียว ถ้าขั้นใดล้มเหลว ทั้งธุรกรรมจะ revert ข้อควรระวังคือ <code>setApprovalForAll</code> ให้สิทธิ์โอน NFT ทุกชิ้นใน contract นั้น รวมถึงชิ้นที่ได้มาภายหลัง ถ้าให้สิทธิ์แก่ address ของผู้โจมตี หรือ contract ที่ได้รับสิทธิ์มีช่องโหว่ ผู้โจมตีก็โอน NFT ทั้งหมดออกไปได้ ควรยกเลิกสิทธิ์ที่ไม่ใช้แล้ว</div></details>
+        </div>
+
+        <div class="q">
+          <p>6. Alice ใช้ <code>transferFrom</code> ส่ง NFT ไปยัง address ของ contract ระดมทุนที่ไม่มีฟังก์ชันจัดการ NFT จะเกิดอะไรขึ้น และถ้าใช้ <code>safeTransferFrom</code> ผลจะต่างอย่างไร</p>
+          <details><summary>ดูเฉลย</summary><div><code>transferFrom</code> แก้ตารางเจ้าของทันที NFT จึงเป็นของ contract นั้น แต่ contract ไม่มีโค้ดสำหรับโอนออก และไม่มี private key ให้ใครสั่งแทน NFT จึงติดอยู่ตลอดไป ส่วน <code>safeTransferFrom</code> จะเรียก <code>onERC721Received</code> ของผู้รับด้วย contract ระดมทุนไม่มีฟังก์ชันนี้ จึงไม่คืนค่า <code>0x150b7a02</code> การโอนทั้งหมดจึง revert และ NFT ยังเป็นของ Alice</div></details>
+        </div>
+
+        <div class="q">
+          <p>7. DAO หนึ่งนับสิทธิ์โหวตจาก <code>balanceOf(msg.sender)</code> ณ ตอนที่เรียก <code>vote()</code> และบันทึกว่า address ใดโหวตแล้ว ผู้โจมตีที่ถือโทเคน 100 หน่วยจะได้เสียงมากกว่า 100 ได้อย่างไร และควรแก้อย่างไร</p>
+          <details><summary>ดูเฉลย</summary><div>ผู้โจมตีโหวตจาก address แรก แล้วโอนโทเคนทั้งหมดไปยัง address ใหม่และโหวตซ้ำ ทำต่อไปได้เรื่อย ๆ เพราะสร้าง address ใหม่ได้ไม่จำกัด อีกวิธีคือกู้ flash loan มาโหวตแล้วคืนในธุรกรรมเดียวกัน ทางแก้คือนับสิทธิ์จากยอด ณ snapshot block ที่กำหนดตอนสร้างข้อเสนอ เช่น ใช้ <code>getPastVotes(account, snapshotBlock)</code> ของ ERC20Votes การโอนหลัง snapshot ไม่เพิ่มเสียง และยอดตอนจบบล็อกไม่รวมเงินกู้ flash loan</div></details>
+        </div>
+
+        <div class="q">
+          <p>8. ทำไม <code>getPastVotes</code> จึง revert เมื่อถามยอดของบล็อกปัจจุบัน (<code>blockNumber == block.number</code>)</p>
+          <details><summary>ดูเฉลย</summary><div>บล็อกปัจจุบันยังไม่จบ ยอดในบล็อกนี้ยังเปลี่ยนได้จากธุรกรรมที่ตามมา รวมถึงธุรกรรมของผู้โจมตีที่กู้ flash loan มาเพิ่มยอดชั่วคราว ยอดของบล็อกที่จบแล้วเท่านั้นที่ไม่มีใครแก้ได้อีก จึงใช้เป็นเกณฑ์นับสิทธิ์ได้อย่างปลอดภัย</div></details>
+        </div>
+
+        <div class="q">
+          <p>9. ข้อใดถูกต้องเกี่ยวกับการโหวตผ่าน Snapshot.org</p>
+          <ol><li>ก. ผู้โหวตทุกคนต้องจ่าย gas เพราะทุกเสียงเป็นธุรกรรม</li><li>ข. เมื่อข้อเสนอผ่าน contract ของ DAO จะทำตามผลโดยอัตโนมัติเสมอ</li><li>ค. ผู้โหวตลงลายเซ็นข้อความ และสิทธิ์โหวตคำนวณจากยอด ณ snapshot block</li><li>ง. ระบบล็อกโทเคนของผู้โหวตไว้จนกว่าการโหวตจะจบ</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> การโหวตเป็นลายเซ็น EIP-712 ไม่ใช่ธุรกรรม จึงไม่เสีย gas (ก ผิด) ผลไม่ผูกมัดบน chain ต้องมี multisig หรือกลไกอย่าง oSnap ส่งผลเข้า chain (ข ผิด) และสิทธิ์คำนวณจากยอด ณ snapshot block โดยไม่ล็อกโทเคน (ง ผิด)</div></details>
+        </div>
+
+        <div class="q">
+          <p>10. โครงการต้องการแจก Airdrop ให้ 300,000 address ตามยอด ณ snapshot block ทำไมจึงนิยมเก็บ Merkle root ไว้ใน contract แล้วให้ผู้รับมากดรับเอง แทนการเขียนลูปโอนให้ทุกคนในฟังก์ชันเดียว</p>
+          <details><summary>ดูเฉลย</summary><div>ลูปที่โอนให้ 300,000 address ใช้ gas เกิน block gas limit ธุรกรรมจะ out of gas และ revert ทั้งหมด (บทที่ 7) การเก็บรายชื่อทั้งหมดใน storage ก็แพงเกินไป Merkle root มีขนาดเพียง 32 ไบต์ ผู้รับแต่ละคนส่ง Merkle proof มาพิสูจน์ว่าอยู่ในรายชื่อ (หลักเดียวกับ SPV ในบทที่ 3) และจ่าย gas ของตัวเอง contract ต้องบันทึกด้วยว่าใครรับไปแล้ว เพื่อไม่ให้รับซ้ำ</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+  <script>
+    // ทดลอง content addressing: เทียบ SHA-256 ของ metadata กับค่าที่ contract อ้างถึง
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const input = $("cidIn"), refOut = $("cidRef"), nowOut = $("cidNow"), msg = $("cidMsg");
+      if (!window.crypto || !crypto.subtle) {
+        msg.textContent = "เบราว์เซอร์นี้คำนวณ SHA-256 ไม่ได้ ให้เปิดหน้านี้ผ่าน http://localhost";
+        return;
+      }
+      const sha256 = async (s) => {
+        const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+        return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+      };
+      const mark = (h, other) => [...h].map((ch, i) => ch === other[i] ? ch : `<b>${ch}</b>`).join("");
+      let ref = "";
+      async function update() {
+        const now = await sha256(input.value);
+        refOut.textContent = ref;
+        nowOut.innerHTML = mark(now, ref);
+        msg.innerHTML = now === ref
+          ? "ค่าแฮช<strong>ตรงกัน</strong> ไฟล์ที่ได้รับคือไฟล์เดียวกับที่ contract อ้างถึง ไม่ว่าโหนดใดจะเป็นผู้ส่งมา"
+          : "ค่าแฮช<strong>ไม่ตรงกัน</strong> ไฟล์นี้ไม่ใช่ไฟล์ที่ contract อ้างถึง ผู้รับจึงปฏิเสธไฟล์ได้ทันที ถ้าต้องการใช้เนื้อหาใหม่ ต้องมี CID ใหม่และต้องแก้ลิงก์ใน contract";
+      }
+      sha256(input.defaultValue).then((h) => { ref = h; update(); });
+      input.addEventListener("input", update);
+    })();
+
+    // ทดลองนับคะแนน: ยอด ณ ตอนโหวต เทียบกับยอด ณ snapshot block #102
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const SUPPLY = 150;
+      const votes = [
+        { who: "Alice", block: 103, choice: "Yes", live: 100, snap: 100, note: "มี 100 ตั้งแต่ก่อน snapshot" },
+        { who: "Carol", block: 105, choice: "Yes", live: 100, snap: 0, note: "รับโอน 100 จาก Alice ที่ #104 หลัง snapshot" },
+        { who: "Dave", block: 106, choice: "No", live: 1000, snap: 0, note: "ยืม 1,000 ด้วย flash loan แล้วคืนในธุรกรรมเดียวกัน" },
+        { who: "Bob", block: 107, choice: "No", live: 50, snap: 50, note: "ถือ 50 ตลอด" },
+      ];
+      const fmt = (n) => n.toLocaleString("en-US");
+
+      function render() {
+        const mode = $("snapMode").value;
+        let yes = 0, no = 0;
+        const rows = votes.map((v) => {
+          const p = v[mode];
+          if (v.choice === "Yes") yes += p; else no += p;
+          return `<tr><td>${v.who}</td><td>#${v.block}</td><td>${v.choice}</td><td><strong>${fmt(p)}</strong></td><td>${v.note}</td></tr>`;
+        }).join("");
+        $("snapTable").innerHTML =
+          `<table class="t"><tr><th>ผู้โหวต</th><th>บล็อก</th><th>เลือก</th><th>สิทธิ์ที่นับ</th><th>หมายเหตุ</th></tr>${rows}</table>`;
+        const total = yes + no;
+        const winner = yes > no ? "Yes ชนะ" : yes < no ? "No ชนะ" : "เสมอ";
+        $("snapStat").innerHTML =
+          `Yes <strong>${fmt(yes)}</strong> · No <strong>${fmt(no)}</strong> · ${winner} · คะแนนรวม ${fmt(total)} จากโทเคนที่มีอยู่จริง ${fmt(SUPPLY)}`;
+        $("snapMsg").innerHTML = mode === "live"
+          ? "คะแนนรวมเกินจำนวนโทเคนทั้งหมด เพราะโทเคน 100 หน่วยของ Alice นับสองครั้ง และ Dave ได้ 1,000 เสียงจากโทเคนที่ยืมมาแล้วคืนภายในธุรกรรมเดียว ผลจึงกลับข้างจากเสียงของผู้ถือจริง"
+          : "ทุกคนใช้ยอดตอนจบบล็อก #102 โทเคนแต่ละหน่วยนับได้ครั้งเดียว Carol ไม่ได้สิทธิ์เพราะได้โทเคนมาหลัง snapshot และเงินกู้ของ Dave หายไปก่อนจบบล็อก คะแนนรวมจึงไม่เกิน 150";
+      }
+
+      $("snapMode").addEventListener("change", render);
+      render();
+    })();
+  </script>
+</body>
+</html>

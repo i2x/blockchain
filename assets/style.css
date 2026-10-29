@@ -32,6 +32,7 @@ body {
 a { color: inherit; }
 code, pre { font-family: var(--mono); }
 code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 5px; font-size: 0.9em; }
+:not(pre) > code { overflow-wrap: anywhere; }
 
 .wrap { max-width: 920px; margin: 0 auto; padding: 40px 16px 80px; }
 
@@ -196,6 +197,7 @@ table.t th { font-weight: 600; background: var(--code-bg); }
 .hash-demo .diff { margin-top: 10px; font-size: 15px; }
 .hash-demo .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
 .hash-demo select {
+  max-width: 100%;
   font: inherit; font-size: 15px; padding: 6px 8px;
   border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
 }

@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 14 Hardware Wallet</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p4" data-chapter="ch14">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 4 แอปพลิเคชันและระบบนิเวศ</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 14 · ความปลอดภัย</div>
+      <h1>Hardware Wallet</h1>
+      <p class="lead">ตลอดเล่มนี้ ผู้ที่ถือ private key คือผู้มีสิทธิ์ใช้เหรียญ ไม่มีธนาคารให้โทรไปอายัดบัญชี และธุรกรรม (transaction) ที่เข้าบล็อกแล้วย้อนกลับไม่ได้ บทนี้ตอบคำถามเชิงปฏิบัติว่าจะเก็บ private key อย่างไรให้ไม่หายและไม่โดนขโมย เนื้อหาเริ่มจากสิ่งที่ wallet เก็บจริง ต่อด้วยเกณฑ์แบ่ง hot wallet กับ cold wallet วิธีสำรอง key ทุกดอกด้วย seed phrase (BIP39) และ HD wallet (BIP32 / BIP44) หลักการที่ทำให้ hardware wallet ลงลายเซ็นได้โดยไม่เปิดเผย key และภัยที่ผู้ใช้เจอบ่อยที่สุด</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: เมื่อไม่มีใครกู้บัญชีคืนให้</a></li>
+        <li><a href="#s1">สิ่งที่ wallet เก็บคือ private key ไม่ใช่ตัวเหรียญ</a></li>
+        <li><a href="#s2">Hot wallet กับ Cold wallet</a></li>
+        <li><a href="#s3">Seed phrase (BIP39) และ HD wallet (BIP32 / BIP44)</a></li>
+        <li><a href="#s4">หลักการของ Hardware wallet: ลงลายเซ็นธุรกรรมภายในอุปกรณ์ โดย key ไม่ออกจากเครื่อง</a></li>
+        <li><a href="#s5">ภัยที่พบบ่อยและวิธีป้องกัน</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: เมื่อไม่มีใครกู้บัญชีคืนให้</h2>
+
+        <p>ถ้าลืมรหัสผ่านแอปธนาคาร เราไปที่สาขาพร้อมบัตรประชาชนแล้วตั้งรหัสใหม่ได้ ถ้ามีคนขโมยบัตรไปรูด ธนาคารอายัดบัตรและอาจคืนเงินให้ ทั้งสองกรณีแก้ได้เพราะมีตัวกลาง (trusted third party) ที่รู้ว่าเงินเป็นของใคร บทที่ 1 อธิบายว่า Bitcoin ตัดตัวกลางนี้ออก และบทที่ 0 อธิบายว่าเครือข่ายรู้จักเจ้าของจากลายเซ็นดิจิทัล (digital signature) ที่สร้างด้วย private key เท่านั้น private key จึงทำหน้าที่เป็นทั้งบัตรประชาชน รหัสผ่าน และลายมือชื่อในคราวเดียว</p>
+
+        <p>เจ้าของเหรียญจึงเจอความเสี่ยงสองแบบ และทางแก้ของสองแบบนี้ขัดกันเอง</p>
+        <ul>
+          <li><strong>key หาย (loss):</strong> ถ้าไม่มีสำเนาของ private key ดอกนั้นเหลืออยู่เลย เหรียญยังอยู่บน chain แต่ไม่มีใครลงลายเซ็นใช้เหรียญได้อีก ผลจึงเท่ากับเหรียญหายไปถาวร ทางแก้ที่ตรงที่สุดคือทำสำเนาไว้หลายชุด</li>
+          <li><strong>key โดนขโมย (theft):</strong> ถ้าคนอื่นได้สำเนาไป เขาโอนเหรียญออกได้ทันที และไม่มีใครย้อนธุรกรรมให้ ทางแก้ที่ตรงที่สุดคือเก็บไว้ที่เดียวและไม่ให้ใครเห็น</li>
+        </ul>
+        <p>ยิ่งทำสำเนามาก โอกาสหายก็ยิ่งน้อย แต่โอกาสรั่วก็ยิ่งมาก โจทย์นี้ยังมีเงื่อนไขอีกข้อ คือ key ต้องพร้อมลงลายเซ็นทุกครั้งที่เจ้าของต้องการจ่ายเงิน key จึงต้องอยู่ในอุปกรณ์ที่ใช้งานได้ จะเก็บซ่อนไว้อย่างเดียวไม่ได้ หัวข้อในบทนี้ตอบโจทย์นี้ทีละส่วนตามตารางด้านล่าง</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำถาม</th><th>คำตอบ</th><th>หัวข้อ</th></tr>
+            <tr><td>wallet เก็บอะไรไว้ ถ้าทำ wallet หาย เหรียญหายด้วยหรือไม่</td><td>wallet เก็บ private key ส่วนเหรียญอยู่บน chain</td><td>14.1</td></tr>
+            <tr><td>key ที่ใช้ทุกวันกับ key ของเงินเก็บระยะยาวควรอยู่ที่เดียวกันหรือไม่</td><td>Hot wallet กับ Cold wallet</td><td>14.2</td></tr>
+            <tr><td>wallet สร้าง key ใหม่ทุกครั้งที่รับเงิน จะสำรองทุกดอกอย่างไร</td><td>Seed phrase (BIP39) และ HD wallet (BIP32 / BIP44)</td><td>14.3</td></tr>
+            <tr><td>ลงลายเซ็นบนคอมพิวเตอร์ที่อาจมี malware ได้อย่างไรโดย key ไม่รั่ว</td><td>Hardware wallet และ offline signing</td><td>14.4</td></tr>
+            <tr><td>ผู้ใช้เสียเงินจากอะไรบ่อยที่สุด และป้องกันอย่างไร</td><td>Phishing, malware, การหลอกให้ลงลายเซ็น และการสำรองผิดวิธี</td><td>14.5</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 14.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">14.1</span>สิ่งที่ wallet เก็บคือ private key ไม่ใช่ตัวเหรียญ</h2>
+
+        <h3>ทำไมต้องแยกให้ออก</h3>
+        <p>คำว่า wallet ชวนให้คิดว่าเหรียญอยู่ในโปรแกรม เหมือนเงินสดอยู่ในกระเป๋าสตางค์ ถ้าเข้าใจแบบนี้ ผู้ใช้อาจตัดสินใจผิดได้สองแบบ แบบแรกคือคิดว่าโทรศัพท์หายแล้วเหรียญหายตามไปด้วย แบบที่สองคือคิดว่าลบแอปทิ้งแล้ว คนที่แอบคัดลอก key ไปก่อนหน้านั้นจะใช้เหรียญไม่ได้ ข้อเท็จจริงคือเหรียญไม่ได้อยู่ในอุปกรณ์ใดเลย</p>
+        <ul>
+          <li><strong>Bitcoin:</strong> เหรียญคือ UTXO ที่ทุก full node บันทึกไว้ใน UTXO set (บทที่ 4) แต่ละก้อนมีเงื่อนไขปลดล็อก (locking script) ที่ผูกกับ public key หรือ address</li>
+          <li><strong>Ethereum:</strong> ยอด ETH เป็นตัวเลขของบัญชี EOA ใน world state (บทที่ 5) และ address ของ EOA คำนวณมาจาก public key</li>
+        </ul>
+        <p>สิ่งที่ wallet เก็บคือ private key สำหรับลงลายเซ็นปลดล็อกเหรียญเหล่านั้น wallet จึงคล้ายพวงกุญแจมากกว่ากระเป๋าเงิน ส่วนยอดเงินที่แอปแสดง แอปก็ถามมาจากโหนดอีกทีหนึ่ง</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 256" role="img" aria-label="ด้านซ้ายคือ blockchain ที่ทุก full node เก็บสำเนา มี UTXO 0.50 BTC และบัญชี Ethereum 2.0 ETH ด้านขวาคือ wallet ที่เก็บ private key สองดอกและ seed phrase wallet อ่านยอดจากโหนด และส่งธุรกรรมที่ลงลายเซ็นแล้วกลับไปยังเครือข่าย">
+            <defs>
+              <marker id="arrW14" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <rect x="20" y="20" width="320" height="180" rx="12" fill="#f0ebe1" stroke="#e4ddd0"/>
+              <text x="180" y="46" text-anchor="middle" font-weight="700">Blockchain</text>
+              <text x="180" y="64" text-anchor="middle" font-size="11" fill="#6b655c">ทุก full node เก็บสำเนาเดียวกัน</text>
+              <rect x="40" y="80" width="280" height="44" rx="7" fill="#fff" stroke="#e2761b"/>
+              <text x="54" y="99" font-size="12" font-weight="700">UTXO 0.50 BTC</text>
+              <text x="54" y="116" font-size="11" fill="#6b655c">ปลดล็อกด้วยลายเซ็นของ key ที่ผูกกับ bc1q…7k</text>
+              <rect x="40" y="136" width="280" height="44" rx="7" fill="#fff" stroke="#5a63d8"/>
+              <text x="54" y="155" font-size="12" font-weight="700">บัญชี 0x71…c3: 2.0 ETH</text>
+              <text x="54" y="172" font-size="11" fill="#6b655c">อยู่ใน world state, address มาจาก public key</text>
+
+              <rect x="440" y="20" width="300" height="180" rx="12" fill="#fbeef5" stroke="#b0417a" stroke-width="1.5"/>
+              <text x="590" y="46" text-anchor="middle" font-weight="700">Wallet</text>
+              <text x="590" y="64" text-anchor="middle" font-size="11" fill="#6b655c">แอปมือถือ, browser extension หรือ hardware wallet</text>
+              <rect x="458" y="80" width="126" height="44" rx="7" fill="#fff" stroke="#b0417a"/>
+              <text x="521" y="107" text-anchor="middle" font-size="12">private key ดอกที่ 1</text>
+              <rect x="596" y="80" width="126" height="44" rx="7" fill="#fff" stroke="#b0417a"/>
+              <text x="659" y="107" text-anchor="middle" font-size="12">private key ดอกที่ 2</text>
+              <rect x="458" y="136" width="264" height="44" rx="7" fill="#fff" stroke="#b0417a" stroke-dasharray="5 4"/>
+              <text x="590" y="163" text-anchor="middle" font-size="12">seed phrase: คำนวณ key ทุกดอกกลับมาได้</text>
+
+              <g stroke="#6b655c" stroke-width="1.3" fill="none">
+                <line x1="342" y1="102" x2="436" y2="102" marker-end="url(#arrW14)"/>
+                <line x1="438" y1="158" x2="344" y2="158" marker-end="url(#arrW14)"/>
+              </g>
+              <text x="390" y="94" text-anchor="middle" font-size="11" fill="#6b655c">ยอดเงิน</text>
+              <text x="390" y="120" text-anchor="middle" font-size="11" fill="#6b655c">(ถามโหนด)</text>
+              <text x="390" y="150" text-anchor="middle" font-size="11" fill="#6b655c">ธุรกรรมที่</text>
+              <text x="390" y="176" text-anchor="middle" font-size="11" fill="#6b655c">ลงลายเซ็นแล้ว</text>
+
+              <g font-size="12">
+                <text x="180" y="226" text-anchor="middle">เหรียญอยู่ที่นี่เสมอ ไม่เคยย้ายเข้าอุปกรณ์</text>
+                <text x="590" y="226" text-anchor="middle">สิ่งที่อยู่ในอุปกรณ์คือสิทธิ์ลงลายเซ็น</text>
+                <text x="590" y="246" text-anchor="middle">ใครมีสำเนา key ก็มีสิทธิ์เท่าเจ้าของ</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>เหรียญอยู่บน blockchain ที่ทุกโหนดเก็บสำเนาไว้ wallet ถือเพียง private key อ่านยอดจากโหนด และส่งธุรกรรมที่ลงลายเซ็นแล้วกลับไปยังเครือข่าย ทำ wallet หายแต่ยังมี seed phrase ก็กู้ key คืนได้ ส่วนคนที่ได้สำเนา key ไปก็ใช้เหรียญได้เหมือนเจ้าของ</figcaption>
+        </figure>
+
+        <h3>งานของ wallet และงานที่ต้องใช้ private key</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>งาน</th><th>ต้องใช้ private key หรือไม่</th><th>หมายเหตุ</th></tr>
+            <tr><td>สร้างกุญแจคู่และ address</td><td>ใช้</td><td>สร้าง private key แล้วคำนวณ public key และ address (บทที่ 0)</td></tr>
+            <tr><td>แสดงยอดและประวัติ</td><td>ไม่ใช้</td><td>ถามโหนดด้วย address</td></tr>
+            <tr><td>สร้างธุรกรรม</td><td>ไม่ใช้</td><td>ได้ธุรกรรมที่ยังไม่มีลายเซ็น (unsigned transaction) ฝั่ง Bitcoin ต้องเลือก UTXO ใส่เงินทอน (change) และค่าธรรมเนียม (fee) ฝั่ง Ethereum ต้องใส่ nonce, gas และ data</td></tr>
+            <tr><td><strong>ลงลายเซ็น</strong></td><td><strong>ใช้</strong></td><td>ขั้นเดียวของการใช้จ่ายที่ต้องใช้ private key</td></tr>
+            <tr><td>ส่งธุรกรรมเข้าเครือข่าย (broadcast)</td><td>ไม่ใช้</td><td>ส่งให้โหนดกระจายต่อ</td></tr>
+          </table>
+        </div>
+        <p>ในตาราง งานที่ต้องใช้ private key มีเพียงสองงาน งานแรกคือสร้าง key ทำครั้งเดียวตอนตั้ง wallet งานที่สองคือลงลายเซ็น ต้องทำทุกครั้งที่จ่ายเงิน งานที่เหลือใช้เพียง public key หรือ address ก็พอ hardware wallet ในหัวข้อ 14.4 อาศัยข้อสังเกตนี้ ถ้าให้อุปกรณ์อีกเครื่องสร้าง key และลงลายเซ็นแทน คอมพิวเตอร์ที่ต่ออินเทอร์เน็ตก็ทำงานที่เหลือได้โดยไม่ต้องเห็น key เลย</p>
+
+        <h3>Custodial กับ Non-custodial</h3>
+        <p>ผู้ใช้จำนวนมากซื้อเหรียญผ่านศูนย์ซื้อขาย (exchange) แล้วฝากไว้ในบัญชีของ exchange ในกรณีนี้ exchange เป็นผู้ถือ private key ส่วนผู้ใช้มีเพียงตัวเลขในฐานข้อมูลของ exchange เหมือนยอดเงินฝากธนาคาร wallet แบบนี้เรียกว่า <strong>custodial wallet</strong> ส่วน wallet ที่ผู้ใช้ถือ key เองเรียกว่า <strong>non-custodial wallet</strong> หรือ self-custody</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>Custodial (ฝากไว้กับ exchange)</th><th>Non-custodial (ถือ key เอง)</th></tr>
+            <tr><td>ผู้ถือ private key</td><td>ผู้ให้บริการ</td><td>ผู้ใช้</td></tr>
+            <tr><td>ลืมรหัสผ่าน</td><td>ติดต่อผู้ให้บริการเพื่อกู้บัญชีได้</td><td>ถ้าไม่มี seed phrase ก็กู้ไม่ได้</td></tr>
+            <tr><td>ผู้ให้บริการล้มละลายหรือโดนเจาะ</td><td>ผู้ใช้อาจไม่ได้เงินคืน</td><td>ไม่กระทบ</td></tr>
+            <tr><td>ภาระของผู้ใช้</td><td>น้อย</td><td>มาก ต้องสำรองและป้องกัน key เอง</td></tr>
+          </table>
+        </div>
+        <p>custodial wallet ทำให้ตัวกลางกลับมาอีกครั้ง ทั้งที่บทที่ 1 พยายามตัดตัวกลางออก ตัวอย่างที่มักยกกันมีสองกรณี Mt. Gox ปิดตัวในปี 2014 และรายงานว่า BTC ของลูกค้าหายไปหลายแสนเหรียญ ส่วน FTX ล้มละลายในปี 2022 สำนวนที่ใช้กันในวงการคือ <em>"Not your keys, not your coins"</em> ถ้าไม่ได้ถือ key เอง สิ่งที่มีอยู่คือคำสัญญาของผู้ให้บริการว่าจะจ่ายคืน ไม่ใช่ตัวเหรียญ</p>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่ข้อสอบชอบถาม</span>
+          "ถ้า hardware wallet พังหรือหาย เหรียญหายหรือไม่" คำตอบคือไม่หาย ถ้ายังมี seed phrase เพราะเหรียญอยู่บน chain เจ้าของซื้ออุปกรณ์ใหม่หรือใช้ wallet อื่นที่รองรับ BIP39 แล้วกู้คืนจาก seed phrase ก็ได้ key ชุดเดิมกลับมา ในทางกลับกัน ถ้าคนอื่นได้ seed phrase ไป อุปกรณ์ที่ยังอยู่ในมือก็ไม่ช่วยอะไร เพราะเขาใช้เหรียญได้จากอุปกรณ์ของเขาเอง
+        </div>
+      </section>
+
+      <!-- ==================== 14.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">14.2</span>Hot wallet กับ Cold wallet</h2>
+
+        <h3>ทำไมต้องแบ่ง</h3>
+        <p>key ที่ใช้จ่ายเงินทุกวันต้องอยู่ในอุปกรณ์ที่หยิบใช้ได้ทันที เช่น โทรศัพท์หรือเบราว์เซอร์ แต่อุปกรณ์ที่ต่ออินเทอร์เน็ตเปิดช่องให้ผู้โจมตีเข้ามาจากระยะไกล malware อาจอ่านไฟล์ wallet หรือดักรหัสผ่านที่พิมพ์ เว็บปลอมอาจหลอกให้ลงลายเซ็น ส่วนเงินเก็บระยะยาวแทบไม่ต้องลงลายเซ็นเลย จึงไม่มีเหตุผลให้รับความเสี่ยงแบบเดียวกัน หลักนี้เหมือนพกเงินสดติดกระเป๋าเท่าที่ใช้รายวัน และเก็บเงินก้อนใหญ่ไว้ในตู้เซฟ เกณฑ์ที่ใช้แบ่งมีข้อเดียว คือ <strong>private key อยู่บนอุปกรณ์ที่ต่ออินเทอร์เน็ตหรือไม่</strong></p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>Hot wallet</th><th>Cold wallet (cold storage)</th></tr>
+            <tr><td>private key อยู่ที่</td><td>อุปกรณ์ที่ต่ออินเทอร์เน็ต</td><td>อุปกรณ์หรือสื่อที่ไม่ต่ออินเทอร์เน็ต</td></tr>
+            <tr><td>ตัวอย่าง</td><td>MetaMask (browser extension), wallet บนมือถือ, Bitcoin Core บนคอมพิวเตอร์ที่ออนไลน์, hot wallet ของ exchange</td><td>Hardware wallet, คอมพิวเตอร์ที่ไม่เคยต่อเครือข่าย (air-gapped), paper wallet</td></tr>
+            <tr><td>ความสะดวก</td><td>สูง ลงลายเซ็นได้ทันที</td><td>ต่ำกว่า ต้องหยิบอุปกรณ์และยืนยันเอง</td></tr>
+            <tr><td>ภัยจากระยะไกล (malware, เว็บปลอม)</td><td>เสี่ยงโดยตรง</td><td>ผู้โจมตีต้องเข้าถึงตัวอุปกรณ์ เว้นแต่ผู้ใช้กดยืนยันธุรกรรมอันตรายเอง</td></tr>
+            <tr><td>เหมาะกับ</td><td>เงินใช้จ่ายรายวัน และใช้เชื่อมต่อกับ DApp (บทที่ 11)</td><td>เงินเก็บระยะยาว</td></tr>
+          </table>
+        </div>
+
+        <p>exchange ก็ใช้หลักเดียวกัน คือเก็บเหรียญส่วนน้อยไว้ใน hot wallet เพื่อให้ลูกค้าถอนได้ทันที และเก็บส่วนใหญ่ไว้ใน cold storage ถ้า hot wallet โดนเจาะ ความเสียหายก็จำกัดอยู่ที่เหรียญส่วนน้อยนั้น</p>
+
+        <h3>Paper wallet: เป็น cold wallet แต่ใช้งานยาก</h3>
+        <p>paper wallet คือ private key ที่พิมพ์ลงกระดาษ ส่วนใหญ่พิมพ์เป็น QR code key อยู่นอกอินเทอร์เน็ตจริง แต่เมื่อต้องการใช้เหรียญ เจ้าของต้องนำ key เข้าโปรแกรม wallet บนคอมพิวเตอร์ ตั้งแต่วินาทีนั้น key ก็กลายเป็น hot ปัญหาอื่นที่ตามมามีดังนี้</p>
+        <ul>
+          <li>ผู้ใช้ที่ไม่เข้าใจ UTXO อาจนำ key เข้าโปรแกรม wallet แล้วใช้เหรียญไปเพียงบางส่วน แต่ธุรกรรมต้องใช้ UTXO ทั้งก้อน ส่วนที่เหลือจึงกลายเป็นเงินทอน (change) และโปรแกรมหลายตัวส่งเงินทอนไปยัง address ใหม่ของโปรแกรมเอง ไม่ได้ส่งกลับไปที่ address บนกระดาษ ถ้าผู้ใช้เข้าใจว่าเงินที่เหลือยังอยู่บนกระดาษ แล้วลบโปรแกรมทิ้งโดยไม่ได้สำรอง key ของเงินทอน เงินทอนก็หายไปถาวร</li>
+          <li>กระดาษไหม้ เปียก และหมึกซีดได้</li>
+          <li>เว็บไซต์ที่ใช้สร้าง key หรือเครื่องพิมพ์อาจเก็บสำเนาไว้</li>
+        </ul>
+        <p>ปัจจุบันจึงไม่แนะนำ paper wallet แล้ว hardware wallet แก้ปัญหาตรงจุดนี้ คือเป็น cold wallet ที่ลงลายเซ็นได้โดยไม่ต้องนำ key ออกมา (หัวข้อ 14.4)</p>
+
+        <div class="callout">
+          <span class="h">Hot และ Cold บอกตำแหน่งของ key ไม่ใช่ของเหรียญ</span>
+          เหรียญอยู่บน chain เสมอ คำว่า hot หรือ cold บอกเพียงว่า key ที่ควบคุมเหรียญอยู่ที่ใด ถ้าเปิดแอป wallet บนมือถือแล้วกรอก seed phrase ของ hardware wallet ลงไป key ทุกดอกก็กลายเป็น hot ทันที แม้ตัวอุปกรณ์ยังอยู่ในตู้เซฟก็ตาม
+        </div>
+      </section>
+
+      <!-- ==================== 14.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">14.3</span>Seed phrase (BIP39) และ HD wallet (BIP32 / BIP44)</h2>
+
+        <h3>ปัญหา: key มีหลายดอกและเพิ่มขึ้นเรื่อย ๆ</h3>
+        <p>บทที่ 4 อธิบายว่า wallet ควรใช้ address ใหม่ทุกครั้งที่รับเงิน เพื่อไม่ให้ผู้อื่นรวบรวมประวัติการเงินของเราได้ง่าย และธุรกรรมที่มีเงินทอนก็ต้องใช้ address ใหม่อีกหนึ่งตัว wallet ที่ใช้มานานจึงมี key หลายร้อยดอก wallet รุ่นแรกของ Bitcoin สุ่ม key แต่ละดอกแยกกัน โดยสุ่มเผื่อไว้ล่วงหน้าชุดหนึ่ง (keypool) ไฟล์สำรอง (backup) จึงมีเฉพาะ key ในชุดนั้น เมื่อใช้ชุดนั้นหมด wallet จะสุ่ม key ชุดใหม่ที่ไฟล์สำรองเก่าไม่มี ถ้าเครื่องเสียแล้วกู้จากไฟล์เก่า เจ้าของจะใช้เหรียญที่รับเข้า address ใหม่เหล่านั้นไม่ได้อีก ปัญหาอีกข้อคือ private key หนึ่งดอกเป็นเลขฐานสิบหก 64 ตัว คนจดด้วยมือผิดได้ง่าย</p>
+        <p>วงการแก้ปัญหานี้ด้วยมาตรฐานสามฉบับที่ทำงานต่อกัน ทั้งสามเป็นเอกสาร BIP (Bitcoin Improvement Proposal) แต่ wallet ของ Ethereum เช่น MetaMask และ hardware wallet ทุกยี่ห้อหลักก็ใช้มาตรฐานชุดนี้</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>มาตรฐาน</th><th>แก้ปัญหาอะไร</th><th>สิ่งที่กำหนด</th></tr>
+            <tr><td><strong>BIP39</strong></td><td>คนจดเลขสุ่มยาว ๆ ผิดได้ง่าย</td><td>แปลงเลขสุ่มเป็นคำภาษาอังกฤษ 12–24 คำพร้อม checksum แล้วแปลงคำเป็น seed</td></tr>
+            <tr><td><strong>BIP32</strong></td><td>key หลายดอกต้องสำรองแยกกัน</td><td>คำนวณ key ทุกดอกจาก seed เดียวเป็นโครงสร้างต้นไม้ เรียกว่า HD wallet</td></tr>
+            <tr><td><strong>BIP44</strong></td><td>wallet ต่างยี่ห้อคำนวณ key จากกิ่งต่างกัน</td><td>กำหนดเส้นทางมาตรฐาน (derivation path) แยกตามเหรียญ บัญชี และประเภท address</td></tr>
+          </table>
+        </div>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 176" role="img" aria-label="Entropy 128 บิตผ่าน BIP39 เป็น seed phrase 12 คำ ผ่าน PBKDF2-HMAC-SHA512 2048 รอบเป็น seed 512 บิต ผ่าน HMAC-SHA512 ตาม BIP32 เป็น master key และ chain code แล้วคำนวณตาม derivation path เป็น key ของแต่ละ address">
+            <defs>
+              <marker id="arrSeed14" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor" text-anchor="middle">
+              <rect x="10" y="20" width="118" height="72" rx="9" fill="#fff" stroke="currentColor"/>
+              <text x="69" y="48" font-weight="700">Entropy</text>
+              <text x="69" y="68" font-size="11">128 บิต</text>
+              <text x="69" y="83" font-size="11" fill="#6b655c">สุ่มจากอุปกรณ์</text>
+
+              <rect x="165" y="20" width="118" height="72" rx="9" fill="#fbeef5" stroke="#b0417a" stroke-width="2"/>
+              <text x="224" y="48" font-weight="700" fill="#8c2f5f">Seed phrase</text>
+              <text x="224" y="68" font-size="11">12 คำ</text>
+              <text x="224" y="83" font-size="11" fill="#8c2f5f">สิ่งที่ผู้ใช้จดเก็บ</text>
+
+              <rect x="320" y="20" width="118" height="72" rx="9" fill="#fff" stroke="currentColor"/>
+              <text x="379" y="48" font-weight="700">Seed</text>
+              <text x="379" y="68" font-size="11">512 บิต</text>
+
+              <rect x="475" y="20" width="118" height="72" rx="9" fill="#fff" stroke="currentColor"/>
+              <text x="534" y="44" font-weight="700">Master key</text>
+              <text x="534" y="63" font-size="11">private key 256 บิต</text>
+              <text x="534" y="79" font-size="11">+ chain code 256 บิต</text>
+
+              <rect x="630" y="20" width="118" height="72" rx="9" fill="#fff" stroke="currentColor"/>
+              <text x="689" y="48" font-weight="700">Key ลูก</text>
+              <text x="689" y="68" font-size="11">ของแต่ละ address</text>
+
+              <g stroke="#6b655c" stroke-width="1.3" fill="none">
+                <line x1="130" y1="56" x2="161" y2="56" marker-end="url(#arrSeed14)"/>
+                <line x1="285" y1="56" x2="316" y2="56" marker-end="url(#arrSeed14)"/>
+                <line x1="440" y1="56" x2="471" y2="56" marker-end="url(#arrSeed14)"/>
+                <line x1="595" y1="56" x2="626" y2="56" marker-end="url(#arrSeed14)"/>
+              </g>
+
+              <g font-size="11" fill="#6b655c">
+                <text x="146" y="118" font-weight="700" fill="currentColor">BIP39</text>
+                <text x="146" y="134">ต่อ checksum</text>
+                <text x="146" y="150">แบ่งกลุ่มละ 11 บิต</text>
+
+                <text x="301" y="118" font-weight="700" fill="currentColor">PBKDF2-HMAC-SHA512</text>
+                <text x="301" y="134">วน 2048 รอบ</text>
+                <text x="301" y="150">salt = "mnemonic" + passphrase</text>
+
+                <text x="456" y="118" font-weight="700" fill="currentColor">BIP32</text>
+                <text x="456" y="134">HMAC-SHA512</text>
+                <text x="456" y="150">key = "Bitcoin seed"</text>
+
+                <text x="611" y="118" font-weight="700" fill="currentColor">BIP32 + BIP44</text>
+                <text x="611" y="134">ตาม derivation path</text>
+                <text x="611" y="150">เช่น m/84'/0'/0'/0/0</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>entropy มาจากการสุ่ม ส่วนทุกขั้นหลังจากนั้นให้ผลเดิมเสมอเมื่อคำนวณซ้ำ (deterministic) ขั้น entropy เป็น seed phrase เป็นเพียงการแปลงรูปแบบ (encoding) ที่แปลงกลับได้ เพราะ seed phrase คือ entropy ที่เขียนเป็นคำ ส่วนตั้งแต่ seed phrase เป็น seed ไปจนถึง key ลูกเป็นการคำนวณทางเดียวที่ย้อนกลับไม่ได้ (ข้อยกเว้นเรื่อง xpub อยู่ในหัวข้อย่อยด้านล่าง) ผู้ใช้จึงสำรองเพียงกล่องสีชมพู (และ passphrase ถ้าตั้งไว้) ก็พอ เพราะ wallet คำนวณขั้นถัดไปทั้งหมดใหม่จาก seed phrase ได้</figcaption>
+        </figure>
+
+        <h3>BIP39: แปลงเลขสุ่มเป็นคำ</h3>
+        <p>wallet เริ่มจากสุ่มเลขขนาด 128 บิต (หรือ 256 บิต) จากแหล่งสุ่มที่ดีของอุปกรณ์ เลขนี้เรียกว่า <strong>entropy</strong> จากนั้นทำสามขั้น</p>
+        <ol>
+          <li>คำนวณ SHA-256 ของ entropy แล้วตัดบิตแรก ๆ ของผลลัพธ์มาเป็น <strong>checksum</strong> จำนวนบิตที่ตัดเท่ากับขนาด entropy หารด้วย 32 เช่น entropy 128 บิตได้ checksum 4 บิต</li>
+          <li>นำ checksum ต่อท้าย entropy ได้ 132 บิต แล้วแบ่งเป็นกลุ่มละ 11 บิต ได้ 12 กลุ่ม</li>
+          <li>แต่ละกลุ่มเป็นเลข 0–2047 (2<sup>11</sup> = 2048 ค่า) wallet ใช้เลขนี้เป็นลำดับในรายการคำ (wordlist) ของ BIP39 ซึ่งมี 2048 คำพอดี</li>
+        </ol>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 236" role="img" aria-label="entropy 128 บิตที่เป็นศูนย์ทั้งหมด ต่อด้วย checksum 4 บิตคือ 0011 รวม 132 บิต แบ่งเป็น 12 กลุ่ม กลุ่มละ 11 บิต สิบเอ็ดกลุ่มแรกมีค่า 0 คือคำว่า abandon กลุ่มสุดท้ายมีค่า 3 คือคำว่า about">
+            <g font-size="12" fill="currentColor">
+              <text x="20" y="22" font-weight="700">entropy 128 บิต (ตัวอย่างนี้เป็นศูนย์ทั้งหมด)</text>
+              <text x="740" y="22" text-anchor="end" font-weight="700" fill="#b0417a">checksum 4 บิต = 0011</text>
+              <rect x="20" y="32" width="698.2" height="30" fill="#f0ebe1" stroke="#e4ddd0"/>
+              <rect x="718.2" y="32" width="21.8" height="30" fill="#b0417a"/>
+              <g stroke="#fff" stroke-width="2">
+                <line x1="80" y1="32" x2="80" y2="62"/><line x1="140" y1="32" x2="140" y2="62"/>
+                <line x1="200" y1="32" x2="200" y2="62"/><line x1="260" y1="32" x2="260" y2="62"/>
+                <line x1="320" y1="32" x2="320" y2="62"/><line x1="380" y1="32" x2="380" y2="62"/>
+                <line x1="440" y1="32" x2="440" y2="62"/><line x1="500" y1="32" x2="500" y2="62"/>
+                <line x1="560" y1="32" x2="560" y2="62"/><line x1="620" y1="32" x2="620" y2="62"/>
+                <line x1="680" y1="32" x2="680" y2="62"/>
+              </g>
+              <text x="350" y="52" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#6b655c">0000 0000 … 0000</text>
+
+              <text x="20" y="84" font-size="11" fill="#6b655c">แบ่ง 132 บิตเป็น 12 กลุ่ม กลุ่มละ 11 บิต แต่ละกลุ่มคือลำดับคำ (0–2047)</text>
+              <g text-anchor="middle" font-family="IBM Plex Mono, monospace">
+                <rect x="22" y="92" width="56" height="30" rx="5" fill="#fff" stroke="#e4ddd0"/><text x="50" y="112">0</text>
+                <rect x="82" y="92" width="56" height="30" rx="5" fill="#fff" stroke="#e4ddd0"/><text x="110" y="112">0</text>
+                <rect x="142" y="92" width="56" height="30" rx="5" fill="#fff" stroke="#e4ddd0"/><text x="170" y="112">0</text>
+                <rect x="202" y="92" width="56" height="30" rx="5" fill="#fff" stroke="#e4ddd0"/><text x="230" y="112">0</text>
+                <rect x="262" y="92" width="56" height="30" rx="5" fill="#fff" stroke="#e4ddd0"/><text x="290" y="112">0</text>
+                <rect x="322" y="92" width="56" height="30" rx="5" fill="#fff" stroke="#e4ddd0"/><text x="350" y="112">0</text>
+                <rect x="382" y="92" width="56" height="30" rx="5" fill="#fff" stroke="#e4ddd0"/><text x="410" y="112">0</text>
+                <rect x="442" y="92" width="56" height="30" rx="5" fill="#fff" stroke="#e4ddd0"/><text x="470" y="112">0</text>
+                <rect x="502" y="92" width="56" height="30" rx="5" fill="#fff" stroke="#e4ddd0"/><text x="530" y="112">0</text>
+                <rect x="562" y="92" width="56" height="30" rx="5" fill="#fff" stroke="#e4ddd0"/><text x="590" y="112">0</text>
+                <rect x="622" y="92" width="56" height="30" rx="5" fill="#fff" stroke="#e4ddd0"/><text x="650" y="112">0</text>
+                <rect x="682" y="92" width="56" height="30" rx="5" fill="#fbeef5" stroke="#b0417a" stroke-width="1.5"/><text x="710" y="112" font-weight="700" fill="#8c2f5f">3</text>
+              </g>
+              <text x="740" y="140" text-anchor="end" font-size="11" fill="#8c2f5f">กลุ่มสุดท้าย = entropy 7 บิต (0000000) + checksum 4 บิต (0011) = 3</text>
+
+              <g text-anchor="middle" font-size="11">
+                <text x="50" y="164">abandon</text><text x="110" y="164">abandon</text><text x="170" y="164">abandon</text>
+                <text x="230" y="164">abandon</text><text x="290" y="164">abandon</text><text x="350" y="164">abandon</text>
+                <text x="410" y="164">abandon</text><text x="470" y="164">abandon</text><text x="530" y="164">abandon</text>
+                <text x="590" y="164">abandon</text><text x="650" y="164">abandon</text>
+                <text x="710" y="164" font-weight="700" fill="#8c2f5f">about</text>
+              </g>
+
+              <text x="20" y="200">ผลลัพธ์: abandon × 11 แล้วตามด้วย about รวม 12 คำ</text>
+              <text x="20" y="222" fill="#6b655c">ถ้าเปลี่ยนคำสุดท้ายเป็น abandon กลุ่มสุดท้ายจะมี checksum 0000 ซึ่งไม่ตรงกับ 0011 wallet จึงปฏิเสธ</text>
+            </g>
+          </svg>
+          <figcaption>ตัวอย่างนี้เป็นค่าทดสอบ (test vector) ในเอกสาร BIP39 คำลำดับ 0 คือ abandon และคำลำดับ 3 คือ about คำสุดท้ายต่างจากคำอื่นเพราะมี checksum อยู่ในกลุ่มนั้น ห้ามนำ seed phrase ชุดนี้ไปใช้กับเงินจริง เพราะ entropy ที่เป็นศูนย์ทั้งหมดไม่ได้มาจากการสุ่มและทุกคนรู้ค่านี้</figcaption>
+        </figure>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>จำนวนคำ</th><th>entropy (บิต)</th><th>checksum (บิต)</th><th>รวม (บิต) = คำ × 11</th></tr>
+            <tr><td>12</td><td>128</td><td>4</td><td>132</td></tr>
+            <tr><td>15</td><td>160</td><td>5</td><td>165</td></tr>
+            <tr><td>18</td><td>192</td><td>6</td><td>198</td></tr>
+            <tr><td>21</td><td>224</td><td>7</td><td>231</td></tr>
+            <tr><td>24</td><td>256</td><td>8</td><td>264</td></tr>
+          </table>
+        </div>
+
+        <p><strong>ทำไมใช้คำแทนตัวเลข</strong> คนจดคำว่า <code>apple</code> ผิดยากกว่าจดเลขฐานสิบหก นอกจากนี้ คำในรายการภาษาอังกฤษของ BIP39 ยังมีตัวอักษร 4 ตัวแรกไม่ซ้ำกันเลย จดหรือพิมพ์เพียง 4 ตัวแรกก็ระบุคำได้</p>
+        <p><strong>ทำไมต้องมี checksum</strong> ถ้าจดผิดหนึ่งคำ wallet มักตรวจพบเพราะ checksum ไม่ตรง ถ้าไม่มี checksum wallet จะกู้คืนเป็น wallet อื่นที่ว่างเปล่าโดยไม่เตือน และเจ้าของอาจเข้าใจว่าเหรียญโดนขโมย อย่างไรก็ตาม checksum ของ 12 คำมีเพียง 4 บิต คำที่ผิดแบบสุ่มจึงยังผ่านการตรวจได้ราว 1 ใน 16</p>
+        <p><strong>ความปลอดภัยมาจาก entropy</strong> รายการคำเป็นข้อมูลสาธารณะ ความปลอดภัยของ seed phrase 12 คำจึงมาจาก entropy 128 บิตเท่านั้น ผู้โจมตีที่สุ่มเดาต้องลองราว 2<sup>128</sup> แบบ ซึ่งทำไม่ได้ในทางปฏิบัติ เงื่อนไขสำคัญคือ entropy ต้องมาจากตัวสร้างเลขสุ่ม (random number generator) ที่ดี ถ้าผู้ใช้เลือกคำเองจากความชอบ หรืออุปกรณ์สุ่มเลขได้ไม่ดี ผู้โจมตีจะเดาได้เร็วกว่านี้มาก</p>
+
+        <h3>จาก seed phrase เป็น seed</h3>
+        <p>BIP39 ไม่ได้นำ entropy ไปใช้เป็น seed ตรง ๆ เพราะมีเป้าหมายสองข้อ ข้อแรกคือให้ผู้ใช้ผสม passphrase ของตัวเองเข้าไปได้ ข้อที่สองคือทำให้ผู้โจมตีเดาแต่ละครั้งได้ช้าลง wallet จึงนำข้อความของ seed phrase เข้าฟังก์ชัน <strong>PBKDF2</strong> ที่ใช้ HMAC-SHA512 วนซ้ำ 2048 รอบ ได้ <strong>seed</strong> ขนาด 512 บิต</p>
+        <p>PBKDF2 รับข้อมูลเพิ่มอีกหนึ่งค่าเรียกว่า <strong>salt</strong> ข้อความตั้งต้นเดียวกันแต่ salt ต่างกันจะได้ผลลัพธ์ต่างกัน BIP39 กำหนดให้ salt เป็นข้อความ <code>"mnemonic"</code> ต่อด้วย passphrase ที่ผู้ใช้ตั้งเอง ถ้าไม่ตั้ง passphrase ส่วนนี้จะเป็นข้อความว่าง passphrase จึงเปลี่ยน seed ได้ทั้งที่ seed phrase เป็นชุดเดิม</p>
+
+        <div class="callout">
+          <span class="h">Passphrase หรือที่มักเรียกว่า "คำที่ 25"</span>
+          passphrase ทุกค่าให้ seed ที่ใช้ได้เสมอ wallet จึงไม่มีทางรู้ว่าผู้ใช้พิมพ์ passphrase ผิด พิมพ์ผิดหนึ่งตัวอักษรก็ได้ wallet อีกชุดที่ว่างเปล่า ข้อดีคือคนที่ขโมย seed phrase ไปอย่างเดียวยังเข้าถึงเหรียญไม่ได้ ข้อเสียคือถ้าลืม passphrase เหรียญก็หายถาวรเหมือนกับลืม seed phrase ผู้ใช้จึงต้องสำรอง passphrase ด้วย และเก็บแยกจาก seed phrase
+        </div>
+
+        <h3>BIP32: HD wallet คำนวณ key ทั้งต้นไม้จาก seed เดียว</h3>
+        <p>BIP32 นำ seed เข้า HMAC-SHA512 โดยใช้ข้อความ <code>"Bitcoin seed"</code> เป็นกุญแจของ HMAC ได้ผลลัพธ์ 512 บิต ครึ่งซ้ายเป็น <strong>master private key</strong> (256 บิต) ครึ่งขวาเป็น <strong>chain code</strong> (256 บิต) จากนั้น wallet คำนวณ key ลูก (child key) จากสามค่า ได้แก่ key แม่ (parent key), chain code ของ key แม่ และเลขลำดับ (index) ของลูก key ลูกแต่ละดอกมี chain code ของตัวเองและมีลูกต่อได้อีก จึงเกิดเป็นต้นไม้ของ key ชื่อ <strong>HD wallet</strong> (Hierarchical Deterministic) มาจากสองลักษณะนี้ คือ key เรียงเป็นลำดับชั้น และคำนวณซ้ำได้ผลเดิมทุกครั้ง สูตรนี้ใช้ chain code ด้วย ผู้ที่รู้เพียง key แม่จึงยังคำนวณ key ลูกไม่ได้</p>
+        <p>ผลที่ได้คือ wallet สร้าง address ใหม่ได้ไม่จำกัด และไฟล์สำรองไม่ต้องเปลี่ยนเลย บทที่ 4 กล่าวถึงประโยชน์ข้อนี้แล้ว คือ wallet ของ Bitcoin Core รุ่นปัจจุบันเป็นแบบ HD และ <code>getnewaddress</code> ให้ address ใหม่ทุกครั้งโดยไม่ต้อง backup ซ้ำ</p>
+
+        <h3>Extended public key (xpub) และ hardened derivation</h3>
+        <p>BIP32 มีคุณสมบัติที่ใช้ประโยชน์ได้มาก คือคำนวณ <em>public key</em> ลูกได้จาก public key แม่กับ chain code โดยไม่ต้องรู้ private key ค่าคู่นี้รวมกันเรียกว่า <strong>extended public key (xpub)</strong> ตัวอย่างเช่น ร้านค้าออนไลน์นำ xpub ไปไว้บนเซิร์ฟเวอร์ เซิร์ฟเวอร์สร้าง address ใหม่ให้ทุกคำสั่งซื้อและตรวจยอดได้เอง ถ้าเซิร์ฟเวอร์โดนเจาะ ผู้โจมตีได้เพียง xpub ซึ่งใช้จ่ายเงินไม่ได้ wallet ที่ดูยอดได้แต่ลงลายเซ็นไม่ได้แบบนี้เรียกว่า <strong>watch-only wallet</strong></p>
+        <p>xpub ยังมีความเสี่ยงสองข้อ</p>
+        <ul>
+          <li><strong>ความเป็นส่วนตัว:</strong> ผู้ที่ได้ xpub เห็น address ทุกตัวในกิ่งนั้นและยอดเงินทั้งหมด</li>
+          <li><strong>private key แม่รั่วได้:</strong> ถ้าผู้โจมตีมี xpub และได้ private key ลูกแบบปกติ (non-hardened) ไปเพียงหนึ่งดอก เขาคำนวณย้อนหา private key แม่ได้ แล้วใช้ key ทุกดอกในกิ่งนั้นได้</li>
+        </ul>
+        <p>BIP32 จึงมี <strong>hardened derivation</strong> สำหรับ index ตั้งแต่ 2<sup>31</sup> ขึ้นไป และเขียนด้วยเครื่องหมาย <code>'</code> ต่อท้ายเลขที่นับเพิ่มจาก 2<sup>31</sup> ดังนั้น <code>44'</code> จึงหมายถึง index 2<sup>31</sup> + 44 ไม่ใช่ 44 key ลูกแบบ hardened คำนวณจาก private key แม่เท่านั้น xpub จึงคำนวณลูกเหล่านี้ไม่ได้ และ key ลูกที่รั่วก็ย้อนไปหา key แม่ไม่ได้ BIP44 ใช้ hardened ในสามชั้นบนของเส้นทาง ความเสียหายในบัญชีหนึ่งจึงไม่ลามไปบัญชีอื่นหรือเหรียญอื่น</p>
+
+        <h3>BIP44: เส้นทางมาตรฐาน</h3>
+        <p>BIP32 กำหนดวิธีคำนวณ แต่ไม่ได้กำหนดว่าควรใช้กิ่งใด ถ้า wallet ยี่ห้อหนึ่งเก็บ address ไว้ที่กิ่ง <code>m/0/5</code> แต่อีกยี่ห้อค้นที่ <code>m/44'/0'/0'/0/5</code> ผู้ใช้ที่ย้ายไปใช้อีกยี่ห้อจะเห็นยอดเป็นศูนย์ เหรียญไม่ได้หาย แต่ wallet ใหม่คำนวณ address คนละชุดจึงมองไม่เห็น BIP44 จึงกำหนดเส้นทาง 5 ชั้นต่อจาก master key (<code>m</code>)</p>
+<pre><code>m / purpose' / coin_type' / account' / change / address_index</code></pre>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ชั้น</th><th>ความหมาย</th><th>ค่าที่พบบ่อย</th></tr>
+            <tr><td><code>purpose'</code></td><td>ระบุว่าเส้นทางนี้ใช้มาตรฐานใด ค่า purpose เท่ากับเลข BIP ของมาตรฐานนั้น เช่น 44' คือ BIP44 และ 84' คือ BIP84 มาตรฐานเหล่านี้ใช้โครงสร้าง 5 ชั้นเดียวกัน ฝั่ง Bitcoin ต่างกันที่ชนิด address</td><td>44' (Legacy 1…), 49' (P2SH-SegWit 3…), 84' (Native SegWit bc1q…), 86' (Taproot bc1p…)</td></tr>
+            <tr><td><code>coin_type'</code></td><td>ชนิดเหรียญตามทะเบียน SLIP-44</td><td>0' = Bitcoin, 1' = testnet ของทุกเหรียญ, 60' = Ethereum</td></tr>
+            <tr><td><code>account'</code></td><td>แยกบัญชีย่อยของผู้ใช้คนเดียว เช่น บัญชีส่วนตัวกับบัญชีธุรกิจ</td><td>0', 1', …</td></tr>
+            <tr><td><code>change</code></td><td>0 = address สำหรับรับเงิน (external), 1 = address สำหรับเงินทอน (internal)</td><td>Ethereum ใช้ 0 เสมอ เพราะ Account model ไม่มีเงินทอน</td></tr>
+            <tr><td><code>address_index</code></td><td>ลำดับของ address ในกิ่งนั้น</td><td>0, 1, 2, …</td></tr>
+          </table>
+        </div>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 306" role="img" aria-label="ต้นไม้ของ key จาก master key m แยกเป็นกิ่ง Bitcoin m/84'/0'/0' ซึ่งมีกิ่ง change 0 สำหรับรับเงินและ 1 สำหรับเงินทอน และกิ่ง Ethereum m/44'/60'/0'/0 ที่ address_index แต่ละค่าคือบัญชีหนึ่งใน MetaMask สามชั้นแรกเป็น hardened">
+            <g font-size="13" fill="currentColor" text-anchor="middle">
+              <g font-size="11" fill="#6b655c">
+                <text x="50" y="20">m</text>
+                <text x="175" y="20">purpose'</text>
+                <text x="295" y="20">coin_type'</text>
+                <text x="415" y="20">account'</text>
+                <text x="535" y="20">change</text>
+                <text x="680" y="20">address_index</text>
+              </g>
+
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <path d="M90,157 C110,157 110,100 130,100"/>
+                <path d="M90,157 C110,157 110,215 130,215"/>
+                <line x1="220" y1="100" x2="250" y2="100"/>
+                <line x1="340" y1="100" x2="370" y2="100"/>
+                <path d="M460,100 C475,100 475,65 490,65"/>
+                <path d="M460,100 C475,100 475,135 490,135"/>
+                <line x1="220" y1="215" x2="250" y2="215"/>
+                <line x1="340" y1="215" x2="370" y2="215"/>
+                <line x1="460" y1="215" x2="490" y2="215"/>
+                <line x1="580" y1="65" x2="610" y2="65"/>
+                <line x1="580" y1="135" x2="610" y2="135"/>
+                <line x1="580" y1="215" x2="610" y2="215"/>
+              </g>
+
+              <rect x="10" y="140" width="80" height="34" rx="8" fill="#fbeef5" stroke="#b0417a" stroke-width="1.5"/>
+              <text x="50" y="162" font-weight="700">m</text>
+              <text x="50" y="192" font-size="10" fill="#6b655c">master key</text>
+
+              <rect x="130" y="83" width="90" height="34" rx="8" fill="#fdf0e4" stroke="#e2761b"/>
+              <text x="175" y="105">84'</text>
+              <text x="175" y="133" font-size="10" fill="#6b655c">Native SegWit</text>
+              <rect x="250" y="83" width="90" height="34" rx="8" fill="#fdf0e4" stroke="#e2761b"/>
+              <text x="295" y="105">0'</text>
+              <text x="295" y="133" font-size="10" fill="#6b655c">Bitcoin</text>
+              <rect x="370" y="83" width="90" height="34" rx="8" fill="#fdf0e4" stroke="#e2761b"/>
+              <text x="415" y="105">0'</text>
+              <text x="415" y="133" font-size="10" fill="#6b655c">บัญชีแรก</text>
+
+              <rect x="490" y="48" width="90" height="34" rx="8" fill="#fdf0e4" stroke="#e2761b"/>
+              <text x="535" y="70">0 รับเงิน</text>
+              <rect x="490" y="118" width="90" height="34" rx="8" fill="#fdf0e4" stroke="#e2761b"/>
+              <text x="535" y="140">1 เงินทอน</text>
+
+              <rect x="610" y="48" width="140" height="34" rx="8" fill="#fff" stroke="#e2761b"/>
+              <text x="680" y="70" font-size="12">0, 1, 2 … → bc1q…</text>
+              <rect x="610" y="118" width="140" height="34" rx="8" fill="#fff" stroke="#e2761b"/>
+              <text x="680" y="140" font-size="12">0, 1 … → เงินทอน</text>
+
+              <rect x="130" y="198" width="90" height="34" rx="8" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="175" y="220">44'</text>
+              <text x="175" y="248" font-size="10" fill="#6b655c">BIP44</text>
+              <rect x="250" y="198" width="90" height="34" rx="8" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="295" y="220">60'</text>
+              <text x="295" y="248" font-size="10" fill="#6b655c">Ethereum</text>
+              <rect x="370" y="198" width="90" height="34" rx="8" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="415" y="220">0'</text>
+              <text x="415" y="248" font-size="10" fill="#6b655c">บัญชีแรก</text>
+              <rect x="490" y="198" width="90" height="34" rx="8" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="535" y="220">0</text>
+              <text x="535" y="248" font-size="10" fill="#6b655c">ไม่มีเงินทอน</text>
+              <rect x="610" y="198" width="140" height="34" rx="8" fill="#fff" stroke="#5a63d8"/>
+              <text x="680" y="220" font-size="12">0, 1, 2 … → 0x…</text>
+              <text x="680" y="248" font-size="10" fill="#6b655c">บัญชีที่ 1, 2, 3 ใน MetaMask</text>
+
+              <line x1="475" y1="34" x2="475" y2="262" stroke="#b0417a" stroke-width="1.3" stroke-dasharray="5 4"/>
+              <text x="470" y="276" text-anchor="end" font-size="11" fill="#8c2f5f">ซ้ายของเส้น: hardened (') xpub คำนวณไม่ได้</text>
+              <text x="480" y="276" text-anchor="start" font-size="11" fill="#8c2f5f">ขวาของเส้น: คำนวณจาก xpub ของบัญชีได้</text>
+              <text x="380" y="299" font-size="11" fill="#6b655c">ตัวอย่าง: m/84'/0'/0'/0/0 = address รับเงินตัวแรกของ Bitcoin, m/44'/60'/0'/0/1 = บัญชีที่สองใน MetaMask</text>
+            </g>
+          </svg>
+          <figcaption>seed เดียวคุมทั้งต้นไม้ กิ่ง Bitcoin (สีส้ม) และกิ่ง Ethereum (สีม่วง) ต่างกันเพียงค่าในชั้น purpose และ coin_type สามชั้นแรก (ซ้ายของเส้นประ) เป็น hardened ส่วนสองชั้นสุดท้าย (ขวาของเส้นประ) เป็นแบบปกติ ร้านค้าจึงให้เซิร์ฟเวอร์ถือ xpub ของบัญชีเพื่อสร้าง address รับเงินได้ โดยไม่ต้องมี private key</figcaption>
+        </figure>
+
+        <p>เมื่อกู้คืนจาก seed phrase wallet ไม่รู้ว่าเจ้าของเคยใช้ address ไปกี่ตัว จึงคำนวณ address เรียงไปทีละตัวแล้วถามโหนดว่ามีประวัติหรือไม่ BIP44 กำหนดให้หยุดค้นเมื่อเจอ address ที่ไม่เคยใช้ติดกัน 20 ตัว ค่านี้เรียกว่า <strong>gap limit</strong> ถ้าเจ้าของเคยสร้าง address ข้ามไปไกลกว่านั้น wallet อาจหาเงินไม่เจอจนกว่าจะตั้งค่าให้ค้นต่อ</p>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่ข้อสอบชอบถาม</span>
+          seed phrase ชุดเดียวคุม key ของทุกเหรียญและทุกบัญชีใน wallet นั้น ทั้ง BTC และ ETH ต่างกันเพียงกิ่ง ถ้า seed phrase รั่ว ทุกอย่างรั่วพร้อมกัน อีกประเด็นหนึ่งคือ ถ้ากู้คืนใน wallet อื่นแล้วยอดเป็นศูนย์ สาเหตุที่พบบ่อยคือ derivation path หรือ passphrase ไม่ตรงกับ wallet เดิม เหรียญยังอยู่บน chain ตามเดิม
+        </div>
+
+        <h3>ทดลอง: จาก entropy เป็นลำดับคำ (BIP39)</h3>
+        <p>เครื่องมือนี้สุ่ม entropy คำนวณ checksum ด้วย SHA-256 แล้วแบ่งเป็นกลุ่มละ 11 บิตตามขั้นตอนข้างต้น ผลลัพธ์แสดงเป็นลำดับคำ (0–2047) wallet จริงจะนำลำดับนี้ไปเปิดหาคำในรายการคำ ปุ่ม "จำลองการจดผิด 1 คำ" เปลี่ยนคำหนึ่งคำแบบสุ่ม แล้วตรวจว่า checksum ยังตรงหรือไม่ กดหลายครั้งเพื่อดูว่าตรวจพบบ่อยเพียงใด</p>
+        <div class="hash-demo" id="bip39demo">
+          <label for="bWords">จำนวนคำ</label>
+          <div class="row">
+            <select id="bWords">
+              <option value="12">12 คำ (entropy 128 บิต)</option>
+              <option value="15">15 คำ (entropy 160 บิต)</option>
+              <option value="18">18 คำ (entropy 192 บิต)</option>
+              <option value="21">21 คำ (entropy 224 บิต)</option>
+              <option value="24">24 คำ (entropy 256 บิต)</option>
+            </select>
+            <button class="btn primary" id="bNew" type="button">สุ่ม entropy ใหม่</button>
+            <button class="btn" id="bTypo" type="button">จำลองการจดผิด 1 คำ</button>
+          </div>
+          <label>entropy (ฐานสิบหก)</label>
+          <output id="bEnt"></output>
+          <label>บิตทั้งหมด แบ่งกลุ่มละ 11 บิต (ตัวหนาสีแดงคือ checksum)</label>
+          <output id="bBits"></output>
+          <label>ลำดับคำ (0–2047)</label>
+          <output id="bIdx"></output>
+          <div class="stat" id="bStat"></div>
+          <div class="diff" id="bTypoOut"></div>
+        </div>
+        <div class="callout warn">
+          <span class="h">ใช้เพื่อการเรียนเท่านั้น</span>
+          อย่าใช้ค่าที่สุ่มจากหน้าเว็บนี้หรือเว็บใดกับเงินจริง seed phrase ของจริงควรสร้างภายใน hardware wallet หรือ wallet ที่เชื่อถือได้ และไม่ควรปรากฏบนหน้าจอคอมพิวเตอร์ที่ต่ออินเทอร์เน็ต
+        </div>
+      </section>
+
+      <!-- ==================== 14.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">14.4</span>หลักการของ Hardware wallet: ลงลายเซ็นธุรกรรมภายในอุปกรณ์ โดย key ไม่ออกจากเครื่อง</h2>
+
+        <h3>โจทย์: ลงลายเซ็นบนคอมพิวเตอร์ที่ไว้ใจไม่ได้</h3>
+        <p>หัวข้อ 14.1 แสดงว่าหลังสร้าง key แล้ว งานเดียวของ wallet ที่ต้องใช้ private key คือการลงลายเซ็น หัวข้อ 14.2 แสดงว่า key บนคอมพิวเตอร์ที่ต่ออินเทอร์เน็ตเสี่ยงต่อ malware และ paper wallet ปลอดภัยเฉพาะช่วงที่ยังไม่นำ key มาใช้ hardware wallet นำสองข้อนี้มารวมกัน อุปกรณ์ขนาดเล็กนี้สร้างและเก็บ key ไว้ภายใน รับธุรกรรมที่ยังไม่มีลายเซ็นเข้ามา ลงลายเซ็นภายในอุปกรณ์ แล้วส่งออกไปเพียงธุรกรรมที่มีลายเซ็นแล้ว คอมพิวเตอร์ยังทำทุกงานที่ไม่ต้องใช้ key ได้ตามเดิม แต่ไม่เคยเห็น key เลย แนวทางนี้เรียกว่า <strong>offline signing</strong></p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 266" role="img" aria-label="ขั้นที่ 1 คอมพิวเตอร์ถามยอดและ UTXO จากเครือข่าย ขั้นที่ 2 ส่งธุรกรรมที่ยังไม่มีลายเซ็นเข้า hardware wallet ขั้นที่ 3 อุปกรณ์แสดงจำนวนเงินและ address บนหน้าจอของตัวเอง ผู้ใช้กดยืนยัน ขั้นที่ 4 อุปกรณ์ส่งธุรกรรมที่มีลายเซ็นกลับ ขั้นที่ 5 คอมพิวเตอร์ส่งเข้าเครือข่าย private key อยู่ใน secure element ตลอด">
+            <defs>
+              <marker id="arrHw14" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor" text-anchor="middle">
+              <rect x="10" y="40" width="150" height="170" rx="12" fill="#f0ebe1" stroke="#e4ddd0"/>
+              <text x="85" y="70" font-weight="700">เครือข่าย</text>
+              <text x="85" y="88" font-size="11" fill="#6b655c">full node</text>
+
+              <rect x="215" y="40" width="210" height="170" rx="12" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="320" y="66" font-weight="700">คอมพิวเตอร์ / มือถือ</text>
+              <text x="320" y="84" font-size="11" fill="#c2412d">ต่ออินเทอร์เน็ต อาจมี malware</text>
+              <rect x="232" y="100" width="176" height="92" rx="8" fill="#f0ebe1"/>
+              <text x="320" y="120" font-size="12" font-weight="700">แอป wallet</text>
+              <text x="320" y="140" font-size="11">ถามยอด เลือก UTXO</text>
+              <text x="320" y="158" font-size="11">สร้างธุรกรรม</text>
+              <text x="320" y="176" font-size="11">broadcast</text>
+
+              <rect x="520" y="40" width="230" height="170" rx="12" fill="#fbeef5" stroke="#b0417a" stroke-width="2.2"/>
+              <text x="635" y="66" font-weight="700" fill="#8c2f5f">Hardware wallet</text>
+              <text x="635" y="84" font-size="11" fill="#6b655c">ไม่ต่ออินเทอร์เน็ตเอง</text>
+              <rect x="538" y="96" width="136" height="50" rx="4" fill="#fff" stroke="currentColor"/>
+              <text x="606" y="116" font-size="11">ส่ง 0.10 BTC</text>
+              <text x="606" y="134" font-size="11" font-family="IBM Plex Mono, monospace">ถึง bc1q…9f3k</text>
+              <circle cx="710" cy="118" r="16" fill="#b0417a"/>
+              <text x="710" y="122" font-size="10" fill="#fff" font-weight="700">OK</text>
+              <text x="710" y="150" font-size="10" fill="#8c2f5f">3 กดยืนยัน</text>
+              <rect x="538" y="158" width="194" height="40" rx="6" fill="#fff" stroke="#b0417a" stroke-dasharray="5 4"/>
+              <text x="635" y="175" font-size="11" font-weight="700">secure element</text>
+              <text x="635" y="191" font-size="10">private key อยู่ในนี้เท่านั้น</text>
+
+              <g stroke="#6b655c" stroke-width="1.3" fill="none">
+                <line x1="162" y1="98" x2="211" y2="98" marker-end="url(#arrHw14)"/>
+                <line x1="213" y1="165" x2="164" y2="165" marker-end="url(#arrHw14)"/>
+                <line x1="427" y1="98" x2="516" y2="98" marker-end="url(#arrHw14)"/>
+                <line x1="518" y1="165" x2="429" y2="165" marker-end="url(#arrHw14)"/>
+              </g>
+              <g font-size="11" fill="#6b655c">
+                <text x="187" y="90">1 ยอด</text>
+                <text x="188" y="157">5 ส่ง</text>
+                <text x="472" y="90">2 ธุรกรรม</text>
+                <text x="472" y="116" font-size="10">ยังไม่มีลายเซ็น</text>
+                <text x="472" y="157">4 ธุรกรรม</text>
+                <text x="472" y="183" font-size="10">ที่มีลายเซ็น</text>
+              </g>
+
+              <g font-size="12">
+                <text x="320" y="236">เห็นธุรกรรมและลายเซ็น</text>
+                <text x="320" y="254">แต่ไม่เคยเห็น private key</text>
+                <text x="635" y="236">key ไม่ออกจากอุปกรณ์</text>
+                <text x="635" y="254">ส่งออกเพียงธุรกรรมที่มีลายเซ็น</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>คอมพิวเตอร์ทำทุกงานที่ไม่ต้องใช้ key ส่วนการลงลายเซ็นเกิดภายใน hardware wallet หลังผู้ใช้ตรวจรายละเอียดบนหน้าจอของอุปกรณ์และกดยืนยัน สิ่งที่ข้ามเส้นแบ่งระหว่างสองเครื่องมีเพียงธุรกรรม ไม่มี private key</figcaption>
+        </figure>
+
+        <ol>
+          <li>แอป wallet บนคอมพิวเตอร์ถามยอดจากโหนด เลือก UTXO (หรือใส่ nonce และ gas สำหรับ Ethereum) แล้วสร้างธุรกรรมที่ยังไม่มีลายเซ็น ฝั่ง Bitcoin มักส่งในรูปแบบมาตรฐาน <strong>PSBT</strong> (Partially Signed Bitcoin Transaction, BIP174)</li>
+          <li>คอมพิวเตอร์ส่งธุรกรรมเข้าอุปกรณ์ผ่าน USB, Bluetooth, QR code หรือ microSD</li>
+          <li>อุปกรณ์อ่านธุรกรรมแล้วแสดง address ปลายทาง จำนวนเงิน และค่าธรรมเนียมบน <strong>หน้าจอของอุปกรณ์เอง</strong> ผู้ใช้ตรวจแล้วกดปุ่มบนอุปกรณ์ อุปกรณ์จึงลงลายเซ็นด้วย private key ภายใน</li>
+          <li>อุปกรณ์ส่งธุรกรรมที่มีลายเซ็นกลับไปยังคอมพิวเตอร์</li>
+          <li>แอปบนคอมพิวเตอร์ broadcast ธุรกรรมเข้าเครือข่าย</li>
+        </ol>
+        <p>ถ้าคอมพิวเตอร์มี malware ผู้โจมตีดูยอดและประวัติได้ และอาจแก้ธุรกรรมก่อนส่งเข้าอุปกรณ์ แต่คัดลอก key ไม่ได้เพราะ key ไม่เคยออกมา และสร้างลายเซ็นเองไม่ได้ถ้าผู้ใช้ไม่กดยืนยันบนอุปกรณ์</p>
+
+        <h3>ทำไมต้องมีหน้าจอและปุ่มบนอุปกรณ์</h3>
+        <p>ถ้าอุปกรณ์ลงลายเซ็นทุกอย่างที่คอมพิวเตอร์ส่งมา malware ก็เพียงเปลี่ยน address ปลายทางเป็นของผู้โจมตีแล้วส่งเข้าไป อุปกรณ์จะลงลายเซ็นให้โดยไม่มีใครรู้ หน้าจอคอมพิวเตอร์ก็เชื่อไม่ได้ เพราะ malware แสดง address เดิมบนหน้าจอได้ ทั้งที่ส่ง address ใหม่เข้าอุปกรณ์ hardware wallet จึงต้องมีหน้าจอและปุ่มของตัวเองที่ malware บนคอมพิวเตอร์ควบคุมไม่ได้ ผู้ใช้จะรู้ได้แน่ว่ากำลังลงลายเซ็นอะไรก็จากหน้าจอนี้เท่านั้น</p>
+        <p>หลักเดียวกันใช้กับการรับเงินด้วย malware อาจแสดง address ของผู้โจมตีในแอปแทน address ของเรา ก่อนให้ address แก่ผู้โอนเงินก้อนใหญ่ ผู้ใช้ควรสั่งให้อุปกรณ์แสดง address รับเงินบนหน้าจอของอุปกรณ์แล้วเทียบให้ตรงกัน ทั้งสองกรณี ถ้าผู้ใช้กดยืนยันโดยไม่อ่านหน้าจออุปกรณ์ hardware wallet ก็ป้องกันอะไรไม่ได้</p>
+
+        <h3>ทำไมต้องมี secure element และ PIN</h3>
+        <p>ภัยอีกแบบคือมีคนขโมยตัวอุปกรณ์ไป ถ้า key เก็บอยู่ในหน่วยความจำธรรมดา ผู้โจมตีที่มีเครื่องมืออาจแกะชิปแล้วอ่านค่าได้ hardware wallet หลายรุ่นจึงเก็บ key ใน <strong>secure element</strong> secure element เป็นชิปประเภทเดียวกับที่ใช้ในบัตรธนาคารแบบชิปและซิมการ์ด ชิปนี้ออกแบบมาให้ทนการโจมตีทางกายภาพสองแบบ แบบแรกคือ side-channel attack ผู้โจมตีวัดกำลังไฟหรือคลื่นแม่เหล็กไฟฟ้าที่ชิปปล่อยออกมาระหว่างคำนวณ ค่าที่วัดได้เปลี่ยนไปตามบิตของ key ผู้โจมตีจึงใช้ค่านี้เดา key ได้ แบบที่สองคือ fault injection ผู้โจมตีรบกวนแรงดันไฟให้ชิปทำงานผิดพลาด เช่น ข้ามขั้นตรวจ PIN หรือส่งข้อมูลในหน่วยความจำออกมา secure element มีวงจรที่ลดสัญญาณรั่วและตรวจจับการรบกวนแบบนี้</p>
+        <p>อุปกรณ์ยังล็อกด้วย <strong>PIN</strong> และหลายรุ่นล้างข้อมูลทั้งหมดเมื่อใส่ PIN ผิดครบจำนวนครั้งที่กำหนด การล้างข้อมูลไม่ทำให้เจ้าของเสียเงิน เพราะเจ้าของกู้คืนจาก seed phrase ได้ แต่ผู้ขโมยจะเดา PIN ไปเรื่อย ๆ ไม่ได้ hardware wallet บางรุ่นใช้ microcontroller ทั่วไปแทน secure element และเคยมีรายงานว่าผู้ที่ได้ตัวเครื่องไปและมีอุปกรณ์เฉพาะทางดึง seed ออกมาได้ สำหรับรุ่นแบบนี้ ผู้ใช้ควรตั้ง passphrase เพิ่ม เพราะ passphrase ไม่ได้เก็บอยู่ในเครื่อง</p>
+
+        <h3>Air-gapped signing</h3>
+        <p>hardware wallet บางรุ่นไม่ต่อสายกับคอมพิวเตอร์เลย แต่รับส่งธุรกรรมผ่าน QR code หรือการ์ด microSD แทน แนวทางนี้เรียกว่า <strong>air-gapped</strong> ข้อดีคือตัดช่องทางที่ malware อาจโจมตีอุปกรณ์ผ่านสาย USB และผู้ใช้เห็นได้ชัดว่ามีข้อมูลอะไรผ่านเข้าออกบ้าง PSBT ในข้อ 1 ช่วยให้ทำแบบนี้ได้ เพราะเป็นรูปแบบมาตรฐานที่ทั้งแอปและอุปกรณ์อ่านได้</p>
+
+        <h3>Ethereum: ปัญหา blind signing</h3>
+        <p>ธุรกรรมโอน BTC หรือ ETH ธรรมดาแสดงบนหน้าจอได้ง่าย มีเพียง address และจำนวนเงิน แต่ธุรกรรมที่เรียก smart contract มี <code>data</code> เป็น function selector ตามด้วยพารามิเตอร์ (บทที่ 5) ถ้าอุปกรณ์ถอดความหมาย (decode) ของ data ไม่ได้ ก็แสดงได้เพียงค่าแฮชหรือเลขฐานสิบหกยาว ๆ ผู้ใช้จึงลงลายเซ็นโดยไม่รู้ว่าธุรกรรมทำอะไร เรียกว่า <strong>blind signing</strong> ผู้ใช้อาจกำลังยืนยัน <code>approve</code> ให้ผู้โจมตีถอนโทเคนทั้งหมด (บทที่ 12) โดยไม่รู้ตัว ลายเซ็นข้อความนอก chain (off-chain) ตาม EIP-712 ก็มีปัญหาเดียวกัน ลายเซ็นแบบนี้ไม่ใช่ธุรกรรมและไม่เสีย gas ผู้ใช้จึงมักคิดว่าไม่มีผล แต่ลายเซ็น <code>permit</code> ให้สิทธิ์ใช้โทเคนได้เหมือน <code>approve</code> คนที่ได้ลายเซ็นไปส่งลายเซ็นนั้นเข้า contract เองได้ แล้วโอนโทเคนออกตามสิทธิ์นั้น</p>
+        <p>ทางแก้คือ <strong>clear signing</strong> อุปกรณ์ถอดความหมายของ data แล้วแสดงชื่อฟังก์ชันและพารามิเตอร์ในรูปที่คนอ่านเข้าใจ ถ้าอุปกรณ์แสดงรายละเอียดไม่ได้ ผู้ใช้ไม่ควรยืนยัน โดยเฉพาะเมื่อธุรกรรมมาจากเว็บไซต์ที่ไม่คุ้นเคย</p>
+
+        <div class="callout warn">
+          <span class="h">Hardware wallet กันไม่ให้ key รั่ว แต่ตัดสินใจแทนผู้ใช้ไม่ได้</span>
+          เหตุการณ์ที่ Bybit (กุมภาพันธ์ 2025) เป็นตัวอย่างที่มักยกกัน ผู้โจมตีแก้หน้าเว็บที่ทีมงานใช้สร้างธุรกรรมของ cold wallet แบบ multisig ผู้ลงลายเซ็นทุกคนเห็นธุรกรรมโอนเงินตามปกติบนหน้าเว็บ แต่ธุรกรรมที่ส่งเข้า hardware wallet จริงเป็นคำสั่งเปลี่ยน smart contract ของ multisig wallet (Safe) ให้ไปใช้โค้ดของผู้โจมตี และหน้าจออุปกรณ์แสดงรายละเอียดได้ไม่ครบ เมื่อลงลายเซ็นครบตามจำนวน ผู้โจมตีก็ควบคุม wallet นั้นได้ แล้วโอน ETH และโทเคนที่อิง ETH มูลค่าราว 1.4–1.5 พันล้านดอลลาร์ออกไป key ไม่ได้รั่วเลย แต่ผู้ถือ key ยืนยันธุรกรรมที่ตนไม่ได้อ่านจริง
+        </div>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>Hot wallet บนคอมพิวเตอร์ / มือถือ</th><th>Hardware wallet</th></tr>
+            <tr><td>private key อยู่ที่</td><td>ไฟล์หรือหน่วยความจำของเครื่องที่ต่ออินเทอร์เน็ต</td><td>ภายในอุปกรณ์ หลายรุ่นอยู่ใน secure element</td></tr>
+            <tr><td>ลงลายเซ็นที่</td><td>เครื่องเดียวกับที่ต่ออินเทอร์เน็ต</td><td>ภายในอุปกรณ์</td></tr>
+            <tr><td>malware ขโมย key ได้หรือไม่</td><td>ได้</td><td>ไม่ได้</td></tr>
+            <tr><td>malware เปลี่ยน address ปลายทางได้หรือไม่</td><td>ได้ และผู้ใช้อาจไม่รู้ตัว</td><td>แก้ธุรกรรมที่ส่งเข้าไปได้ แต่ address จริงจะปรากฏบนหน้าจออุปกรณ์ ผู้ใช้ที่ตรวจจะเห็น</td></tr>
+            <tr><td>อุปกรณ์หาย</td><td>ผู้เก็บได้อาจถอดรหัสไฟล์ wallet ถ้ารหัสผ่านอ่อน</td><td>ผู้เก็บได้ต้องรู้ PIN ส่วนเจ้าของกู้คืนจาก seed phrase</td></tr>
+            <tr><td>สิ่งที่ยังป้องกันไม่ได้</td><td colspan="2">seed phrase ที่สำรองไว้รั่ว และผู้ใช้กดยืนยันธุรกรรมอันตรายเอง (หัวข้อ 14.5)</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 14.5 ==================== -->
+      <section id="s5">
+        <h2><span class="no">14.5</span>ภัยที่พบบ่อยและวิธีป้องกัน</h2>
+
+        <h3>ทำไมผู้โจมตีไม่เจาะที่คณิตศาสตร์</h3>
+        <p>ผู้โจมตีเดา private key หรือ seed phrase ที่มี entropy 128 บิตไม่ได้ในทางปฏิบัติ (หัวข้อ 14.3) ผู้โจมตีจึงเลือกจุดที่อ่อนกว่า ได้แก่ ตัวผู้ใช้ วิธีสำรอง seed phrase และหน้าจอที่ผู้ใช้เชื่อ ธุรกรรมที่สำเร็จแล้วย้อนไม่ได้ ผู้โจมตีจึงต้องสำเร็จเพียงครั้งเดียว ในขณะที่ผู้ใช้ต้องไม่พลาดเลย ภัยที่พบบ่อยแบ่งตามผลที่เกิดได้สามกลุ่ม คือ seed phrase ตกไปถึงผู้โจมตี ผู้ใช้โดนหลอกให้ลงลายเซ็นธุรกรรมที่ผู้โจมตีได้ประโยชน์ และเจ้าของเข้าถึง key ของตัวเองไม่ได้อีก</p>
+
+        <h3>กลุ่มที่ 1: ภัยที่มุ่งเอา seed phrase</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ภัย</th><th>วิธีการ</th><th>วิธีป้องกัน</th></tr>
+            <tr><td>Phishing ขอ seed phrase</td><td>เว็บไซต์ แอป หรือ "ฝ่ายช่วยเหลือ" ปลอม แจ้งว่าบัญชีมีปัญหา แล้วให้กรอก seed phrase เพื่อ "ยืนยัน" หรือ "ซิงก์" wallet</td><td>ไม่กรอก seed phrase ลงเว็บไซต์ แชต หรือแอปที่ขอมา hardware wallet ส่วนใหญ่ให้กรอก seed phrase บนตัวอุปกรณ์ตอนกู้คืนเท่านั้น บางรุ่น เช่น Trezor Model One ให้พิมพ์คำผ่านคอมพิวเตอร์ตามลำดับที่อุปกรณ์สลับไว้ ซึ่งทำได้เฉพาะในขั้นตอนกู้คืนของแอปทางการ ผู้ผลิตไม่มีเหตุผลใดที่ต้องขอ seed phrase</td></tr>
+            <tr><td>อุปกรณ์ปลอมหรือโดนดัดแปลง (supply chain attack)</td><td>ขายอุปกรณ์ผ่านร้านที่ไม่ใช่ตัวแทน หรือส่งอุปกรณ์ "ทดแทน" มาทางไปรษณีย์ บางกล่องแนบการ์ดที่พิมพ์ seed phrase มาให้ใช้</td><td>ซื้อจากผู้ผลิตหรือตัวแทนที่ได้รับอนุญาต ให้อุปกรณ์สร้าง seed phrase ใหม่เองทุกครั้ง ถ้ามี seed phrase มาในกล่อง ให้ถือว่าเป็นของปลอม</td></tr>
+            <tr><td>สำรองแบบดิจิทัล</td><td>ถ่ายรูป seed phrase แล้วรูปซิงก์ขึ้นคลาวด์ จดในแอปโน้ต หรือส่งอีเมลหาตัวเอง แล้วบัญชีคลาวด์หรืออีเมลโดนเจาะ</td><td>จดด้วยมือบนกระดาษหรือแผ่นโลหะ ไม่เก็บสำเนาในอุปกรณ์ที่ต่ออินเทอร์เน็ต</td></tr>
+            <tr><td>คนใกล้ตัวเห็นการ์ด seed phrase</td><td>เก็บการ์ดไว้กับตัวอุปกรณ์ หรือในที่ที่คนในบ้านหรือที่ทำงานเปิดดูได้</td><td>เก็บในที่ที่คนอื่นเข้าถึงไม่ได้ และพิจารณาตั้ง passphrase เพิ่ม</td></tr>
+          </table>
+        </div>
+
+        <div class="callout">
+          <span class="h">ข้อมูลส่วนตัวรั่วก็นำไปสู่การขโมยเหรียญได้</span>
+          ในปี 2020 ฐานข้อมูลลูกค้าของ Ledger ผู้ผลิต hardware wallet รายใหญ่ รั่วออกไป ข้อมูลที่รั่วมีชื่อ ที่อยู่ และเบอร์โทรศัพท์ ไม่มี key ของลูกค้า แต่หลังจากนั้นลูกค้าจำนวนมากได้รับอีเมลและ SMS ปลอม และมีรายงานว่าบางรายได้รับอุปกรณ์ปลอมทางไปรษณีย์ที่ออกแบบมาเพื่อขโมย seed phrase ผู้โจมตีรู้แน่ชัดว่าคนเหล่านี้ถือเหรียญ จึงส่ง phishing ได้ตรงเป้า
+        </div>
+
+        <h3>กลุ่มที่ 2: ภัยที่หลอกให้ลงลายเซ็น</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ภัย</th><th>วิธีการ</th><th>วิธีป้องกัน</th></tr>
+            <tr><td>Malware เปลี่ยน address (clipboard hijacker)</td><td>ผู้ใช้คัดลอก address ผู้รับ แล้ว malware แทนที่ด้วย address ของผู้โจมตี ซึ่งมักมีตัวอักษรต้นและท้ายคล้ายกัน</td><td>ตรวจ address ทั้งหมดบนหน้าจอ hardware wallet ไม่ใช่แค่ตัวแรกและตัวท้าย</td></tr>
+            <tr><td>Address poisoning</td><td>ผู้โจมตีสร้าง address ที่ต้นและท้ายเหมือน address ที่เราเคยโอนให้ แล้วส่งธุรกรรมมูลค่าศูนย์หรือน้อยมากเข้ามา address ปลอมจึงปรากฏในประวัติ ผู้ใช้คัดลอกจากประวัติไปใช้ครั้งต่อไป</td><td>ไม่คัดลอก address จากประวัติธุรกรรม ใช้สมุด address (address book) หรือขอ address จากผู้รับโดยตรง และโอนจำนวนน้อยทดสอบก่อนเมื่อเป็นยอดใหญ่</td></tr>
+            <tr><td>Approve หรือลายเซ็นที่ให้สิทธิ์เกินจำเป็น (wallet drainer)</td><td>DApp ปลอมขอให้ <code>approve</code> โทเคน หรือ <code>setApprovalForAll</code> ของ NFT (บทที่ 12) หรือขอลายเซ็น <code>permit</code> แล้วใช้สิทธิ์นั้นโอนทรัพย์สินออกภายหลัง</td><td>อ่านสิ่งที่ลงลายเซ็นบนหน้าจออุปกรณ์ ปฏิเสธเมื่อเป็น blind signing ใช้ hot wallet แยกที่มีเงินน้อยสำหรับทดลอง DApp และเพิกถอนสิทธิ์ (revoke) ที่ไม่ใช้แล้ว</td></tr>
+          </table>
+        </div>
+
+        <h3>กลุ่มที่ 3: ภัยที่ทำให้เจ้าของเข้าถึง key ไม่ได้</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ภัย</th><th>วิธีการหรือสาเหตุ</th><th>วิธีป้องกัน</th></tr>
+            <tr><td>seed phrase เสียหายหรือหาย</td><td>ไฟไหม้ น้ำท่วม หมึกซีด หรือทิ้งไปโดยไม่ตั้งใจ</td><td>เก็บสำเนามากกว่าหนึ่งชุดในสถานที่ต่างกัน ใช้แผ่นโลหะ และทดลองกู้คืนจาก seed phrase ก่อนโอนเงินก้อนใหญ่เข้า</td></tr>
+            <tr><td>ลืม passphrase หรือ derivation path</td><td>ไม่ได้จด passphrase หรือไม่ได้จดว่า wallet เดิมใช้ derivation path ใด เมื่อกู้คืนใน wallet อื่นจึงเห็นยอดเป็นศูนย์</td><td>จดไว้ว่าใช้ wallet ใดและตั้งค่าอย่างไร และสำรอง passphrase แยกจาก seed phrase</td></tr>
+            <tr><td>เจ้าของเสียชีวิตหรือไร้ความสามารถ</td><td>ทายาทไม่รู้ว่ามีเหรียญ หรือไม่รู้วิธีเข้าถึง เหรียญจึงหายถาวร</td><td>วางแผนมรดก บอกวิธีหาข้อมูลแก่คนที่ไว้ใจ หรือใช้ multisig ที่ทายาทถือ key บางดอก</td></tr>
+          </table>
+        </div>
+
+        <p>ภัยอีกแบบไม่เข้ากลุ่มใดข้างต้น คือการบังคับข่มขู่ทางกายภาพ (wrench attack) ในกรณีนี้ key ไม่ได้รั่วและเจ้าของก็ยังเข้าถึง key ได้ แต่ผู้ร้ายบังคับให้เจ้าของโอนเหรียญด้วยมือตัวเอง hardware wallet จึงช่วยไม่ได้ วิธีลดความเสี่ยงคือไม่เปิดเผยยอดถือครอง และใช้ passphrase ซ่อน wallet หลักไว้ เจ้าของเก็บเงินจำนวนน้อยใน wallet ที่ไม่มี passphrase และยอมเปิด wallet นี้ให้ผู้ร้ายดูได้ ส่วน wallet หลักต้องใส่ passphrase จึงจะเห็น อีกวิธีคือใช้ multisig ที่ key อยู่หลายสถานที่ เจ้าของจึงโอนคนเดียวทันทีไม่ได้</p>
+
+        <h3>Multisig: ตัดจุดล้มเหลวเดียว</h3>
+        <p>ทุกวิธีข้างต้นยังมี seed phrase ชุดเดียวเป็น<strong>จุดล้มเหลวเดียว (single point of failure)</strong> seed phrase นั้นรั่วก็เสียทั้งหมด หายก็เสียทั้งหมด <strong>multisig</strong> (multi-signature) แก้ปัญหานี้โดยกำหนดให้ใช้ลายเซ็นจาก key หลายดอก ตัวอย่างเช่นแบบ 2-of-3 เจ้าของมี key 3 ดอกเก็บในอุปกรณ์และสถานที่ต่างกัน การใช้เหรียญแต่ละครั้งต้องมีลายเซ็นอย่างน้อย 2 ดอก</p>
+        <ul>
+          <li><strong>key หนึ่งดอกรั่ว:</strong> ผู้โจมตีมีลายเซ็นเพียงหนึ่งดอก จึงยังใช้เหรียญไม่ได้</li>
+          <li><strong>key หนึ่งดอกหาย:</strong> เจ้าของยังใช้อีกสองดอกย้ายเหรียญไป wallet ใหม่ได้</li>
+        </ul>
+        <p>Bitcoin ทำ multisig ใน Script ได้โดยตรง มักอยู่ใน address แบบ P2SH หรือ P2WSH ส่วน Ethereum ทำผ่าน smart contract wallet เช่น Safe ข้อแลกเปลี่ยนคือตั้งค่าและกู้คืนยากกว่า ฝั่ง Bitcoin ผู้ใช้ต้องสำรองข้อมูลการตั้งค่าของ multisig ด้วย เช่น xpub ของทุกดอกและจำนวนลายเซ็นที่ต้องใช้ ไม่ใช่สำรองเพียง seed phrase ของแต่ละดอก เหตุผลคือ address ของ multisig คำนวณจาก script ที่มี public key ครบทุกดอกและจำนวนลายเซ็นที่กำหนด ถ้าเหลือ seed phrase เพียงสองชุดจากสามชุด และไม่มี xpub ของดอกที่สาม wallet จะสร้าง script และ address เดิมไม่ได้ จึงหาเหรียญไม่เจอ แม้จะมี key ครบสองดอกตามเงื่อนไขก็ตาม กรณี Bybit ในหัวข้อ 14.4 ยังแสดงว่า multisig ไม่ช่วย ถ้าผู้ลงลายเซ็นทุกคนเห็นข้อมูลเดียวกันจากหน้าเว็บที่โดนแก้ แล้วยืนยันโดยไม่ได้ตรวจบนอุปกรณ์</p>
+
+        <div class="callout exam">
+          <span class="h">กฎที่ควรจำ</span>
+          <ol>
+            <li>กรอก seed phrase เฉพาะตอนกู้คืน และกรอกในอุปกรณ์หรือแอป wallet ที่ตัวเองเลือกและตรวจแหล่งที่มาแล้วเท่านั้น ถ้าใช้ hardware wallet ให้กรอกผ่านขั้นตอนกู้คืนของอุปกรณ์ ใครขอ seed phrase ไม่ว่าด้วยเหตุผลใด ให้ถือว่าเป็นผู้โจมตี</li>
+            <li>ให้อุปกรณ์สร้าง seed phrase เอง ไม่ใช้ seed phrase ที่คนอื่นเตรียมไว้ให้</li>
+            <li>สำรอง seed phrase แบบออฟไลน์ มากกว่าหนึ่งชุด และทดลองกู้คืนก่อนใช้จริง</li>
+            <li>เชื่อเฉพาะสิ่งที่แสดงบนหน้าจอของอุปกรณ์ ถ้าอ่านไม่เข้าใจหรือแสดงไม่ครบ อย่ากดยืนยัน</li>
+            <li>แยกเงินเก็บ (cold) ออกจากเงินใช้จ่ายและการทดลอง DApp (hot)</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li><strong>โจทย์:</strong> ผู้ถือ private key คือเจ้าของเหรียญ และไม่มีตัวกลางกู้บัญชีหรือย้อนธุรกรรมให้ เจ้าของจึงต้องป้องกัน key ทั้งจากการหายและการรั่ว ในขณะที่ key ยังต้องพร้อมลงลายเซ็น</li>
+          <li><strong>14.1:</strong> เหรียญอยู่บน chain เสมอ wallet เก็บเพียง private key และหลังสร้าง key แล้ว งานเดียวที่ต้องใช้ private key คือการลงลายเซ็น custodial wallet ให้ผู้ให้บริการถือ key แทน จึงนำตัวกลางกลับมา (Not your keys, not your coins)</li>
+          <li><strong>14.2:</strong> Hot wallet เก็บ key บนอุปกรณ์ที่ต่ออินเทอร์เน็ต สะดวกแต่เสี่ยงต่อภัยระยะไกล Cold wallet เก็บ key นอกอินเทอร์เน็ต เหมาะกับเงินเก็บระยะยาว paper wallet เป็น cold ก็จริง แต่ key กลายเป็น hot ทันทีที่นำมาใช้</li>
+          <li><strong>14.3:</strong> BIP39 แปลง entropy 128–256 บิตพร้อม checksum เป็นคำ 12–24 คำ ขั้นนี้แปลงกลับได้ จากนั้นใช้ PBKDF2 แปลงเป็น seed 512 บิต ซึ่งย้อนกลับไม่ได้ BIP32 คำนวณ key ทั้งต้นไม้จาก seed เดียว และมี xpub กับ hardened derivation BIP44 กำหนดเส้นทาง <code>m/purpose'/coin_type'/account'/change/address_index</code> wallet ต่างยี่ห้อจึงกู้คืนได้ตรงกัน</li>
+          <li><strong>14.4:</strong> hardware wallet ลงลายเซ็นภายในอุปกรณ์และส่งออกเพียงธุรกรรมที่มีลายเซ็น หน้าจอและปุ่มของอุปกรณ์ทำให้ผู้ใช้เห็นได้ถ้า malware แก้ธุรกรรม secure element และ PIN ป้องกันผู้ที่ได้ตัวเครื่องไป แต่ถ้าผู้ใช้กดยืนยันโดยไม่อ่าน หรือยอมลงลายเซ็นแบบ blind signing อุปกรณ์ก็ลงลายเซ็นให้ตามคำสั่ง</li>
+          <li><strong>14.5:</strong> ผู้โจมตีเลือกเจาะที่คนและกระบวนการ ไม่ใช่ที่คณิตศาสตร์ ภัยแบ่งเป็นสามกลุ่ม คือเอา seed phrase หลอกให้ลงลายเซ็น และทำให้เจ้าของเข้าถึง key ไม่ได้ ส่วน wrench attack บังคับเจ้าของโดยตรง multisig ช่วยตัดจุดล้มเหลวเดียว</li>
+        </ul>
+
+        <h3>คำศัพท์และตัวเลขที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>รายการ</th><th>ค่าหรือความหมาย</th></tr>
+            <tr><td>ขนาด private key</td><td>256 บิต</td></tr>
+            <tr><td>seed phrase 12 คำ / 24 คำ</td><td>entropy 128 + checksum 4 บิต / entropy 256 + checksum 8 บิต</td></tr>
+            <tr><td>ขนาดรายการคำ BIP39</td><td>2048 คำ = 2<sup>11</sup> หนึ่งคำแทน 11 บิต</td></tr>
+            <tr><td>checksum ของ BIP39</td><td>บิตแรก ๆ ของ SHA-256(entropy) จำนวนบิตเท่ากับขนาด entropy ÷ 32 เช่น entropy 128 บิตได้ checksum 4 บิต</td></tr>
+            <tr><td>seed phrase เป็น seed</td><td>PBKDF2-HMAC-SHA512 วน 2048 รอบ ได้ seed 512 บิต salt = "mnemonic" + passphrase</td></tr>
+            <tr><td>master key ของ BIP32</td><td>HMAC-SHA512(key = "Bitcoin seed", seed) ซ้าย 256 บิตเป็น private key ขวา 256 บิตเป็น chain code</td></tr>
+            <tr><td>hardened index</td><td>ตั้งแต่ 2<sup>31</sup> ขึ้นไป เขียนด้วย ' เช่น 44' = 2<sup>31</sup> + 44</td></tr>
+            <tr><td>เส้นทาง BIP44</td><td>m / purpose' / coin_type' / account' / change / address_index</td></tr>
+            <tr><td>coin_type</td><td>0' = Bitcoin, 1' = testnet, 60' = Ethereum</td></tr>
+            <tr><td>purpose ของ Bitcoin</td><td>44' Legacy, 49' P2SH-SegWit, 84' Native SegWit, 86' Taproot</td></tr>
+            <tr><td>gap limit</td><td>20 address ที่ไม่เคยใช้ติดกัน</td></tr>
+            <tr><td>PSBT</td><td>รูปแบบมาตรฐานของธุรกรรม Bitcoin ที่ยังลงลายเซ็นไม่ครบ (BIP174)</td></tr>
+            <tr><td>xpub</td><td>public key + chain code คำนวณ public key ลูกแบบปกติได้ แต่ลงลายเซ็นไม่ได้</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. โทรศัพท์ที่ติดตั้ง MetaMask หาย แต่เจ้าของจด seed phrase ไว้ ETH ในบัญชีหายไปด้วยหรือไม่ และเจ้าของควรทำอะไรต่อ</p>
+          <details><summary>ดูเฉลย</summary><div><strong>ไม่หาย</strong> เพราะ ETH อยู่ใน world state บน chain ไม่ได้อยู่ในโทรศัพท์ เจ้าของติดตั้ง wallet บนเครื่องใหม่แล้วกู้คืนจาก seed phrase ก็ได้ key ชุดเดิม แต่ถ้าผู้เก็บได้ปลดล็อกโทรศัพท์ได้ เขาก็อาจเข้าถึง key ได้เช่นกัน เจ้าของจึงควรสร้าง seed phrase ชุดใหม่แล้วโอนเงินทั้งหมดไปยัง address ใหม่โดยเร็ว</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. seed phrase 24 คำตาม BIP39 มี entropy กี่บิต</p>
+          <ol><li>ก. 128 บิต</li><li>ข. 192 บิต</li><li>ค. 256 บิต</li><li>ง. 264 บิต</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> 24 คำ × 11 บิต = 264 บิต ประกอบด้วย entropy 256 บิตและ checksum 256 / 32 = 8 บิต ข้อ ง คือจำนวนบิตรวมที่นับ checksum ด้วย</div></details>
+        </div>
+
+        <div class="q">
+          <p>3. checksum ใน seed phrase ช่วยอะไร และทำไมจดผิดหนึ่งคำใน seed phrase 12 คำจึงอาจยังผ่านการตรวจได้</p>
+          <details><summary>ดูเฉลย</summary><div>checksum ช่วยให้ wallet ตรวจพบว่าคำผิด แทนที่จะกู้คืนเป็น wallet อื่นที่ว่างเปล่าโดยไม่เตือน แต่ seed phrase 12 คำมี checksum เพียง 4 บิต ซึ่งมี 16 ค่าที่เป็นไปได้ คำที่ผิดแบบสุ่มจึงมีโอกาสราว 1 ใน 16 ที่ checksum ตรงโดยบังเอิญ</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. ข้อใดไม่ใช่ cold wallet</p>
+          <ol><li>ก. Hardware wallet</li><li>ข. Paper wallet ที่ยังไม่เคยนำ key ไปใช้</li><li>ค. MetaMask บนเบราว์เซอร์</li><li>ง. คอมพิวเตอร์ที่ไม่เคยต่อเครือข่าย ใช้ลงลายเซ็นอย่างเดียว</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> MetaMask เก็บ key ไว้ในเบราว์เซอร์บนเครื่องที่ต่ออินเทอร์เน็ต จึงเป็น hot wallet เกณฑ์แบ่ง hot กับ cold คือ private key อยู่บนอุปกรณ์ที่ต่ออินเทอร์เน็ตหรือไม่</div></details>
+        </div>
+
+        <div class="q">
+          <p>5. derivation path ใดคือ address ของบัญชีที่สองใน MetaMask</p>
+          <ol><li>ก. <code>m/44'/0'/0'/0/1</code></li><li>ข. <code>m/44'/60'/1'/0/0</code></li><li>ค. <code>m/44'/60'/0'/0/1</code></li><li>ง. <code>m/44'/60'/0'/1/0</code></li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> coin_type ของ Ethereum คือ 60' และ MetaMask เพิ่มบัญชีใหม่ที่ชั้น address_index ข้อ ก เป็นกิ่งของ Bitcoin (coin_type 0') ข้อ ข เพิ่มที่ชั้น account' ซึ่งเป็นรูปแบบที่ wallet บางยี่ห้อใช้ แต่ไม่ใช่ของ MetaMask ข้อ ง ใช้ change = 1 ซึ่ง Ethereum ไม่ใช้เพราะ Account model ไม่มีเงินทอน</div></details>
+        </div>
+
+        <div class="q">
+          <p>6. ร้านค้านำ xpub ของบัญชีไปไว้บนเซิร์ฟเวอร์เพื่อสร้าง address รับเงิน ได้ประโยชน์อะไร และถ้าพนักงานคนหนึ่งได้ private key ของ address รับเงินไปหนึ่งดอก จะเกิดอะไรขึ้น</p>
+          <details><summary>ดูเฉลย</summary><div>เซิร์ฟเวอร์สร้าง address ใหม่ให้ทุกคำสั่งซื้อและตรวจยอดได้โดยไม่ต้องมี private key ถ้าเซิร์ฟเวอร์โดนเจาะ ผู้โจมตีเห็นยอดและประวัติแต่ใช้เงินไม่ได้ อย่างไรก็ตาม address รับเงินอยู่ในชั้นที่ไม่ใช่ hardened ถ้าใครมีทั้ง xpub และ private key ลูกหนึ่งดอก ก็คำนวณย้อนหา private key ของบัญชีได้ และใช้เงินทุก address ในบัญชีนั้นได้ ส่วนบัญชีอื่นหรือเหรียญอื่นไม่เสียหาย เพราะชั้น account' ขึ้นไปเป็น hardened</div></details>
+        </div>
+
+        <div class="q">
+          <p>7. คอมพิวเตอร์ของผู้ใช้ติด malware และผู้ใช้โอน BTC ด้วย hardware wallet hardware wallet ป้องกันอะไรได้และป้องกันอะไรไม่ได้</p>
+          <details><summary>ดูเฉลย</summary><div><strong>ป้องกันได้:</strong> malware คัดลอก private key ไม่ได้เพราะ key ไม่ออกจากอุปกรณ์ และสร้างลายเซ็นเองไม่ได้ถ้าผู้ใช้ไม่กดยืนยัน <strong>ป้องกันไม่ได้:</strong> malware แก้ address ปลายทางในธุรกรรมที่ส่งเข้าอุปกรณ์ได้ ถ้าผู้ใช้ไม่ตรวจ address บนหน้าจออุปกรณ์แล้วกดยืนยัน เงินก็ไปถึงผู้โจมตี นอกจากนี้ malware ยังเห็นยอดและประวัติธุรกรรมได้</div></details>
+        </div>
+
+        <div class="q">
+          <p>8. ทำไม hardware wallet ต้องมีหน้าจอของตัวเอง ทั้งที่คอมพิวเตอร์ก็แสดงรายละเอียดธุรกรรมได้อยู่แล้ว</p>
+          <details><summary>ดูเฉลย</summary><div>malware ควบคุมหน้าจอคอมพิวเตอร์ได้ จึงแสดง address ที่ถูกต้องบนหน้าจอ แต่ส่งธุรกรรมที่มี address ของผู้โจมตีเข้าอุปกรณ์ได้ หน้าจอของอุปกรณ์แสดงข้อมูลจากธุรกรรมที่อุปกรณ์กำลังจะลงลายเซ็นจริง และ malware บนคอมพิวเตอร์แก้หน้าจอนี้ไม่ได้ จึงเป็นจุดเดียวที่ผู้ใช้เชื่อได้</div></details>
+        </div>
+
+        <div class="q">
+          <p>9. ผู้ใช้กู้คืน seed phrase 12 คำที่ถูกต้องใน wallet ยี่ห้อใหม่ แต่ยอดแสดงเป็นศูนย์ สาเหตุที่เป็นไปได้มีอะไรบ้าง</p>
+          <details><summary>ดูเฉลย</summary><div>(1) derivation path ไม่ตรงกัน เช่น wallet เดิมใช้ <code>m/84'/0'/0'</code> แต่ wallet ใหม่ค้นที่ <code>m/44'/0'/0'</code> (2) wallet เดิมตั้ง passphrase ไว้ แต่ตอนกู้คืนไม่ได้ใส่หรือใส่ผิด ซึ่ง wallet ไม่มีทางเตือนได้ (3) address ที่มีเงินอยู่ไกลเกิน gap limit 20 ตัว (4) wallet ใหม่ต่อกับเครือข่ายอื่น เช่น testnet ในทุกกรณี เหรียญยังอยู่บน chain เพียงแต่ wallet ใหม่ยังคำนวณไม่ถึง address ที่มีเงิน</div></details>
+        </div>
+
+        <div class="q">
+          <p>10. ผู้ใช้ตั้ง multisig แบบ 2-of-3 ต่อมา key A รั่วไปถึงผู้โจมตี และ key B หายเพราะอุปกรณ์เสีย ผู้ใช้ยังรักษาเหรียญได้หรือไม่ ควรทำอย่างไร</p>
+          <details><summary>ดูเฉลย</summary><div><strong>ได้</strong> ผู้ใช้ยังมี key A และ key C ครบ 2 ดอกตามเงื่อนไข จึงควรรีบใช้สองดอกนี้ลงลายเซ็นย้ายเหรียญทั้งหมดไปยัง multisig ชุดใหม่ ขั้นนี้ต้องใช้ข้อมูลการตั้งค่า multisig ที่สำรองไว้ด้วย รวมถึง xpub ของ key B เพราะ wallet ต้องสร้าง script เดิมให้ได้ก่อน ส่วนผู้โจมตีมีเพียง key A ดอกเดียวจึงยังใช้เหรียญไม่ได้ แต่ถ้าปล่อยไว้แล้ว key C รั่วอีกดอก ผู้โจมตีก็จะครบสองดอก</div></details>
+        </div>
+
+        <div class="q">
+          <p>11. ผู้ใช้เชื่อมต่อ wallet กับเว็บ NFT แห่งใหม่ แล้วกดปุ่ม "Claim" ตามที่เว็บแนะนำ hardware wallet แสดงข้อความว่าธุรกรรมมี data ที่อ่านไม่ได้ ให้ยืนยันแบบ blind signing ผู้ใช้ควรทำอย่างไร และทำไม</p>
+          <details><summary>ดูเฉลย</summary><div>ควร <strong>ปฏิเสธ</strong> เพราะผู้ใช้ไม่รู้ว่าธุรกรรมเรียกฟังก์ชันใด อาจเป็น <code>setApprovalForAll</code> หรือ <code>approve</code> ที่ให้ผู้โจมตีโอนทรัพย์สินออกได้ภายหลัง การเชื่อมต่อ wallet ให้เว็บเห็นเพียง address ส่วนธุรกรรมที่ต้องลงลายเซ็นเกิดขึ้นเมื่อกดปุ่ม Claim hardware wallet กันไม่ให้ key รั่วได้ แต่ถ้าผู้ใช้กดยืนยันธุรกรรมอันตรายเอง อุปกรณ์ก็ลงลายเซ็นให้ตามคำสั่ง ถ้าต้องการทดลอง DApp ที่ไม่คุ้นเคย ควรใช้ hot wallet แยกที่มีเงินน้อย</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+  <script>
+    // ทดลอง BIP39: สุ่ม entropy คำนวณ checksum ด้วย SHA-256 แล้วแบ่งเป็นกลุ่มละ 11 บิต
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      if (!$("bip39demo")) return;
+      const btnNew = $("bNew"), btnTypo = $("bTypo"), stat = $("bStat"), typoOut = $("bTypoOut");
+
+      if (!(window.crypto && crypto.getRandomValues)) {
+        stat.textContent = "เบราว์เซอร์นี้สุ่มเลขด้วย crypto.getRandomValues ไม่ได้ จึงทดลองส่วนนี้ไม่ได้";
+        btnNew.disabled = true; btnTypo.disabled = true;
+        return;
+      }
+
+      // SHA-256 ของข้อมูลแบบไบต์ (เขียนเองเพื่อให้ใช้ได้แม้เปิดไฟล์โดยตรง ซึ่งบางเบราว์เซอร์ไม่เปิดให้ใช้ crypto.subtle)
+      const sha256Bytes = (function () {
+        const primes = [];
+        for (let n = 2; primes.length < 64; n++) if (primes.every((q) => n % q !== 0)) primes.push(n);
+        const frac32 = (x) => ((x - Math.floor(x)) * 2 ** 32) >>> 0;
+        const K = primes.map((q) => frac32(Math.cbrt(q)));
+        const H0 = primes.slice(0, 8).map((q) => frac32(Math.sqrt(q)));
+        const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+        return function (bytes) {
+          const len = bytes.length, total = ((len + 9 + 63) >> 6) << 6;
+          const m = new Uint8Array(total);
+          m.set(bytes); m[len] = 0x80;
+          const bitLen = len * 8;
+          m[total - 4] = (bitLen >>> 24) & 255; m[total - 3] = (bitLen >>> 16) & 255;
+          m[total - 2] = (bitLen >>> 8) & 255; m[total - 1] = bitLen & 255;
+          const H = H0.slice(), W = new Uint32Array(64);
+          for (let off = 0; off < total; off += 64) {
+            for (let i = 0; i < 16; i++) W[i] = (m[off + 4 * i] << 24) | (m[off + 4 * i + 1] << 16) | (m[off + 4 * i + 2] << 8) | m[off + 4 * i + 3];
+            for (let i = 16; i < 64; i++) {
+              const s0 = rotr(W[i - 15], 7) ^ rotr(W[i - 15], 18) ^ (W[i - 15] >>> 3);
+              const s1 = rotr(W[i - 2], 17) ^ rotr(W[i - 2], 19) ^ (W[i - 2] >>> 10);
+              W[i] = (W[i - 16] + s0 + W[i - 7] + s1) >>> 0;
+            }
+            let [a, b, c, d, e, f, g, h] = H;
+            for (let i = 0; i < 64; i++) {
+              const t1 = (h + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + W[i]) >>> 0;
+              const t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+              h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+            }
+            [a, b, c, d, e, f, g, h].forEach((v, i) => { H[i] = (H[i] + v) >>> 0; });
+          }
+          const out = new Uint8Array(32);
+          H.forEach((v, i) => { out[4 * i] = v >>> 24; out[4 * i + 1] = (v >>> 16) & 255; out[4 * i + 2] = (v >>> 8) & 255; out[4 * i + 3] = v & 255; });
+          return out;
+        };
+      })();
+
+      let cur = null, tries = 0, caught = 0;
+      const toBits = (bytes) => Array.from(bytes, (b) => b.toString(2).padStart(8, "0")).join("");
+      const toHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      const fromBits = (bits) => {
+        const out = new Uint8Array(bits.length / 8);
+        for (let i = 0; i < out.length; i++) out[i] = parseInt(bits.slice(i * 8, i * 8 + 8), 2);
+        return out;
+      };
+      const sci = (x) => {
+        const e = Math.floor(Math.log10(x));
+        return `${(x / 10 ** e).toFixed(1)} × 10<sup>${e}</sup>`;
+      };
+
+      function checksumOf(entBytes) {
+        const h = sha256Bytes(entBytes);
+        return toBits(h).slice(0, (entBytes.length * 8) / 32);
+      }
+
+      function build(entBytes) {
+        const ent = toBits(entBytes);
+        const cs = checksumOf(entBytes);
+        const all = ent + cs;
+        const idx = [];
+        for (let i = 0; i < all.length; i += 11) idx.push(parseInt(all.slice(i, i + 11), 2));
+        return { entBytes, ent, cs, idx };
+      }
+
+      function render(r) {
+        $("bEnt").textContent = toHex(r.entBytes);
+        const all = r.ent + r.cs;
+        let html = "";
+        for (let i = 0; i < all.length; i++) {
+          if (i > 0 && i % 11 === 0) html += " ";
+          html += i >= r.ent.length ? `<b>${all[i]}</b>` : all[i];
+        }
+        $("bBits").innerHTML = html;
+        $("bIdx").textContent = r.idx.join(" · ");
+        const E = r.ent.length, C = r.cs.length;
+        const years = 2 ** (E - 1) / 1e12 / 31557600;
+        stat.innerHTML = `entropy ${E} บิต + checksum ${C} บิต = ${E + C} บิต = ${r.idx.length} คำ × 11 บิต<br>`
+          + `ผู้โจมตีที่สุ่มเดาต้องลองได้ถึง 2<sup>${E}</sup> ≈ ${sci(2 ** E)} แบบ `
+          + `ถ้าเดาได้ 10<sup>12</sup> ครั้งต่อวินาที จะใช้เวลาเฉลี่ยราว ${sci(years)} ปี`;
+      }
+
+      function fresh() {
+        const words = Number($("bWords").value);
+        const bytes = new Uint8Array((words * 4) / 3);
+        crypto.getRandomValues(bytes);
+        cur = build(bytes);
+        tries = 0; caught = 0;
+        typoOut.textContent = "";
+        render(cur);
+      }
+
+      function typo() {
+        if (!cur) return;
+        const n = cur.idx.length;
+        const pos = Math.floor(Math.random() * n);
+        let val;
+        do { val = Math.floor(Math.random() * 2048); } while (val === cur.idx[pos]);
+        const idx = cur.idx.slice();
+        idx[pos] = val;
+        const bits = idx.map((i) => i.toString(2).padStart(11, "0")).join("");
+        const E = cur.ent.length;
+        const expected = checksumOf(fromBits(bits.slice(0, E)));
+        const got = bits.slice(E);
+        const pass = expected === got;
+        tries++;
+        if (!pass) caught++;
+        typoOut.innerHTML = `เปลี่ยนคำที่ ${pos + 1} จากลำดับ ${cur.idx[pos]} เป็น ${val} `
+          + `checksum ในคำชุดใหม่คือ ${got} ส่วน checksum ที่คำนวณจาก entropy ชุดใหม่คือ ${expected}<br>ผล: `
+          + (pass
+            ? `<strong>ตรงกันโดยบังเอิญ</strong> wallet ตรวจไม่พบ และจะกู้คืนเป็น wallet อื่นที่ว่างเปล่า`
+            : `<strong>ไม่ตรงกัน</strong> wallet แจ้งว่า seed phrase ไม่ถูกต้อง`)
+          + `<br>จำลองแล้ว ${tries} ครั้ง ตรวจพบ ${caught} ครั้ง (ทฤษฎี: ตรวจไม่พบราว 1 ใน ${2 ** cur.cs.length})`;
+      }
+
+      btnNew.addEventListener("click", fresh);
+      btnTypo.addEventListener("click", typo);
+      $("bWords").addEventListener("change", fresh);
+      fresh();
+    })();
+  </script>
+</body>
+</html>

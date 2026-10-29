@@ -16,7 +16,7 @@
     <header class="chapter-head">
       <div class="eyebrow">บทที่ 11 · แอปพลิเคชัน</div>
       <h1>DApp และ DAO</h1>
-      <p class="lead">บทที่ 5–7 เขียน smart contract และเรียกใช้ผ่าน Remix แต่ผู้ใช้ทั่วไปไม่ได้ใช้ Remix ผู้ใช้เปิดหน้าเว็บแล้วกดปุ่ม บทนี้อธิบายว่าหน้าเว็บกับ contract ทำงานร่วมกันอย่างไรจนกลายเป็น DApp (Decentralized Application) และเมื่อ contract ต้องเปลี่ยนค่าหรือใช้เงินกองกลาง ใครเป็นผู้ตัดสินใจ คำตอบของคำถามหลังคือ DAO (Decentralized Autonomous Organization) ท้ายบทศึกษากรณี The DAO ในปี 2016 ซึ่งแสดงว่ากติกาที่อยู่ในโค้ดมีข้อดีและข้อเสียอย่างไร</p>
+      <p class="lead">บทที่ 5–7 เขียน smart contract และเรียกใช้ผ่าน Remix แต่ผู้ใช้ทั่วไปไม่ได้ใช้ Remix ผู้ใช้เปิดหน้าเว็บแล้วกดปุ่ม บทนี้อธิบายว่าหน้าเว็บกับ contract ทำงานร่วมกันอย่างไรจนกลายเป็น DApp (Decentralized Application) และเมื่อ contract ต้องเปลี่ยนค่าหรือใช้เงินกองกลาง (treasury) ใครเป็นผู้ตัดสินใจ กลไกที่ตอบเรื่องนี้คือ DAO (Decentralized Autonomous Organization) ท้ายบทเป็นกรณีศึกษา The DAO ในปี 2016 กรณีนี้แสดงให้เห็นทั้งข้อดีและข้อเสียของกติกาที่เขียนเป็นโค้ด</p>
     </header>
 
     <div class="mini-toc">
@@ -38,7 +38,7 @@
       <section id="s0">
         <h2>เริ่มจากโจทย์: ถ้าเจ้าของแอปเปลี่ยนใจ ผู้ใช้ทำอะไรได้บ้าง</h2>
 
-        <p>ลองนึกถึงเว็บระดมทุนทั่วไป ผู้ใช้โอนเงินเข้าบัญชีธนาคารของบริษัท บริษัทเก็บรายชื่อผู้สนับสนุนและยอดเงินไว้ในฐานข้อมูลของตัวเอง และเขียนกติกาไว้บนหน้าเว็บว่าถ้าไม่ครบเป้าจะคืนเงิน ผู้ใช้ต้องเชื่อว่าบริษัทจะทำตามที่เขียนไว้ เพราะบริษัทแก้ยอดในฐานข้อมูลได้ เปลี่ยนกติกาได้ ปิดบัญชีผู้ใช้ได้ หรือปิดบริการไปพร้อมเงินได้ ผู้ใช้ไม่มีทางตรวจเองว่าเงินยังอยู่ครบหรือไม่</p>
+        <p>ลองนึกถึงเว็บระดมทุนทั่วไป ผู้ใช้โอนเงินเข้าบัญชีธนาคารของบริษัท บริษัทเก็บรายชื่อผู้สนับสนุนและยอดเงินไว้ในฐานข้อมูลของตัวเอง และเขียนกติกาไว้บนหน้าเว็บว่าถ้าไม่ครบเป้าจะคืนเงิน ผู้ใช้ต้องเชื่อว่าบริษัทจะทำตามที่เขียนไว้ เพราะบริษัทแก้ยอดในฐานข้อมูลได้ เปลี่ยนกติกาได้ ปิดบัญชีผู้ใช้ได้ หรือปิดบริการแล้วหายไปพร้อมเงินก็ได้ ผู้ใช้ไม่มีทางตรวจเองว่าเงินยังอยู่ครบหรือไม่</p>
 
         <p>บทที่ 5 แสดงว่า smart contract ย้ายกติกาและเงินไปไว้บน blockchain ได้ ทุกโหนดรันโค้ดเดียวกัน ทุกคนอ่านยอดได้ และเจ้าของแก้โค้ดหลัง deploy ไม่ได้ แต่ contract เพียงอย่างเดียวยังไม่พอสำหรับแอปที่คนทั่วไปใช้ และยังมีคำถามตามมาอีกหลายข้อ</p>
 
@@ -46,7 +46,7 @@
           <table class="t">
             <tr><th>คำถามที่ตามมา</th><th>คำตอบ</th><th>หัวข้อ</th></tr>
             <tr><td>แอปที่ใช้ contract ต่างจากแอปทั่วไปตรงไหน และต้องแลกกับอะไร</td><td>DApp</td><td>11.1</td></tr>
-            <tr><td>ผู้ใช้ยังต้องมีหน้าเว็บ หน้าเว็บอยู่ที่ไหน และไฟล์ใหญ่ที่เก็บบน chain ไม่ไหวเก็บที่ใด</td><td>Frontend, Wallet, RPC node และ IPFS</td><td>11.2</td></tr>
+            <tr><td>ผู้ใช้ต้องใช้งานผ่านหน้าเว็บ หน้าเว็บควรวางไว้ที่ใด และไฟล์ขนาดใหญ่ที่เก็บบน chain ไม่ได้ควรเก็บที่ใด</td><td>Frontend, Wallet, RPC node และ IPFS</td><td>11.2</td></tr>
             <tr><td>หน้าเว็บสั่ง contract ได้อย่างไร โดยที่หน้าเว็บไม่เห็น private key ของผู้ใช้</td><td>ABI, provider และ signer</td><td>11.3</td></tr>
             <tr><td>ถ้าต้องเปลี่ยนค่าใน contract หรือใช้เงินกองกลาง ใครตัดสินใจ ถ้าให้คนเดียวถือ owner key ก็กลับไปเชื่อใจคนคนเดียวอีก</td><td>DAO</td><td>11.4</td></tr>
             <tr><td>ถ้าโค้ดมีบั๊ก กติกาที่แก้ไม่ได้จะกลายเป็นช่องโหว่ที่แก้ไม่ได้ด้วยหรือไม่</td><td>กรณี The DAO และ reentrancy</td><td>11.5</td></tr>
@@ -68,24 +68,24 @@
         </ul>
 
         <h3>DApp ย้ายส่วนที่ต้องเชื่อใจไปไว้บน blockchain</h3>
-        <p><strong>DApp (Decentralized Application)</strong> คือแอปที่เก็บกติกาหลัก (business logic) และข้อมูลสำคัญไว้ใน smart contract ผู้ใช้ยืนยันตัวด้วยการลงลายเซ็นจาก wallet ของตัวเอง ไม่ใช้ชื่อผู้ใช้กับรหัสผ่านที่บริษัทเก็บไว้ ผลที่ได้คือคำถามว่า "เงินยังอยู่ครบหรือไม่" และ "กติกาเป็นอย่างไร" ผู้ใช้ตรวจเองได้จาก chain ไม่ต้องเชื่อคำพูดของผู้ให้บริการ</p>
+        <p><strong>DApp (Decentralized Application)</strong> คือแอปที่เก็บกติกาหลัก (business logic) และข้อมูลสำคัญไว้ใน smart contract ผู้ใช้ยืนยันตัวด้วยการลงลายเซ็นจาก wallet ของตัวเอง ไม่ใช้ชื่อผู้ใช้กับรหัสผ่านที่บริษัทเก็บไว้ ผลคือผู้ใช้ตรวจจาก chain ได้เองว่าเงินยังอยู่ครบหรือไม่ และกติกาเป็นอย่างไร โดยไม่ต้องเชื่อคำพูดของผู้ให้บริการ</p>
 
         <div class="table-wrap">
           <table class="t">
             <tr><th>ประเด็น</th><th>แอปทั่วไป</th><th>DApp</th></tr>
             <tr><td>กติกาและข้อมูลอยู่ที่</td><td>เซิร์ฟเวอร์และฐานข้อมูลของบริษัท</td><td>smart contract บน blockchain</td></tr>
-            <tr><td>การยืนยันตัวตน</td><td>ชื่อผู้ใช้และรหัสผ่าน บริษัท reset ให้ได้</td><td>ลายเซ็นจาก private key ทำ key หายก็เข้าบัญชีไม่ได้อีก (บทที่ 14)</td></tr>
-            <tr><td>ผู้แก้กติกาได้</td><td>บริษัท แก้ได้ทุกเมื่อ</td><td>แก้โค้ดไม่ได้ ยกเว้นออกแบบให้อัปเกรดได้ ซึ่งต้องมีผู้ถือสิทธิ์อัปเกรด</td></tr>
+            <tr><td>การยืนยันตัวตน (authentication)</td><td>ชื่อผู้ใช้และรหัสผ่าน บริษัท reset ให้ได้</td><td>ลายเซ็นจาก private key ทำ key หายก็เข้าบัญชีไม่ได้อีก (บทที่ 14)</td></tr>
+            <tr><td>ผู้แก้กติกาได้</td><td>บริษัท แก้ได้ทุกเมื่อ</td><td>แก้โค้ดไม่ได้ ยกเว้นออกแบบให้อัปเกรดได้ แต่แบบนั้นต้องมีผู้ถือสิทธิ์อัปเกรด</td></tr>
             <tr><td>ตรวจสอบได้หรือไม่</td><td>ไม่ได้ ต้องเชื่อรายงานของบริษัท</td><td>ได้ โค้ดและ state อ่านได้จาก chain</td></tr>
             <tr><td>ผู้จ่ายค่าประมวลผล</td><td>บริษัทจ่ายค่าเซิร์ฟเวอร์</td><td>ผู้ใช้จ่าย gas ทุกครั้งที่แก้ state</td></tr>
             <tr><td>ความเร็ว</td><td>ตอบกลับในเสี้ยววินาที</td><td>รอเข้าบล็อกราว 12 วินาที และรอ finality ราว 13 นาที (บทที่ 8)</td></tr>
-            <tr><td>ความเป็นส่วนตัว</td><td>บริษัทเห็นข้อมูล คนนอกไม่เห็น</td><td>ทุกคนเห็นธุรกรรมและ state ทั้งหมด</td></tr>
-            <tr><td>แก้บั๊ก</td><td>แก้แล้ว deploy ใหม่ได้ทันที</td><td>ต้อง deploy contract ใหม่แล้วย้ายผู้ใช้ หรืออัปเกรดผ่าน proxy</td></tr>
+            <tr><td>ความเป็นส่วนตัว (privacy)</td><td>บริษัทเห็นข้อมูล คนนอกไม่เห็น</td><td>ทุกคนเห็นธุรกรรมและ state ทั้งหมด</td></tr>
+            <tr><td>แก้บั๊ก</td><td>แก้แล้ว deploy ใหม่ได้ทันที</td><td>ต้อง deploy contract ใหม่แล้วย้ายผู้ใช้ หรืออัปเกรดผ่าน proxy (contract ตัวกลางที่เปลี่ยน address ของ contract ปลายทางได้ บทที่ 5)</td></tr>
             <tr><td>ต่อยอดจากแอปอื่น</td><td>ผ่าน API ที่เจ้าของเปิดหรือปิดได้</td><td>contract ใดก็เรียก contract อื่นได้โดยไม่ต้องขออนุญาต (composability)</td></tr>
           </table>
         </div>
 
-        <p>ตารางนี้แสดงว่า DApp ไม่ได้ดีกว่าแอปทั่วไปในทุกด้าน DApp แลกความเร็ว ค่าใช้จ่าย และความเป็นส่วนตัว กับการที่ผู้ใช้ไม่ต้องเชื่อใจผู้ให้บริการ ถ้าแอปไม่มีปัญหาเรื่องความเชื่อใจตั้งแต่ต้น เช่น แอปจดบันทึกส่วนตัว การย้ายไปเป็น DApp ก็มีแต่ต้นทุนเพิ่ม</p>
+        <p>ตารางนี้แสดงว่า DApp ไม่ได้ดีกว่าแอปทั่วไปในทุกด้าน DApp ยอมเสียความเร็ว ค่าใช้จ่าย และความเป็นส่วนตัว เพื่อให้ผู้ใช้ไม่ต้องเชื่อใจผู้ให้บริการ ถ้าแอปไม่มีปัญหาเรื่องความเชื่อใจตั้งแต่ต้น เช่น แอปจดบันทึกส่วนตัว ย้ายไปเป็น DApp ก็มีแต่ต้นทุนเพิ่ม</p>
 
         <div class="callout">
           <span class="h">ความเป็น decentralized มีหลายระดับ</span>
@@ -103,17 +103,17 @@
         <h2><span class="no">11.2</span>สถาปัตยกรรม DApp: Frontend, Wallet, Smart contract และ IPFS</h2>
 
         <h3>ทำไม contract อย่างเดียวไม่พอ</h3>
-        <p>contract รับได้เฉพาะธุรกรรมที่ลงลายเซ็นแล้ว ผู้ใช้ทั่วไปเขียน calldata เองไม่เป็น contract แสดงหน้าจอไม่ได้ เก็บไฟล์ใหญ่ไม่ไหวเพราะ storage บน chain แพงมาก และติดต่อโลกภายนอกเองไม่ได้ DApp จึงต้องมีส่วนประกอบอื่นมาช่วย แต่ละส่วนแก้ปัญหาคนละข้อ</p>
+        <p>contract รับได้เฉพาะธุรกรรมที่ลงลายเซ็นแล้ว แต่ผู้ใช้ทั่วไปเขียน calldata เองไม่เป็น นอกจากนี้ contract ยังแสดงหน้าจอไม่ได้ เก็บไฟล์ใหญ่ไม่ไหวเพราะ storage บน chain แพงมาก และดึงข้อมูลภายนอกอย่างราคาเหรียญเองไม่ได้ ปัญหาข้อสุดท้ายแก้ด้วย oracle ในบทที่ 13 ส่วนปัญหาที่เหลือแก้ด้วยส่วนประกอบในตารางด้านล่าง แต่ละส่วนแก้ปัญหาคนละข้อ</p>
 
         <div class="table-wrap">
           <table class="t">
             <tr><th>ส่วนประกอบ</th><th>หน้าที่</th><th>ถ้าไม่มี</th></tr>
             <tr><td><strong>Frontend</strong> (HTML, CSS, JavaScript)</td><td>แสดงหน้าจอ แปลงการกดปุ่มเป็นการเรียกฟังก์ชันของ contract และแสดงผลที่อ่านกลับมา</td><td>ผู้ใช้ต้องเขียน calldata เองหรือใช้ Remix</td></tr>
-            <tr><td><strong>Wallet</strong> (เช่น MetaMask)</td><td>เก็บ private key แสดงรายละเอียดธุรกรรมให้ผู้ใช้ยืนยัน แล้วลงลายเซ็น</td><td>หน้าเว็บต้องถือ private key เอง เว็บใดก็ขโมย key ได้</td></tr>
+            <tr><td><strong>Wallet</strong> (เช่น MetaMask)</td><td>เก็บ private key แสดงรายละเอียดธุรกรรมให้ผู้ใช้ยืนยัน แล้วลงลายเซ็น</td><td>หน้าเว็บต้องถือ private key เอง เว็บที่ไม่หวังดีก็นำ key ไปได้ทันที</td></tr>
             <tr><td><strong>RPC node</strong> (provider)</td><td>โหนด Ethereum ที่รับคำขอ JSON-RPC จากแอป เช่น อ่าน state หรือส่งธุรกรรมเข้าเครือข่าย</td><td>เบราว์เซอร์ติดต่อเครือข่าย peer-to-peer โดยตรงไม่ได้</td></tr>
             <tr><td><strong>Smart contract</strong></td><td>เก็บกติกาและ state ที่ต้องเชื่อถือได้ เช่น ยอดเงินและสิทธิ์</td><td>กลับไปเป็นแอปที่ต้องเชื่อใจเซิร์ฟเวอร์</td></tr>
             <tr><td><strong>IPFS</strong> (InterPlanetary File System)</td><td>เก็บไฟล์ใหญ่นอก chain เช่น รูป metadata หรือไฟล์ของหน้าเว็บ แล้วอ้างถึงไฟล์ด้วยค่าแฮชของเนื้อหา</td><td>ต้องเก็บไฟล์บน chain ซึ่งแพงเกินไป หรือเก็บบนเซิร์ฟเวอร์ที่เจ้าของเปลี่ยนไฟล์ได้</td></tr>
-            <tr><td><strong>Indexer</strong> (ไม่บังคับ เช่น The Graph)</td><td>เก็บ event จาก chain ลงฐานข้อมูลเพื่อค้นได้เร็ว เช่น ประวัติการโหวตทั้งหมด</td><td>frontend ต้องไล่อ่าน event ย้อนหลังจากโหนดเอง ซึ่งช้า</td></tr>
+            <tr><td><strong>Indexer</strong> (ไม่บังคับ เช่น The Graph)</td><td>เก็บ event จาก chain ลงฐานข้อมูลเพื่อค้นได้เร็ว เช่น ประวัติการโหวตทั้งหมด</td><td>frontend ต้องไล่อ่าน event ย้อนหลังจากโหนดเอง และใช้เวลานาน</td></tr>
           </table>
         </div>
 
@@ -152,7 +152,7 @@
 
               <line x1="246" y1="240" x2="367" y2="240" stroke="#6b655c" stroke-width="1.3" marker-end="url(#arrDapp)"/>
               <text x="306" y="231" text-anchor="middle" font-size="11" fill="#b0417a" font-weight="700">③ ส่งธุรกรรม</text>
-              <text x="306" y="256" text-anchor="middle" font-size="11" fill="#6b655c">ลงลายเซ็นแล้ว เสีย gas</text>
+              <text x="306" y="256" text-anchor="middle" font-size="11" fill="#6b655c">มีลายเซ็น เสีย gas</text>
 
               <!-- เครือข่าย -->
               <rect x="580" y="36" width="160" height="236" rx="12" fill="#eceefb" stroke="#5a63d8" stroke-width="1.4"/>
@@ -175,27 +175,27 @@
               <text x="314" y="314" text-anchor="middle" font-size="11" fill="#6b655c">โหลดตาม CID</text>
             </g>
           </svg>
-          <figcaption>DApp มีสองเส้นทาง เส้นทางอ่าน (①) ส่งคำขอไปที่ RPC node โดยตรง ไม่ต้องลงลายเซ็นและไม่เสีย gas เส้นทางเขียน (② และ ③) ต้องผ่าน wallet ทุกครั้ง หน้าเว็บจึงไม่เคยเห็น private key ส่วนไฟล์ใหญ่อยู่บน IPFS และ contract เก็บไว้เพียง CID</figcaption>
+          <figcaption>DApp มีสองเส้นทาง เส้นทางอ่าน (①) ไม่ต้องลงลายเซ็นและไม่เสีย gas คำขอจะไปที่ RPC node โดยตรง (<code>JsonRpcProvider</code>) หรือส่งผ่านการเชื่อมต่อของ wallet (<code>BrowserProvider</code>) ก็ได้ ทั้งสองแบบไม่มีหน้าต่างของ wallet ขึ้นให้ยืนยัน เส้นทางเขียน (② และ ③) ต้องผ่าน wallet ทุกครั้ง หน้าเว็บจึงไม่เคยเห็น private key ส่วนไฟล์ใหญ่อยู่บน IPFS และ contract เก็บไว้เพียง CID</figcaption>
         </figure>
 
         <h3>RPC node: ทางเข้าสู่เครือข่าย</h3>
-        <p>เบราว์เซอร์ไม่ได้เป็นโหนด Ethereum จึงต้องส่งคำขอผ่านโหนดที่เปิดบริการ JSON-RPC เช่น <code>eth_call</code> (จำลองการเรียกฟังก์ชันเพื่ออ่านค่า) <code>eth_getBalance</code> หรือ <code>eth_sendRawTransaction</code> (ส่งธุรกรรมที่ลงลายเซ็นแล้ว) แอปส่วนใหญ่ใช้โหนดของผู้ให้บริการ เช่น Infura หรือ Alchemy เพราะการรันโหนดเองต้องใช้พื้นที่และดูแลต่อเนื่อง ข้อเสียคือผู้ให้บริการกลายเป็นจุดที่ต้องเชื่อใจ โหนดที่ตอบผิดอาจแสดงยอดที่ไม่จริงได้ แต่ปลอมลายเซ็นของผู้ใช้ไม่ได้ ผู้ให้บริการจึงย้ายเงินของผู้ใช้เองไม่ได้ ทำได้เพียงไม่ส่งธุรกรรมต่อหรือแสดงข้อมูลผิด</p>
+        <p>เบราว์เซอร์ไม่ได้เป็นโหนด Ethereum จึงต้องส่งคำขอ JSON-RPC ผ่านโหนดที่เปิดบริการไว้ คำขอที่ใช้บ่อย เช่น <code>eth_call</code> (จำลองการเรียกฟังก์ชันเพื่ออ่านค่า) <code>eth_getBalance</code> หรือ <code>eth_sendRawTransaction</code> (ส่งธุรกรรมที่ลงลายเซ็นแล้ว) แอปส่วนใหญ่ใช้โหนดของผู้ให้บริการ เช่น Infura หรือ Alchemy เพราะรันโหนดเองต้องใช้พื้นที่ดิสก์มากและต้องดูแลต่อเนื่อง ข้อเสียคือผู้ให้บริการกลายเป็นจุดที่ต้องเชื่อใจ โหนดที่ตอบผิดอาจแสดงยอดที่ไม่จริง แต่ปลอมลายเซ็นของผู้ใช้ไม่ได้ ผู้ให้บริการจึงย้ายเงินของผู้ใช้ไม่ได้ ทำได้เพียงไม่ส่งธุรกรรมต่อหรือแสดงข้อมูลผิด</p>
 
         <h3>ทำไมไม่เก็บไฟล์ไว้บน chain</h3>
-        <p>EVM คิดค่าเขียน storage ช่องใหม่ราว 20,000 gas ต่อ 32 ไบต์ ไฟล์รูปขนาด 1 MB มี 32,768 ช่อง จึงใช้ gas ราว 655 ล้าน ค่านี้มากกว่าเพดาน gas ของหนึ่งบล็อกซึ่งอยู่ในระดับหลายสิบล้านหลายเท่า เก็บในบล็อกเดียวไม่ได้ และถ้า base fee เป็น 10 Gwei ค่าธรรมเนียมจะสูงถึงราว 6.5 ETH DApp จึงเก็บไฟล์ไว้นอก chain และให้ contract เก็บเพียงตัวอ้างอิงสั้น ๆ</p>
+        <p>EVM คิดค่าเขียน storage ช่องใหม่ราว 20,000 gas ต่อ 32 ไบต์ ไฟล์รูปขนาด 1 MB ต้องใช้ 32,768 ช่อง จึงใช้ gas ราว 655 ล้าน ส่วนเพดาน gas ของหนึ่งบล็อก (block gas limit) อยู่ในระดับหลายสิบล้าน ไฟล์นี้จึงใช้ gas เกินเพดานหลายเท่า และเก็บในบล็อกเดียวไม่ได้ ถ้า base fee เป็น 10 Gwei ค่าธรรมเนียมจะสูงถึงราว 6.5 ETH DApp จึงเก็บไฟล์ไว้นอก chain และให้ contract เก็บเพียงตัวอ้างอิงสั้น ๆ</p>
 
-        <p>ถ้าตัวอ้างอิงเป็น URL ธรรมดา เช่น <code>https://example.com/cat.png</code> เจ้าของเซิร์ฟเวอร์ก็เปลี่ยนรูปหรือลบไฟล์ได้ทุกเมื่อ ข้อมูลบน chain ที่แก้ไม่ได้ก็ไม่มีความหมาย เพราะชี้ไปยังสิ่งที่แก้ได้ IPFS แก้ปัญหานี้ด้วย <strong>content addressing</strong> คือเรียกไฟล์ด้วยค่าแฮชของเนื้อหา แทนการเรียกด้วยตำแหน่งที่เก็บ</p>
+        <p>ถ้าตัวอ้างอิงเป็น URL ธรรมดา เช่น <code>https://example.com/cat.png</code> เจ้าของเซิร์ฟเวอร์ก็เปลี่ยนรูปหรือลบไฟล์ได้ทุกเมื่อ การที่ข้อมูลบน chain แก้ไม่ได้จึงไม่ช่วยอะไร เพราะ URL นั้นชี้ไปยังไฟล์ที่เจ้าของเซิร์ฟเวอร์แก้ได้ IPFS แก้ปัญหานี้ด้วย <strong>content addressing</strong> คือเรียกไฟล์ด้วยค่าแฮชของเนื้อหา แทนที่จะเรียกด้วยตำแหน่งที่เก็บ</p>
 
         <ul>
-          <li><strong>CID (Content Identifier):</strong> ตัวระบุไฟล์ที่คำนวณจากค่าแฮชของเนื้อหา CID รุ่นแรกขึ้นต้นด้วย <code>Qm…</code> รุ่นใหม่มักขึ้นต้นด้วย <code>bafy…</code> ไฟล์ที่ต่างกันแม้หนึ่งบิตจะได้ CID ต่างกัน เหมือนคุณสมบัติของฟังก์ชันแฮชในบทที่ 0</li>
-          <li><strong>ตรวจได้เอง:</strong> ผู้ขอไฟล์คำนวณค่าแฮชของสิ่งที่ได้รับแล้วเทียบกับ CID จึงรับไฟล์จากโหนดใดก็ได้โดยไม่ต้องเชื่อใจโหนดนั้น IPFS แบ่งไฟล์ใหญ่เป็นก้อนแล้วเชื่อมด้วยค่าแฮชเป็นโครงสร้างแบบ Merkle (Merkle DAG) แนวคิดเดียวกับ Merkle tree ในบทที่ 3</li>
-          <li><strong>ไฟล์ไม่ได้อยู่ถาวรเอง:</strong> IPFS เป็นเพียงวิธีค้นหาและส่งไฟล์ ไฟล์จะหายไปถ้าไม่มีโหนดใดเก็บไว้ ผู้ทำ DApp จึงต้อง <strong>pin</strong> ไฟล์ไว้บนโหนดของตัวเอง ใช้บริการ pinning หรือจ่ายให้เครือข่ายอย่าง Filecoin เก็บรักษา</li>
+          <li><strong>CID (Content Identifier):</strong> ตัวระบุไฟล์ที่คำนวณจากค่าแฮชของเนื้อหา CID รุ่นแรกขึ้นต้นด้วย <code>Qm…</code> รุ่นใหม่มักขึ้นต้นด้วย <code>bafy…</code> ไฟล์ที่ต่างกันแม้หนึ่งบิตจะได้ CID ต่างกัน ตามคุณสมบัติของฟังก์ชันแฮชในบทที่ 0</li>
+          <li><strong>ตรวจได้เอง:</strong> ผู้ขอไฟล์คำนวณค่าแฮชของสิ่งที่ได้รับแล้วเทียบกับ CID จึงรับไฟล์จากโหนดใดก็ได้โดยไม่ต้องเชื่อใจโหนดนั้น สำหรับไฟล์ใหญ่ IPFS แบ่งไฟล์เป็นก้อน (chunk) ผู้ขอจึงโหลดแต่ละก้อนจากคนละโหนดได้ และตรวจทีละก้อนได้ทันทีโดยไม่ต้องรอให้ครบทั้งไฟล์ IPFS เชื่อมค่าแฮชของก้อนเหล่านี้เป็น Merkle DAG ตามแนวคิดเดียวกับ Merkle tree ในบทที่ 3</li>
+          <li><strong>ไฟล์ไม่ได้อยู่ถาวรเอง:</strong> IPFS เป็นเพียงวิธีค้นหาและส่งไฟล์ โหนดที่โหลดไฟล์มาจะเก็บไว้เพียงชั่วคราว และลบทิ้งเมื่อต้องการพื้นที่คืน (garbage collection) ไฟล์จึงหายไปถ้าไม่มีโหนดใดเลือกเก็บไว้ถาวร การสั่งให้โหนดเก็บไฟล์ไว้ถาวรเรียกว่า <strong>pin</strong> (pinning) ผู้ทำ DApp จึงต้อง pin ไฟล์ไว้บนโหนดของตัวเอง ใช้บริการ pinning หรือจ่ายให้เครือข่ายอย่าง Filecoin เก็บรักษา</li>
           <li><strong>แก้ไฟล์แล้ว CID เปลี่ยน:</strong> หน้าเว็บที่ต้องอัปเดตจึงใช้ชื่อที่ชี้ไปยัง CID ล่าสุด เช่น ชื่อ ENS (Ethereum Name Service) อย่าง <code>app.eth</code> แล้วแก้ค่า CID ที่ชื่อนั้นชี้ไปเมื่อมีรุ่นใหม่</li>
         </ul>
 
         <div class="callout warn">
           <span class="h">หน้าเว็บก็เป็นจุดโจมตีได้</span>
-          ถ้า contract ปลอดภัยแต่หน้าเว็บอยู่บนเซิร์ฟเวอร์ทั่วไป ผู้โจมตีที่ยึด DNS หรือเซิร์ฟเวอร์ได้ก็เปลี่ยน JavaScript ให้ขอลายเซ็นธุรกรรมที่ส่งเงินไปให้ตัวเองได้ ผู้ใช้เห็นหน้าเว็บเดิมทุกอย่างจึงกดยืนยันโดยไม่รู้ตัว การวางหน้าเว็บบน IPFS แล้วอ้างถึงด้วย CID ช่วยลดความเสี่ยงนี้ เพราะเนื้อหาที่ตรงกับ CID เปลี่ยนไม่ได้ แต่ผู้ใช้ก็ยังต้องอ่านรายละเอียดในหน้าต่างของ wallet ก่อนยืนยันทุกครั้ง
+          ถ้า contract ปลอดภัยแต่หน้าเว็บอยู่บนเซิร์ฟเวอร์ทั่วไป ผู้โจมตีที่ยึด DNS หรือเซิร์ฟเวอร์ได้ก็เปลี่ยน JavaScript ให้ขอลายเซ็นธุรกรรมที่ส่งเงินไปให้ตัวเองได้ ผู้ใช้เห็นหน้าเว็บหน้าตาเหมือนเดิม จึงกดยืนยันโดยไม่รู้ตัว ถ้าวางหน้าเว็บไว้บน IPFS แล้วเปิดผ่าน CID ความเสี่ยงนี้จะลดลง เพราะไม่มีใครเปลี่ยนเนื้อหาของ CID เดิมได้ แต่ผู้ใช้ก็ยังต้องอ่านรายละเอียดในหน้าต่างของ wallet ก่อนยืนยันทุกครั้ง
         </div>
       </section>
 
@@ -204,8 +204,8 @@
         <h2><span class="no">11.3</span>การเชื่อม Frontend กับ Contract: ABI, provider และ signer (ethers.js)</h2>
 
         <h3>ทำไมต้องมี ABI</h3>
-        <p>บน chain มีเพียง bytecode ของ contract ไม่มีชื่อฟังก์ชันหรือชนิดของพารามิเตอร์ บทที่ 5 อธิบายว่าธุรกรรมเรียกฟังก์ชันด้วย function selector คือ 4 ไบต์แรกของค่าแฮช Keccak-256 ของ function signature ค่าแฮชย้อนกลับไม่ได้ frontend จึงเดาชื่อฟังก์ชันจาก bytecode ไม่ได้ และเมื่อ contract คืนค่ากลับมา frontend ได้รับเพียงข้อมูลดิบเป็นช่องละ 32 ไบต์ ถ้าไม่รู้ชนิดของค่าที่คืนมา ก็แปลข้อมูลนั้นไม่ได้</p>
-        <p><strong>ABI (Application Binary Interface)</strong> แก้ปัญหานี้ ABI คือคำอธิบายรูปแบบการเรียก contract ประกอบด้วยรายชื่อฟังก์ชัน ชนิดของพารามิเตอร์และค่าที่คืน state mutability และ event คอมไพเลอร์สร้าง ABI ออกมาพร้อม bytecode ในรูป JSON (ใน Remix คือปุ่มคัดลอก ABI ในแท็บ Solidity Compiler ตามบทที่ 6) ABI ไม่ได้บันทึกไว้บน chain ผู้ทำ frontend จึงต้องนำ ABI จากผลการคอมไพล์ หรือจาก contract ที่ยืนยันซอร์สโค้ดไว้บน Etherscan แล้ว (verified contract)</p>
+        <p>บน chain มีเพียง bytecode ของ contract ไม่มีชื่อฟังก์ชันหรือชนิดของพารามิเตอร์ บทที่ 5 อธิบายว่าธุรกรรมเรียกฟังก์ชันด้วย function selector คือ 4 ไบต์แรกของค่าแฮช Keccak-256 ของ function signature ค่าแฮชย้อนกลับไม่ได้ frontend จึงคำนวณชื่อฟังก์ชันจาก bytecode โดยตรงไม่ได้ ทำได้เพียงเทียบ selector กับฐานข้อมูล signature ที่มีผู้รวบรวมไว้ เช่น 4byte.directory ฐานข้อมูลนี้ไม่ครบทุกฟังก์ชัน และไม่บอกชนิดของค่าที่คืนมา นอกจากนี้ เมื่อ contract คืนค่ากลับมา frontend ได้รับเพียงข้อมูลดิบเป็นช่องละ 32 ไบต์ ถ้าไม่รู้ชนิดของค่าที่คืนมา ก็แปลข้อมูลนั้นไม่ได้</p>
+        <p><strong>ABI (Application Binary Interface)</strong> แก้ปัญหานี้ ABI บอกว่า contract มีฟังก์ชันอะไร แต่ละฟังก์ชันรับพารามิเตอร์และคืนค่าชนิดใด มี state mutability แบบใด และ contract ปล่อย event อะไรบ้าง คอมไพเลอร์สร้าง ABI ออกมาพร้อม bytecode ในรูป JSON (ใน Remix คือปุ่มคัดลอก ABI ในแท็บ Solidity Compiler ตามบทที่ 6) chain ไม่ได้เก็บ ABI ไว้ ผู้ทำ frontend จึงต้องเอา ABI มาจากผลการคอมไพล์ หรือจากหน้า contract บน Etherscan ที่ยืนยันซอร์สโค้ดแล้ว (verified contract)</p>
 
 <pre><code>[
   { "type": "function", "name": "count",     "inputs": [], "outputs": [{ "type": "uint256" }], "stateMutability": "view" },
@@ -219,7 +219,7 @@
                     ค่าที่คืน = 0x0000…0005 (32 ไบต์)    ABI บอกว่าเป็น uint256 จึงแปลได้เป็น 5</code></pre>
 
         <h3>ทำไมต้องแยก provider กับ signer</h3>
-        <p>การอ่านกับการเขียนต้องการสิ่งต่างกัน การอ่าน state ต้องการเพียงโหนดที่ตอบคำถามได้ ไม่ต้องใช้ private key และไม่เสีย gas ส่วนการแก้ state ต้องมีธุรกรรมที่ลงลายเซ็นด้วย private key ของผู้ใช้ ถ้าหน้าเว็บถือ private key เอง เว็บใดก็ขโมย key ได้ wallet จึงเก็บ key ไว้กับตัวเอง แล้วเปิดช่องทางให้หน้าเว็บขอลายเซ็นผ่านอ็อบเจกต์ <code>window.ethereum</code> (มาตรฐาน EIP-1193) ผู้ใช้ต้องกดยืนยันในหน้าต่างของ wallet ทุกครั้ง library อย่าง <strong>ethers.js</strong> แยกสองบทบาทนี้ออกจากกันอย่างชัดเจน</p>
+        <p>การอ่านกับการเขียนต้องการสิ่งต่างกัน การอ่าน state ต้องการเพียงโหนดที่ตอบคำถามได้ ไม่ต้องใช้ private key และไม่เสีย gas ส่วนการแก้ state ต้องมีธุรกรรมที่ลงลายเซ็นด้วย private key ของผู้ใช้ ถ้าให้หน้าเว็บถือ private key เอง เว็บที่ไม่หวังดีก็นำ key ไปได้ทันที wallet จึงเก็บ key ไว้กับตัวเอง แล้วเปิดช่องทางให้หน้าเว็บขอลายเซ็นผ่านอ็อบเจกต์ <code>window.ethereum</code> (มาตรฐาน EIP-1193) ผู้ใช้ต้องกดยืนยันในหน้าต่างของ wallet ทุกครั้ง library อย่าง <strong>ethers.js</strong> แยกสองบทบาทนี้เป็นอ็อบเจกต์สองชนิด คือ provider และ signer</p>
 
         <div class="table-wrap">
           <table class="t">
@@ -256,16 +256,23 @@ console.log("tx hash:", tx.hash);                       // ธุรกรรม
 const receipt = await tx.wait();                        // ได้ receipt ที่มี status, gasUsed, logs
 console.log(receipt.status === 1 ? "สำเร็จ" : "ล้มเหลว", await counter.count());</code></pre>
 
-        <p>โค้ดนี้แสดงลำดับของการเขียน state ทุกครั้ง คือ frontend ใช้ ABI สร้าง calldata แล้วส่งคำขอ <code>eth_sendTransaction</code> ไปที่ wallet จากนั้น wallet แสดงรายละเอียดและค่า gas ให้ผู้ใช้ เมื่อผู้ใช้ยืนยัน wallet ลงลายเซ็นแล้วส่งธุรกรรมเข้าเครือข่าย frontend ได้ transaction hash กลับมาทันที แต่ต้องรอ <code>tx.wait()</code> จนธุรกรรมเข้าบล็อกก่อน จึงจะรู้ว่าสำเร็จหรือ revert</p>
+        <p>โค้ดนี้แสดงขั้นตอนที่เกิดขึ้นทุกครั้งที่เขียน state ซึ่งมีสี่ขั้น</p>
+        <ol>
+          <li>frontend ใช้ ABI สร้าง calldata แล้วส่งคำขอ <code>eth_sendTransaction</code> ไปที่ wallet คำขอนี้ยังไม่มีลายเซ็น</li>
+          <li>wallet แสดงรายละเอียดและค่า gas ให้ผู้ใช้ตรวจ</li>
+          <li>เมื่อผู้ใช้ยืนยัน wallet ลงลายเซ็น แล้วส่งธุรกรรมที่ลงลายเซ็นแล้วไปที่ RPC node ด้วย <code>eth_sendRawTransaction</code></li>
+          <li>frontend ได้ transaction hash กลับมาทันที แต่ต้องรอ <code>tx.wait()</code> จนธุรกรรมเข้าบล็อกก่อน จึงจะรู้ว่าสำเร็จหรือ revert</li>
+        </ol>
+        <p>สองคำสั่งนี้ต่างกันที่ลายเซ็น <code>eth_sendTransaction</code> ขอให้ผู้ถือ key ลงลายเซ็นแล้วส่งธุรกรรมให้ ส่วน <code>eth_sendRawTransaction</code> รับธุรกรรมที่ลงลายเซ็นเสร็จแล้ว RPC node ของผู้ให้บริการไม่ได้ถือ key ของผู้ใช้ wallet จึงลงลายเซ็นเองแล้วส่งด้วยคำสั่งหลัง</p>
 
         <div class="callout">
           <span class="h">ethers v5 กับ v6</span>
-          เอกสารและตัวอย่างรุ่นเก่าจำนวนมากใช้ ethers v5 ซึ่งเขียนต่างออกไป เช่น v5 ใช้ <code>new ethers.providers.Web3Provider(window.ethereum)</code> และ <code>provider.getSigner()</code> ไม่ต้อง await ส่วน v6 เปลี่ยนเป็น <code>BrowserProvider</code> และ <code>await provider.getSigner()</code> ตัวเลขขนาดใหญ่ v5 ใช้ <code>BigNumber</code> ส่วน v6 ใช้ <code>bigint</code> ของ JavaScript ถ้าโค้ดตัวอย่างรันไม่ผ่าน ให้ตรวจรุ่นของ ethers ก่อน
+          เอกสารและตัวอย่างรุ่นเก่าจำนวนมากใช้ ethers v5 ซึ่งเขียนต่างออกไป เช่น v5 ใช้ <code>new ethers.providers.Web3Provider(window.ethereum)</code> และ <code>provider.getSigner()</code> ไม่ต้อง await ส่วน v6 เปลี่ยนเป็น <code>BrowserProvider</code> และ <code>await provider.getSigner()</code> สำหรับตัวเลขขนาดใหญ่ v5 ใช้ <code>BigNumber</code> ส่วน v6 ใช้ <code>bigint</code> ของ JavaScript ถ้าโค้ดตัวอย่างรันไม่ผ่าน ให้ตรวจรุ่นของ ethers ก่อน
         </div>
 
         <div class="callout warn">
           <span class="h">ลงลายเซ็นโดยไม่อ่าน (blind signing)</span>
-          wallet แสดงข้อมูลตามที่หน้าเว็บส่งมา หน้าเว็บที่ไม่หวังดีอาจขอให้ผู้ใช้ลงลายเซ็นธุรกรรม <code>approve</code> ที่อนุญาตให้ address ของผู้โจมตีย้ายเหรียญทั้งหมดของผู้ใช้ (บทที่ 12) แม้หน้าเว็บจะเขียนว่า "รับของรางวัลฟรี" การแยก signer ไว้ใน wallet ช่วยได้เฉพาะเมื่อผู้ใช้อ่านหน้าต่างยืนยันจริง hardware wallet ในบทที่ 14 แสดงรายละเอียดบนจอของอุปกรณ์เอง จึงลดความเสี่ยงที่คอมพิวเตอร์โดนแก้หน้าจอได้
+          หน้าเว็บเป็นผู้เลือกว่าจะขอให้ลงลายเซ็นธุรกรรมใด และเขียนข้อความบนหน้าเว็บอย่างไรก็ได้ หน้าเว็บที่ไม่หวังดีอาจเขียนว่า "รับของรางวัลฟรี" แต่ขอให้ผู้ใช้ลงลายเซ็นธุรกรรม <code>approve</code> ที่อนุญาตให้ address ของผู้โจมตีย้ายเหรียญทั้งหมดของผู้ใช้ไปได้ (หัวข้อ 12.3) signer ที่แยกไว้ใน wallet ช่วยได้เฉพาะเมื่อผู้ใช้อ่านหน้าต่างยืนยันจริง hardware wallet ในบทที่ 14 แสดงรายละเอียดบนจอของอุปกรณ์เอง จึงยังแสดงข้อมูลจริง แม้มัลแวร์ (malware) บนคอมพิวเตอร์จะแก้สิ่งที่แสดงบนจอคอมพิวเตอร์
         </div>
 
         <div class="callout exam">
@@ -283,9 +290,9 @@ console.log(receipt.status === 1 ? "สำเร็จ" : "ล้มเหลว
         <div class="table-wrap">
           <table class="t">
             <tr><th>ผู้ถือสิทธิ์</th><th>ข้อดี</th><th>ปัญหา</th></tr>
-            <tr><td><strong>owner key ของคนเดียว</strong> (modifier <code>onlyOwner</code> ในบทที่ 5)</td><td>ง่าย ตัดสินใจได้เร็ว</td><td>ถ้า key หาย สั่งอะไรไม่ได้อีก ถ้า key โดนขโมยหรือเจ้าของคิดโกง ก็ย้ายเงินทั้งหมดได้ ผู้ใช้จึงกลับไปเชื่อใจคนคนเดียว</td></tr>
+            <tr><td><strong>owner key ของคนเดียว</strong> (modifier <code>onlyOwner</code> ในบทที่ 5)</td><td>ง่าย ตัดสินใจได้เร็ว</td><td>ถ้า key หาย ก็สั่งอะไรไม่ได้อีก ถ้า key โดนขโมยหรือเจ้าของคิดโกง ผู้ถือ key ก็ย้ายเงินทั้งหมดได้ ผู้ใช้จึงกลับไปเชื่อใจคนคนเดียว</td></tr>
             <tr><td><strong>multisig</strong> เช่น ต้องมีลายเซ็น 3 จาก 5 คน</td><td>key หายหรือโดนขโมยหนึ่งดอกยังไม่เสียหาย</td><td>อำนาจยังอยู่กับกลุ่มเล็ก ผู้ใช้ส่วนใหญ่ไม่มีเสียง</td></tr>
-            <tr><td><strong>DAO</strong></td><td>ผู้ถือเหรียญทุกคนเสนอและลงมติได้ ผลการลงมติมีผลผ่านโค้ด</td><td>ตัดสินใจช้า และอาจโดนโจมตีผ่านกติกาการโหวต (หัวข้อย่อยด้านล่าง)</td></tr>
+            <tr><td><strong>DAO</strong></td><td>ผู้ถือเหรียญทุกคนเสนอและลงมติได้ และ contract ทำตามมติเอง</td><td>ตัดสินใจช้า และอาจโดนโจมตีผ่านกติกาการโหวต (ดูหัวข้อย่อย "ปัญหาที่ DAO ยังต้องเผชิญ")</td></tr>
           </table>
         </div>
 
@@ -293,76 +300,87 @@ console.log(receipt.status === 1 ? "สำเร็จ" : "ล้มเหลว
 
         <h3>ส่วนประกอบของ DAO</h3>
         <ul>
-          <li><strong>Governance token:</strong> เหรียญที่ใช้นับสิทธิ์ออกเสียง ส่วนใหญ่ใช้หลัก 1 เหรียญ = 1 เสียง หลายระบบให้ผู้ถือ <strong>delegate</strong> สิทธิ์ให้ตัวเองหรือผู้อื่นก่อน เสียงจึงจะนับ ผู้ที่ไม่มีเวลาติดตามทุกข้อเสนอจึงมอบเสียงให้ผู้แทนได้</li>
+          <li><strong>Governance token:</strong> เหรียญที่ใช้นับสิทธิ์ออกเสียง (voting power) ส่วนใหญ่ใช้หลัก 1 เหรียญ = 1 เสียง หลายระบบกำหนดให้ผู้ถือ <strong>delegate</strong> สิทธิ์ให้ตัวเองหรือผู้อื่นก่อน ระบบจึงจะนับเสียงของเหรียญนั้น เหตุผลคือเหรียญแบบ ERC20Votes ต้องบันทึกยอดย้อนหลัง (checkpoint) ไว้ใช้ตอน snapshot ถ้าบันทึกทุกครั้งที่โอนเหรียญ ผู้โอนทุกคนจะเสีย gas เพิ่ม เหรียญจึงบันทึกเฉพาะบัญชีที่ delegate แล้ว ผู้ที่ไม่มีเวลาติดตามทุกข้อเสนอก็มอบเสียงให้ผู้แทนได้</li>
           <li><strong>Proposal:</strong> ข้อเสนอไม่ได้เป็นเพียงข้อความ แต่มีรายการคำสั่งที่จะให้ contract ทำ คือ target (address ปลายทาง) value (จำนวน ETH) และ calldata (ฟังก์ชันกับพารามิเตอร์) พร้อมคำอธิบาย ผู้โหวตจึงรู้แน่ชัดว่าถ้าผ่านแล้วจะเกิดอะไร</li>
-          <li><strong>กติกาการลงมติ:</strong> เกณฑ์ขั้นต่ำในการเสนอ ระยะรอก่อนเริ่มโหวต ระยะเวลาโหวต และองค์ประชุม (quorum)</li>
-          <li><strong>Timelock:</strong> contract ที่ถือเงินกองกลางและสิทธิ์ admin ทุกคำสั่งต้องรอครบเวลาที่กำหนดก่อนมีผล</li>
+          <li><strong>กติกาการลงมติ:</strong> เกณฑ์ขั้นต่ำในการเสนอ (proposal threshold) ระยะรอก่อนเริ่มโหวต (voting delay) ระยะเวลาโหวต (voting period) และองค์ประชุม (quorum)</li>
+          <li><strong>Timelock:</strong> contract ที่ถือเงินกองกลางและสิทธิ์ admin คำสั่งทุกข้อที่ผ่าน timelock ต้องรอครบเวลาที่กำหนดก่อนมีผล</li>
         </ul>
 
         <figure class="diagram">
-          <svg viewBox="0 0 760 270" role="img" aria-label="วงจรชีวิตของข้อเสนอใน DAO ห้าขั้น Propose ส่งข้อเสนอ Pending รอ voting delay จุด snapshot ของ voting power อยู่ตอนเริ่มโหวต Active ลงคะแนนตลอด voting period Queued รอ timelock delay และ Executed contract เรียก calldata ตามที่โหวต ถ้าไม่ถึง quorum หรือคะแนนเห็นด้วยไม่พอ ข้อเสนอจบที่ Defeated">
+          <svg viewBox="0 0 900 270" role="img" aria-label="วงจรชีวิตของข้อเสนอใน DAO หกขั้น Propose ส่งข้อเสนอ Pending รอ voting delay จุด snapshot ของ voting power อยู่ตอนเริ่มโหวต Active ลงคะแนนตลอด voting period Succeeded โหวตผ่านแล้วและรอผู้เรียก queue ซึ่งใครก็เรียกได้ Queued รอ timelock delay และ Executed contract เรียก calldata ตามที่โหวต ถ้าไม่ถึง quorum หรือคะแนนเห็นด้วยไม่พอ ข้อเสนอจบที่ Defeated">
             <defs>
               <marker id="arrDao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
             </defs>
             <g font-size="13" fill="currentColor">
-              <line x1="305" y1="36" x2="305" y2="138" stroke="#b0417a" stroke-width="1.4" stroke-dasharray="4 3"/>
-              <text x="305" y="26" text-anchor="middle" font-size="11" fill="#b0417a" font-weight="700">จุด snapshot ของ voting power</text>
+              <line x1="302" y1="36" x2="302" y2="138" stroke="#b0417a" stroke-width="1.4" stroke-dasharray="4 3"/>
+              <text x="302" y="26" text-anchor="middle" font-size="11" fill="#b0417a" font-weight="700">จุด snapshot ของ voting power</text>
 
               <rect x="20" y="60" width="120" height="64" rx="9" fill="#fff" stroke="currentColor" stroke-width="1.2"/>
               <text x="80" y="86" text-anchor="middle" font-weight="700">Propose</text>
               <text x="80" y="107" text-anchor="middle" font-size="11">ส่งข้อเสนอ</text>
 
-              <rect x="170" y="60" width="120" height="64" rx="9" fill="#f0ebe1"/>
-              <text x="230" y="86" text-anchor="middle" font-weight="700">Pending</text>
-              <text x="230" y="107" text-anchor="middle" font-size="11">รอ voting delay</text>
+              <rect x="168" y="60" width="120" height="64" rx="9" fill="#f0ebe1"/>
+              <text x="228" y="86" text-anchor="middle" font-weight="700">Pending</text>
+              <text x="228" y="107" text-anchor="middle" font-size="11">รอ voting delay</text>
 
-              <rect x="320" y="60" width="120" height="64" rx="9" fill="#f7e6ef" stroke="#b0417a" stroke-width="1.4"/>
-              <text x="380" y="86" text-anchor="middle" font-weight="700">Active</text>
-              <text x="380" y="107" text-anchor="middle" font-size="11">โหวตตลอด voting period</text>
+              <rect x="316" y="60" width="120" height="64" rx="9" fill="#f7e6ef" stroke="#b0417a" stroke-width="1.4"/>
+              <text x="376" y="86" text-anchor="middle" font-weight="700">Active</text>
+              <text x="376" y="107" text-anchor="middle" font-size="11">ช่วง voting period</text>
 
-              <rect x="470" y="60" width="120" height="64" rx="9" fill="#f0ebe1"/>
-              <text x="530" y="86" text-anchor="middle" font-weight="700">Queued</text>
-              <text x="530" y="107" text-anchor="middle" font-size="11">รอ timelock delay</text>
+              <rect x="464" y="60" width="120" height="64" rx="9" fill="#fff" stroke="#1f8a70" stroke-width="1.2"/>
+              <text x="524" y="86" text-anchor="middle" font-weight="700">Succeeded</text>
+              <text x="524" y="107" text-anchor="middle" font-size="11">โหวตผ่าน รอ queue</text>
 
-              <rect x="620" y="60" width="120" height="64" rx="9" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.4"/>
-              <text x="680" y="86" text-anchor="middle" font-weight="700">Executed</text>
-              <text x="680" y="107" text-anchor="middle" font-size="11">มีผลแล้ว</text>
+              <rect x="612" y="60" width="120" height="64" rx="9" fill="#f0ebe1"/>
+              <text x="672" y="86" text-anchor="middle" font-weight="700">Queued</text>
+              <text x="672" y="107" text-anchor="middle" font-size="11">รอ timelock delay</text>
+
+              <rect x="760" y="60" width="120" height="64" rx="9" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.4"/>
+              <text x="820" y="86" text-anchor="middle" font-weight="700">Executed</text>
+              <text x="820" y="107" text-anchor="middle" font-size="11">มีผลแล้ว</text>
 
               <g stroke="#6b655c" stroke-width="1.3">
-                <line x1="142" y1="92" x2="167" y2="92" marker-end="url(#arrDao)"/>
-                <line x1="292" y1="92" x2="317" y2="92" marker-end="url(#arrDao)"/>
-                <line x1="442" y1="92" x2="467" y2="92" marker-end="url(#arrDao)"/>
-                <line x1="592" y1="92" x2="617" y2="92" marker-end="url(#arrDao)"/>
+                <line x1="142" y1="92" x2="165" y2="92" marker-end="url(#arrDao)"/>
+                <line x1="290" y1="92" x2="313" y2="92" marker-end="url(#arrDao)"/>
+                <line x1="438" y1="92" x2="461" y2="92" marker-end="url(#arrDao)"/>
+                <line x1="586" y1="92" x2="609" y2="92" marker-end="url(#arrDao)"/>
+                <line x1="734" y1="92" x2="757" y2="92" marker-end="url(#arrDao)"/>
+                <line x1="376" y1="194" x2="376" y2="215" stroke-dasharray="3 3" marker-end="url(#arrDao)"/>
               </g>
-              <text x="455" y="54" text-anchor="middle" font-size="10" fill="#1f6e5a">ผ่าน</text>
+              <text x="598" y="54" text-anchor="middle" font-size="10" fill="#1f6e5a">queue()</text>
+              <text x="746" y="54" text-anchor="middle" font-size="10" fill="#1f6e5a">execute()</text>
 
               <g font-size="11" fill="#4a453e">
                 <text x="80" y="154" text-anchor="middle">ผู้ถือเหรียญเกินเกณฑ์</text>
                 <text x="80" y="170" text-anchor="middle">ส่ง target, value,</text>
                 <text x="80" y="186" text-anchor="middle">calldata และคำอธิบาย</text>
 
-                <text x="230" y="154" text-anchor="middle">ให้เวลาอ่านข้อเสนอ</text>
-                <text x="230" y="170" text-anchor="middle">และ delegate สิทธิ์</text>
-                <text x="230" y="186" text-anchor="middle">ก่อนเริ่มนับเสียง</text>
+                <text x="228" y="154" text-anchor="middle">ให้เวลาอ่านข้อเสนอ</text>
+                <text x="228" y="170" text-anchor="middle">และ delegate สิทธิ์</text>
+                <text x="228" y="186" text-anchor="middle">ก่อนเริ่มนับเสียง</text>
 
-                <text x="380" y="154" text-anchor="middle">For / Against / Abstain</text>
-                <text x="380" y="170" text-anchor="middle">นับเสียงจากยอดถือ</text>
-                <text x="380" y="186" text-anchor="middle">ณ จุด snapshot</text>
+                <text x="376" y="154" text-anchor="middle">For / Against / Abstain</text>
+                <text x="376" y="170" text-anchor="middle">นับเสียงจากยอดถือ</text>
+                <text x="376" y="186" text-anchor="middle">ณ จุด snapshot</text>
 
-                <text x="530" y="154" text-anchor="middle">ผู้ไม่เห็นด้วยมีเวลา</text>
-                <text x="530" y="170" text-anchor="middle">ถอนตัวก่อนมีผล</text>
-                <text x="530" y="186" text-anchor="middle">และตรวจหาข้อเสนอแฝง</text>
+                <text x="524" y="154" text-anchor="middle">For ชนะและถึง quorum</text>
+                <text x="524" y="170" text-anchor="middle">ใครก็เรียก queue ได้</text>
+                <text x="524" y="186" text-anchor="middle">เพื่อส่งเข้า timelock</text>
 
-                <text x="680" y="154" text-anchor="middle">ใครก็เรียก execute ได้</text>
-                <text x="680" y="170" text-anchor="middle">contract เรียก calldata</text>
-                <text x="680" y="186" text-anchor="middle">ตรงตามที่โหวตไว้</text>
+                <text x="672" y="154" text-anchor="middle">ผู้ไม่เห็นด้วยมีเวลา</text>
+                <text x="672" y="170" text-anchor="middle">ถอนตัวก่อนมีผล</text>
+                <text x="672" y="186" text-anchor="middle">และตรวจหาคำสั่งอันตราย</text>
+
+                <text x="820" y="154" text-anchor="middle">ใครก็เรียก execute ได้</text>
+                <text x="820" y="170" text-anchor="middle">contract เรียก calldata</text>
+                <text x="820" y="186" text-anchor="middle">ตรงตามที่โหวตไว้</text>
               </g>
 
-              <rect x="20" y="218" width="720" height="38" rx="8" fill="#fbeceb"/>
-              <text x="36" y="242" font-size="12"><tspan font-weight="700" fill="#c2412d">Defeated:</tspan> ถ้าเมื่อจบ voting period คะแนนไม่ถึง quorum หรือเสียง For ไม่ชนะ ข้อเสนอจบตรงนั้น ไม่มีคำสั่งใดทำงาน</text>
+              <rect x="20" y="218" width="860" height="38" rx="8" fill="#fbeceb"/>
+              <text x="36" y="242" font-size="12"><tspan font-weight="700" fill="#c2412d">Defeated:</tspan> ถ้าจบ voting period แล้วคะแนนไม่ถึง quorum หรือเสียง For ไม่ชนะ ข้อเสนอจบที่สถานะนี้ ไม่มีคำสั่งใดทำงาน</text>
             </g>
           </svg>
-          <figcaption>วงจรของข้อเสนอใน DAO แบบที่ใช้กันแพร่หลาย (ชื่อสถานะตาม OpenZeppelin Governor) ระยะรอแต่ละช่วงมีเหตุผลรองรับ voting delay เปิดเวลาให้อ่านและ delegate จุด snapshot ทำให้เหรียญหนึ่งเหรียญโหวตได้ครั้งเดียว และ timelock เปิดเวลาให้ผู้ไม่เห็นด้วยถอนตัว</figcaption>
+          <figcaption>วงจรของข้อเสนอใน DAO แบบที่ใช้กันแพร่หลาย Propose คือการส่งข้อเสนอ ส่วนกล่องที่เหลือใช้ชื่อสถานะหลักตาม OpenZeppelin Governor (ละสถานะ Canceled และ Expired ไว้) ระยะรอแต่ละช่วงมีหน้าที่ของตัวเอง voting delay ให้เวลาอ่านข้อเสนอและ delegate สิทธิ์ จุด snapshot ทำให้เหรียญหนึ่งเหรียญโหวตได้ครั้งเดียว ส่วน timelock ให้เวลาผู้ไม่เห็นด้วยถอนตัว</figcaption>
         </figure>
 
         <h3>ทำไมแต่ละกติกาต้องมี</h3>
@@ -370,18 +388,18 @@ console.log(receipt.status === 1 ? "สำเร็จ" : "ล้มเหลว
         <div class="table-wrap">
           <table class="t">
             <tr><th>กติกา</th><th>มีไว้เพื่อ</th><th>ถ้าไม่มี</th></tr>
-            <tr><td><strong>Proposal threshold</strong> (ต้องถือเหรียญขั้นต่ำจึงเสนอได้)</td><td>กันข้อเสนอขยะ</td><td>ผู้โจมตีส่งข้อเสนอจำนวนมากจนผู้โหวตตรวจไม่ทัน</td></tr>
+            <tr><td><strong>Proposal threshold</strong> (ต้องถือเหรียญขั้นต่ำจึงเสนอได้)</td><td>กันข้อเสนอขยะ (spam proposal)</td><td>ผู้โจมตีส่งข้อเสนอจำนวนมากจนผู้โหวตตรวจไม่ทัน</td></tr>
             <tr><td><strong>Voting delay</strong></td><td>ให้ผู้ถือเหรียญอ่านข้อเสนอ และ delegate สิทธิ์ก่อนนับเสียง</td><td>ผู้เสนอเปิดโหวตทันทีขณะที่คนอื่นยังไม่รู้ว่ามีข้อเสนอ</td></tr>
-            <tr><td><strong>Snapshot ของ voting power</strong> (นับยอดถือ ณ บล็อกที่เริ่มโหวต)</td><td>ให้เหรียญแต่ละเหรียญมีเสียงได้ครั้งเดียว</td><td>โหวตแล้วโอนเหรียญไปอีกบัญชีแล้วโหวตซ้ำได้ หรือยืมเหรียญมาโหวตแล้วคืน</td></tr>
-            <tr><td><strong>Voting period</strong></td><td>เปิดเวลาให้ผู้ถือเหรียญทุกเขตเวลาโหวตได้</td><td>ผลขึ้นกับว่าใครออนไลน์อยู่ในช่วงสั้น ๆ</td></tr>
+            <tr><td><strong>Snapshot ของ voting power</strong> (นับยอดถือ ณ บล็อกที่เริ่มโหวต)</td><td>ให้เหรียญแต่ละเหรียญโหวตได้ครั้งเดียว</td><td>โหวตแล้วโอนเหรียญไปอีกบัญชีแล้วโหวตซ้ำได้ หรือยืมเหรียญมาโหวตแล้วคืน</td></tr>
+            <tr><td><strong>Voting period</strong></td><td>ให้ผู้ถือเหรียญในทุกเขตเวลา (time zone) มีโอกาสโหวต</td><td>ผลขึ้นกับว่าใครออนไลน์อยู่ในช่วงสั้น ๆ</td></tr>
             <tr><td><strong>Quorum</strong> (เสียงรวมต้องถึงสัดส่วนขั้นต่ำของเหรียญทั้งหมด)</td><td>กันข้อเสนอผ่านเมื่อมีผู้มาโหวตน้อย</td><td>กลุ่มเล็กผ่านข้อเสนอได้ในช่วงที่คนส่วนใหญ่ไม่สนใจ</td></tr>
-            <tr><td><strong>Timelock</strong></td><td>เปิดเวลาระหว่างมติผ่านกับวันที่มีผล</td><td>ข้อเสนอที่ซ่อนคำสั่งอันตรายมีผลทันที ผู้ไม่เห็นด้วยถอนเงินออกไม่ทัน</td></tr>
+            <tr><td><strong>Timelock</strong></td><td>เว้นระยะระหว่างวันที่มติผ่านกับวันที่มีผล</td><td>ข้อเสนอที่ซ่อนคำสั่งอันตรายมีผลทันที ผู้ไม่เห็นด้วยถอนเงินออกไม่ทัน</td></tr>
           </table>
         </div>
-        <p>ค่าที่พบในตัวอย่างของ OpenZeppelin Governor เช่น voting delay 1 วัน voting period 1 สัปดาห์ และ quorum 4% ของเหรียญทั้งหมด แต่ละ DAO ตั้งค่าเองตามความเหมาะสม จึงไม่ใช่ตัวเลขมาตรฐานที่ต้องจำ</p>
+        <p>ค่าตั้งต้นในตัวอย่างโค้ดของ OpenZeppelin Governor คือ voting delay 1 วัน voting period 1 สัปดาห์ และ quorum 4% ของเหรียญทั้งหมด แต่ละ DAO ตั้งค่าเหล่านี้เองตามความเหมาะสม จึงไม่ใช่ตัวเลขมาตรฐานที่ต้องจำ</p>
 
-        <h3>ผลของมติมีผลผ่านโค้ด</h3>
-        <p>contract ด้านล่างเป็น DAO แบบย่อสำหรับทำความเข้าใจ ไม่มี timelock และไม่ได้ป้องกันการโจมตีทุกแบบ จุดที่ควรสังเกตคือ <code>execute</code> เรียก calldata ที่บันทึกไว้ตั้งแต่ตอนเสนอ ไม่มีใครเปลี่ยนคำสั่งหลังโหวตได้</p>
+        <h3>contract ทำตามมติเอง</h3>
+        <p>contract ด้านล่างเป็น DAO แบบย่อสำหรับทำความเข้าใจ ไม่มี timelock และกันการโจมตีไม่ครบทุกแบบ จุดที่ควรสังเกตคือ <code>execute</code> เรียก calldata ที่บันทึกไว้ตั้งแต่ตอนเสนอ ไม่มีใครเปลี่ยนคำสั่งหลังโหวตได้</p>
 <pre><code>// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
@@ -401,6 +419,7 @@ contract MiniDAO {
     mapping(uint256 => mapping(address => bool)) public voted;
 
     constructor(IVotes t) { token = t; }
+    receive() external payable {}                       // รับ ETH เข้ากองกลาง
 
     function propose(address target, uint256 value, bytes calldata data) external returns (uint256 id) {
         proposals.push(Proposal(target, value, data, block.number + 7200, block.number + 57600, 0, 0, false));
@@ -432,14 +451,16 @@ contract MiniDAO {
         <h3>ปัญหาที่ DAO ยังต้องเผชิญ</h3>
         <ul>
           <li><strong>อำนาจกระจุกที่ผู้ถือรายใหญ่:</strong> หลัก 1 เหรียญ = 1 เสียง ทำให้ผู้ถือรายใหญ่ (whale) ไม่กี่รายตัดสินผลได้ ระบบนี้จึงมีลักษณะคล้ายบริษัทที่ผู้ถือหุ้นใหญ่คุมเสียง มากกว่าประชาธิปไตยแบบหนึ่งคนหนึ่งเสียง</li>
-          <li><strong>ผู้มาโหวตน้อย:</strong> การโหวตบน chain เสียค่า gas ทุกครั้ง ผู้ถือรายย่อยจึงมักไม่โหวต ค่า quorum ที่ตั้งสูงเกินไปทำให้ไม่มีข้อเสนอใดผ่าน หลาย DAO จึงโหวตนอก chain ผ่าน Snapshot.org ซึ่งไม่เสีย gas (บทที่ 12) แต่ผลโหวตนอก chain ไม่มีผลกับ contract เอง ต้องมี multisig นำผลไปดำเนินการ ผู้ใช้จึงต้องเชื่อใจ multisig นั้นอีกชั้น</li>
-          <li><strong>การโจมตีด้วย flash loan:</strong> flash loan คือการกู้เหรียญจำนวนมากโดยไม่มีหลักประกัน แต่ต้องคืนภายในธุรกรรมเดียวกัน ถ้าคืนไม่ครบ ทั้งธุรกรรมจะ revert ในเดือนเมษายน 2022 ผู้โจมตี Beanstalk กู้เงินด้วย flash loan มาซื้อสิทธิ์โหวตเกินสองในสาม แล้วผ่านข้อเสนอที่ส่งเงินกองกลางให้ตัวเองได้ภายในธุรกรรมเดียว ความเสียหายรวมราว 180 ล้านดอลลาร์ ช่องโหว่อยู่ที่กติกาของ Beanstalk นับเสียงจากยอดถือ ณ ขณะโหวต และให้ข้อเสนอฉุกเฉินมีผลทันที การนับเสียง ณ บล็อก snapshot ในอดีตปิดช่องนี้ได้ เพราะเหรียญที่กู้มาในธุรกรรมปัจจุบันไม่มีอยู่ในบัญชี ณ บล็อกนั้น ส่วน timelock ทำให้ข้อเสนอไม่มีผลทันที</li>
+          <li><strong>ผู้มาโหวตน้อย:</strong> การโหวตบน chain เสียค่า gas ทุกครั้ง ผู้ถือรายย่อยจึงมักไม่โหวต ถ้าตั้ง quorum สูงเกินไป ก็จะไม่มีข้อเสนอใดผ่าน</li>
+          <li><strong>โหวตนอก chain:</strong> หลาย DAO จึงโหวตนอก chain (off-chain voting) ผ่านบริการชื่อ Snapshot.org ซึ่งไม่เสีย gas (หัวข้อ 12.5) Snapshot.org เป็นชื่อบริการ คนละเรื่องกับจุด snapshot ของ voting power ข้างต้น แต่บริการนี้ก็นับยอดถือ ณ บล็อกที่กำหนดเช่นกัน ข้อเสียคือ contract ไม่ได้อ่านผลโหวตนอก chain เอง ส่วนใหญ่ต้องมี multisig นำผลไปดำเนินการ หรือใช้ oracle อย่าง oSnap ส่งผลเข้า chain ผู้ใช้จึงต้องเชื่อใจผู้ดำเนินการนั้นเพิ่มอีกชั้น</li>
+          <li><strong>การโจมตีด้วย flash loan:</strong> flash loan คือการกู้เหรียญจำนวนมากโดยไม่มีหลักประกัน (collateral) แต่ต้องคืนภายในธุรกรรมเดียวกัน ถ้าคืนไม่ครบ ทั้งธุรกรรมจะ revert กรณีที่รู้จักกันดีคือโครงการ Beanstalk ในเดือนเมษายน 2022 ข้อเสนอแบบฉุกเฉินของ Beanstalk สั่งให้มีผลได้ทันทีเมื่อเข้าสองเงื่อนไข คือข้อเสนอมีอายุครบ 24 ชั่วโมง และได้เสียงอย่างน้อยสองในสาม ผู้โจมตีจึงส่งข้อเสนอที่โอนเงินกองกลางให้ตัวเองไว้ล่วงหน้าหนึ่งวัน วันต่อมาผู้โจมตีทำทุกขั้นที่เหลือในธุรกรรมเดียว คือกู้เงินด้วย flash loan นำไปฝากเพื่อรับสิทธิ์โหวตจนได้เกินสองในสาม โหวตผ่านข้อเสนอ สั่งให้ข้อเสนอมีผลทันที รับเงินกองกลาง แล้วคืนเงินกู้ ความเสียหายรวมราว 180 ล้านดอลลาร์</li>
+          <li><strong>บทเรียนจาก Beanstalk:</strong> ช่องโหว่อยู่ที่กติกาสองข้อ ข้อแรก Beanstalk นับเสียงจากยอดฝาก ณ ขณะโหวต ข้อที่สอง ข้อเสนอฉุกเฉินมีผลทันทีเมื่อได้เสียงถึงเกณฑ์ โดยไม่มีช่วงรอหลังมติผ่าน Beanstalk มีระยะรอ 24 ชั่วโมงก็จริง แต่วางไว้ก่อนการนับเสียง ผู้โจมตีจึงส่งข้อเสนอรอไว้ก่อนได้ ถ้านับเสียงจากบล็อก snapshot ในอดีต ช่องแรกจะปิด เพราะ ณ บล็อกนั้นเหรียญที่กู้มายังไม่อยู่ในบัญชีของผู้โจมตี ส่วน timelock ที่วางไว้หลังมติผ่านจะปิดช่องที่สอง เพราะข้อเสนอไม่มีผลทันที ผู้ถือเหรียญจึงมีเวลาเห็นคำสั่งอันตรายและถอนเงินออกก่อน</li>
           <li><strong>สถานะทางกฎหมาย:</strong> หลายประเทศยังไม่มีกฎหมายรองรับ DAO ชัดเจน ผู้ร่วม DAO อาจต้องรับผิดร่วมกันเหมือนหุ้นส่วนที่ไม่ได้จดทะเบียน</li>
         </ul>
 
         <div class="callout exam">
           <span class="h">ประเด็นที่มักออกสอบ</span>
-          จำลำดับ propose, vote, queue, execute และเหตุผลของ timelock ได้ คือให้ผู้ที่ไม่เห็นด้วยมีเวลาถอนตัวก่อนมติมีผล อีกประเด็นคือทำไม DAO นับเสียงจากยอดถือ ณ บล็อก snapshot ไม่ใช่ยอดปัจจุบัน คำตอบคือกันการโหวตซ้ำด้วยการโอนเหรียญ และกันการยืมเหรียญด้วย flash loan มาโหวต
+          ต้องจำลำดับ propose, vote, queue, execute ให้ได้ และอธิบายได้ว่า timelock มีไว้ให้ผู้ที่ไม่เห็นด้วยมีเวลาถอนตัวก่อนมติมีผล อีกประเด็นคือทำไม DAO นับเสียงจากยอดถือ ณ บล็อก snapshot ไม่ใช่ยอดปัจจุบัน คำตอบคือเพื่อกันผู้โหวตโอนเหรียญไปโหวตซ้ำ และกันผู้ที่ยืมเหรียญด้วย flash loan มาโหวต
         </div>
       </section>
 
@@ -448,11 +469,11 @@ contract MiniDAO {
         <h2><span class="no">11.5</span>กรณีศึกษา The DAO (2016): ช่องโหว่ Reentrancy และผลที่ตามมา</h2>
 
         <h3>The DAO คืออะไร</h3>
-        <p>The DAO เป็น DAO ขนาดใหญ่รายแรกบน Ethereum แนวคิดคือกองทุนร่วมลงทุน (venture fund) ที่ไม่มีผู้จัดการกองทุน ผู้ร่วมลงทุนส่ง ETH เข้า contract แล้วได้เหรียญ DAO กลับมา จากนั้นใช้เหรียญโหวตว่าจะให้เงินโครงการใด ช่วงระดมทุนในเดือนเมษายนถึงพฤษภาคม 2016 The DAO รวบรวมได้มากกว่า 11 ล้าน ETH เป็นสัดส่วนที่สูงมากของ ETH ทั้งหมดในเวลานั้น</p>
-        <p>ผู้ออกแบบรู้ว่าเสียงข้างมากอาจโหวตใช้เงินในทางที่เสียงข้างน้อยไม่เห็นด้วย จึงเพิ่มฟังก์ชัน <code>splitDAO</code> ให้ผู้ไม่เห็นด้วยแยกตัวออกไปตั้ง DAO ลูก (child DAO) แล้วนำ ETH ส่วนของตัวเองติดตัวไป ฟังก์ชันนี้มีไว้คุ้มครองเสียงข้างน้อย แต่กลายเป็นทางที่ผู้โจมตีใช้ดึงเงิน</p>
+        <p>The DAO เป็น DAO ขนาดใหญ่รายแรกบน Ethereum แนวคิดคือกองทุนร่วมลงทุน (venture fund) ที่ไม่มีผู้จัดการกองทุน ผู้ร่วมลงทุนส่ง ETH เข้า contract แล้วได้เหรียญ DAO กลับมา จากนั้นใช้เหรียญโหวตว่าจะให้เงินโครงการใด ช่วงระดมทุนในเดือนเมษายนถึงพฤษภาคม 2016 The DAO รวบรวมได้มากกว่า 11 ล้าน ETH คิดเป็นราว 14% ของ ETH ทั้งหมดในเวลานั้น</p>
+        <p>ผู้ออกแบบรู้ว่าเสียงข้างมากอาจโหวตใช้เงินในทางที่เสียงข้างน้อยไม่เห็นด้วย จึงเพิ่มฟังก์ชัน <code>splitDAO</code> ให้ผู้ไม่เห็นด้วยแยกตัวออกไปตั้ง DAO ลูก (child DAO) แล้วนำ ETH ส่วนของตัวเองติดตัวไป แต่ <code>splitDAO</code> ส่ง ETH ออกไปก่อน แล้วจึงตั้งยอดเหรียญ DAO ของผู้ขอแยกตัวเป็นศูนย์ ผู้โจมตีใช้ contract ที่เรียก <code>splitDAO</code> กลับเข้ามาทุกครั้งที่ได้รับเงิน จึงแยกตัวซ้อนกันได้หลายชั้นด้วยยอดเหรียญเดิม และดึง ETH ออกไปมากกว่าส่วนของตัวเองหลายเท่า ช่องโหว่นี้เรียกว่า reentrancy รายละเอียดอยู่ในหัวข้อย่อยถัดไป</p>
 
         <h3>Reentrancy เกิดขึ้นได้อย่างไร</h3>
-        <p>เมื่อ contract ส่ง ETH ให้ address ที่เป็น contract ฟังก์ชัน <code>receive</code> (หรือ <code>fallback</code>) ของผู้รับจะทำงานทันที การทำงานจึงย้ายไปอยู่ในโค้ดของผู้รับ ขณะที่ฟังก์ชันของผู้ส่งยังทำงานไม่จบ ถ้าผู้ส่งยังไม่ได้แก้ยอดในบัญชีก่อนส่งเงิน ผู้รับก็เรียกฟังก์ชันถอนเงินกลับเข้ามาได้อีก และฟังก์ชันจะเห็นยอดเดิมที่ยังไม่ลด ช่องโหว่ที่ผู้ถูกเรียกเรียกฟังก์ชันเดิมกลับเข้ามา (re-enter) ก่อน state จะอัปเดตนี้เรียกว่า <strong>reentrancy</strong></p>
+        <p>เมื่อ contract ส่ง ETH ให้ address ที่เป็น contract ฟังก์ชัน <code>receive</code> (หรือ <code>fallback</code>) ของผู้รับจะทำงานทันที การทำงานจึงย้ายไปอยู่ในโค้ดของผู้รับ ขณะที่ฟังก์ชันของผู้ส่งยังทำงานไม่จบ ถ้าผู้ส่งยังไม่ได้แก้ยอดในบัญชีก่อนส่งเงิน ผู้รับก็เรียกฟังก์ชันถอนเงินกลับเข้ามาได้อีก และฟังก์ชันจะเห็นยอดเดิมที่ยังไม่ลด ช่องโหว่แบบนี้เรียกว่า <strong>reentrancy</strong> เพราะ contract ปลายทางเรียกฟังก์ชันเดิมกลับเข้ามา (re-enter) ก่อน state จะอัปเดต</p>
 
         <p>โค้ดของ The DAO ซับซ้อนกว่านี้มาก แต่จุดที่ผิดมีลักษณะเดียวกับตัวอย่างย่อด้านล่าง คือ contract ส่ง ETH ออกไปก่อน แล้วจึงตั้งยอดของผู้ถอนเป็นศูนย์</p>
 <pre><code>contract Bank {
@@ -486,7 +507,7 @@ contract Attacker {
 }</code></pre>
 
         <figure class="diagram">
-          <svg viewBox="0 0 760 400" role="img" aria-label="ลำดับการโจมตีแบบ reentrancy Attacker เรียก withdraw ชั้นที่ 1 Bank ตรวจยอดได้ 1 ETH แล้วส่ง 1 ETH ทำให้ receive ของ Attacker ทำงาน receive เรียก withdraw ชั้นที่ 2 Bank ตรวจยอดยังเป็น 1 ETH จึงส่งอีก วนซ้ำจนเงินใน Bank หมด จากนั้นแต่ละชั้นจึงทำงานต่อจนจบและตั้งยอดเป็นศูนย์ซึ่งช้าเกินไป">
+          <svg viewBox="0 0 760 400" role="img" aria-label="ลำดับการโจมตีแบบ reentrancy Attacker เรียก withdraw ชั้นที่ 1 Bank ตรวจยอดได้ 1 ETH แล้วส่ง 1 ETH ทำให้ receive ของ Attacker ทำงาน receive เรียก withdraw ชั้นที่ 2 Bank ตรวจยอดยังเป็น 1 ETH จึงส่งอีก วนซ้ำจนเงินใน Bank หมด จากนั้นแต่ละชั้นจึงทำงานต่อจนจบและตั้งยอดเป็นศูนย์ แต่ช้าเกินไปแล้ว">
             <defs>
               <marker id="arrReen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
             </defs>
@@ -535,7 +556,7 @@ contract Attacker {
         </figure>
 
         <h3>ทดลอง: เดินทีละขั้นของการโจมตี</h3>
-        <p>Bank เริ่มต้นมี 4 ETH เป็นเงินฝากของผู้อื่น 3 ETH และของ Attacker 1 ETH เลือกลำดับของโค้ด แล้วกด "ขั้นถัดไป" เพื่อดูว่าแต่ละชั้นของ <code>withdraw()</code> เห็นยอดเท่าใด</p>
+        <p>Bank เริ่มต้นมี 4 ETH แบ่งเป็นเงินฝากของผู้อื่น 3 ETH และของ Attacker 1 ETH Attacker ฝากเงินไว้แล้วในธุรกรรมก่อนหน้า ตัวอย่างนี้จึงเริ่มที่การเรียก <code>withdraw()</code> ให้เลือกลำดับของโค้ด แล้วกด "ขั้นถัดไป" เพื่อดูว่าแต่ละชั้นของ <code>withdraw()</code> เห็นยอดเท่าใด</p>
         <div class="hash-demo" id="reen">
           <div class="row" style="margin-top:0">
             <label for="reMode" style="margin:0">ลำดับในฟังก์ชัน withdraw()</label>
@@ -559,18 +580,18 @@ contract Attacker {
           <table class="t">
             <tr><th>เวลา</th><th>เหตุการณ์</th></tr>
             <tr><td>เมษายน–พฤษภาคม 2016</td><td>The DAO ระดมทุนได้มากกว่า 11 ล้าน ETH</td></tr>
-            <tr><td>17 มิถุนายน 2016</td><td>ผู้โจมตีเรียก <code>splitDAO</code> ซ้อนกันหลายชั้น ดึง ETH ราว 3.6 ล้าน ETH เข้า DAO ลูกของตัวเอง</td></tr>
+            <tr><td>17 มิถุนายน 2016</td><td>ผู้โจมตีเรียก <code>splitDAO</code> ซ้อนกันหลายชั้น และดึงเงินราว 3.6 ล้าน ETH เข้า DAO ลูกของตัวเอง</td></tr>
             <tr><td>หลังการโจมตี</td><td>กติกาของ The DAO ล็อกเงินใน DAO ลูกไว้ 28 วันก่อนถอนได้ ชุมชนจึงมีเวลาถกเถียงว่าจะทำอย่างไร</td></tr>
-            <tr><td>20 กรกฎาคม 2016</td><td>hard fork ที่บล็อก 1,920,000 ย้าย ETH จาก The DAO และ DAO ลูกไปไว้ใน contract คืนเงิน ผู้ถือเหรียญ DAO แลกคืนได้ 100 DAO ต่อ 1 ETH</td></tr>
-            <tr><td>หลัง hard fork</td><td>ผู้ที่ไม่ยอมรับการแก้ประวัติรันกติกาเดิมต่อ สายเดิมกลายเป็น Ethereum Classic (ETC) รายละเอียดอยู่ในหัวข้อ 9.4</td></tr>
+            <tr><td>20 กรกฎาคม 2016</td><td>hard fork ที่บล็อก 1,920,000 ย้าย ETH จาก The DAO และ DAO ลูกไปไว้ใน contract คืนเงิน ผู้ถือเหรียญ DAO นำเหรียญไปแลกคืนได้ในอัตรา 100 DAO ต่อ 1 ETH</td></tr>
+            <tr><td>หลัง hard fork</td><td>ผู้ที่ไม่ยอมรับการแก้ประวัติยังรันกติกาเดิมต่อ สายเดิมกลายเป็น Ethereum Classic (ETC) รายละเอียดอยู่ในหัวข้อ 9.4</td></tr>
           </table>
         </div>
 
         <h3>วิธีป้องกัน reentrancy</h3>
         <ol>
-          <li><strong>Checks-Effects-Interactions (CEI):</strong> ตรวจเงื่อนไข แก้ state แล้วจึงติดต่อภายนอก (บทที่ 7 หัวข้อ 7.5) เมื่อยอดเป็นศูนย์ก่อนส่งเงิน การเรียกซ้ำจะไม่ผ่าน <code>require</code></li>
-          <li><strong>Reentrancy guard:</strong> ตัวแปรล็อกที่ตั้งค่าเมื่อเข้าฟังก์ชันและปลดเมื่อออก ถ้ามีการเรียกซ้อนเข้ามาระหว่างนั้น ฟังก์ชันจะ revert OpenZeppelin มี modifier สำเร็จรูปชื่อ <code>nonReentrant</code> ใน <code>ReentrancyGuard</code> วิธีนี้กันได้แม้ผู้เขียนลืมเรียงลำดับตาม CEI</li>
-          <li><strong>Pull over Push:</strong> ให้ผู้รับถอนเงินเองทีละคน (หัวข้อ 7.5) ทุกฟังก์ชันที่ส่งเงินยังต้องเขียนตาม CEI แต่จำนวนจุดที่ต้องระวังลดลง</li>
+          <li><strong>Checks-Effects-Interactions (CEI):</strong> ตรวจเงื่อนไข แก้ state แล้วจึงติดต่อ contract ภายนอก (บทที่ 7 หัวข้อ 7.5) ถ้าตั้งยอดเป็นศูนย์ก่อนส่งเงิน การเรียกซ้ำจะไม่ผ่าน <code>require</code></li>
+          <li><strong>Reentrancy guard:</strong> ตัวแปรล็อกที่ตั้งค่าเมื่อเข้าฟังก์ชันและปลดเมื่อออก ถ้ามีผู้เรียกซ้อนเข้ามาระหว่างนั้น ฟังก์ชันจะ revert OpenZeppelin มี modifier สำเร็จรูปชื่อ <code>nonReentrant</code> ใน <code>ReentrancyGuard</code> วิธีนี้กันได้แม้ผู้เขียนลืมเรียงลำดับตาม CEI</li>
+          <li><strong>Pull over Push:</strong> ให้ผู้รับมาถอนเงินเองทีละคน แทนที่ contract จะส่งเงินออกไปให้หลายคนพร้อมกัน (หัวข้อ 7.5) แนวทางนี้ไม่ได้กัน reentrancy ด้วยตัวเอง ฟังก์ชันถอนเงินยังต้องเขียนตาม CEI แต่การเรียก contract ภายนอกจะอยู่ในฟังก์ชันสั้น ๆ เพียงฟังก์ชันเดียว ไม่กระจายอยู่ในโค้ดที่ซับซ้อน ผู้เขียนจึงตรวจลำดับได้ง่ายกว่า</li>
         </ol>
 <pre><code>// แก้ด้วย CEI
 function withdraw() external {
@@ -591,17 +612,22 @@ modifier nonReentrant() {
 }</code></pre>
 
         <div class="callout warn">
-          <span class="h">อย่าพึ่ง transfer() หรือรุ่นคอมไพเลอร์แทน CEI</span>
-          <code>transfer</code> และ <code>send</code> ส่ง gas ต่อให้ผู้รับเพียง 2,300 ซึ่งไม่พอให้ผู้รับเรียกฟังก์ชันกลับเข้ามา จึงเคยเป็นวิธีที่แนะนำ แต่ราคา gas ของ opcode เปลี่ยนได้เมื่อมีการอัปเกรด เช่น EIP-1884 ในปี 2019 ขึ้นราคาบาง opcode จน contract บางตัวรับเงินผ่าน <code>transfer</code> ไม่ได้ (บทที่ 7) ปัจจุบันจึงแนะนำให้ใช้ <code>call</code> คู่กับ CEI หรือ <code>nonReentrant</code> อีกเรื่องหนึ่งคือ ถ้าโค้ดที่มีช่องโหว่เขียนว่า <code>balances[msg.sender] -= amount</code> แทนการตั้งเป็นศูนย์ Solidity 0.8 จะ revert เมื่อยอดติดลบตอนชั้นที่ซ้อนกันคืนค่า การโจมตีแบบง่ายจึงล้มเหลว แต่ผู้โจมตีมีวิธีอื่น เช่น เรียกซ้ำผ่านอีกฟังก์ชันหนึ่งที่อ่านยอดเดียวกัน (cross-function reentrancy) จึงไม่ควรพึ่งการตรวจตัวเลขของคอมไพเลอร์แทน CEI
+          <span class="h">อย่าพึ่ง transfer() แทน CEI</span>
+          <code>transfer</code> และ <code>send</code> ส่ง gas ต่อให้ผู้รับเพียง 2,300 ซึ่งไม่พอให้ผู้รับเรียกฟังก์ชันกลับเข้ามา วิธีนี้จึงเคยเป็นวิธีที่แนะนำ แต่ราคา gas ของ opcode เปลี่ยนได้เมื่อเครือข่ายอัปเกรด เช่น EIP-1884 ในปี 2019 ขึ้นราคาบาง opcode จน contract บางตัวรับเงินผ่าน <code>transfer</code> ไม่ได้ และ wallet แบบ smart contract หลายตัวก็ต้องใช้ gas เกิน 2,300 เพื่อรับเงิน (gas stipend ในหัวข้อ 7.4) ปัจจุบันจึงแนะนำให้ใช้ <code>call</code> คู่กับ CEI หรือ <code>nonReentrant</code>
+        </div>
+
+        <div class="callout warn">
+          <span class="h">อย่าพึ่งการตรวจ underflow ของ Solidity 0.8 แทน CEI</span>
+          ถ้าโค้ดที่มีช่องโหว่ใช้ <code>balances[msg.sender] -= amount</code> แทนการตั้งยอดเป็นศูนย์ เมื่อชั้นที่ซ้อนกันคืนค่ากลับมาทีละชั้น ชั้นแรกลดยอดจาก 1 เป็น 0 ชั้นถัดไปต้องลดจาก 0 ลงอีก แต่ <code>uint256</code> ติดลบไม่ได้ Solidity 0.8 จึงตรวจพบ underflow และ revert ทั้งธุรกรรม การโจมตีแบบง่ายจึงล้มเหลว แต่ผู้โจมตียังมีวิธีอื่น เช่น เรียกซ้ำผ่านอีกฟังก์ชันหนึ่งที่อ่านยอดเดียวกัน (cross-function reentrancy) ผู้เขียน contract จึงไม่ควรพึ่งการตรวจ underflow ของคอมไพเลอร์แทน CEI
         </div>
 
         <h3>ผลที่ตามมา</h3>
         <ul>
-          <li><strong>Ethereum แยกเป็นสองสาย:</strong> hard fork คืนเงินให้ผู้ลงทุน แต่ทำให้เกิด ETH กับ ETC ตามบทที่ 9 และในช่วงแรกผู้ใช้หลายคนเสียเงินจาก replay attack ระหว่างสองสาย จนมี EIP-155 นำ chainId ไปรวมไว้ในลายเซ็น (บทที่ 5)</li>
+          <li><strong>Ethereum แยกเป็นสองสาย:</strong> hard fork คืนเงินให้ผู้ลงทุน แต่ทำให้ chain แยกเป็น ETH กับ ETC (บทที่ 9) ช่วงแรกผู้ใช้หลายคนเสียเงินจาก replay attack ระหว่างสองสาย ต่อมา EIP-155 จึงนำ chainId ไปรวมไว้ในลายเซ็น (บทที่ 5)</li>
           <li><strong>คำถามเรื่อง "code is law":</strong> ฝ่ายหนึ่งมองว่าผู้โจมตีทำตามที่โค้ดอนุญาต การแก้ประวัติจึงทำลายหลักที่ว่า blockchain แก้ไม่ได้ อีกฝ่ายมองว่าโค้ดไม่ได้ทำตามเจตนาของผู้ลงทุน และความเสียหายใหญ่เกินกว่าจะปล่อยไว้ ข้อถกเถียงนี้ยังไม่มีข้อยุติ</li>
-          <li><strong>วัฒนธรรมด้านความปลอดภัย:</strong> หลังเหตุการณ์นี้ การตรวจสอบโค้ด (audit) ก่อน deploy กลายเป็นขั้นตอนปกติ รูปแบบ CEI และ <code>ReentrancyGuard</code> กลายเป็นความรู้พื้นฐานของนักพัฒนา แต่ reentrancy ยังพบในโครงการใหม่จนถึงปัจจุบัน</li>
-          <li><strong>บทเรียนสำหรับการออกแบบ DAO:</strong> DAO ที่ถือเงินจำนวนมากต้องถือว่าโค้ดของตัวเองอาจมีบั๊ก จึงมี timelock ช่องทางหยุดฉุกเฉิน และจำกัดจำนวนเงินที่ย้ายได้ต่อครั้ง เพื่อให้มีเวลาตอบสนองก่อนความเสียหายลุกลาม</li>
-          <li><strong>มุมมองทางกฎหมาย:</strong> ในปี 2017 ก.ล.ต. สหรัฐฯ (SEC) ออกรายงานว่าเหรียญ DAO เข้าข่ายหลักทรัพย์ เหตุการณ์นี้จึงเป็นจุดเริ่มต้นของการกำกับดูแลการออกเหรียญด้วย</li>
+          <li><strong>วัฒนธรรมด้านความปลอดภัย:</strong> หลังเหตุการณ์นี้ การตรวจสอบโค้ด (audit) ก่อน deploy กลายเป็นขั้นตอนปกติ รูปแบบ CEI และ <code>ReentrancyGuard</code> กลายเป็นความรู้พื้นฐานของนักพัฒนา แต่ปัจจุบันก็ยังพบ reentrancy ในโครงการใหม่อยู่</li>
+          <li><strong>บทเรียนสำหรับการออกแบบ DAO:</strong> DAO ที่ถือเงินจำนวนมากควรเผื่อไว้ว่าโค้ดของตัวเองอาจมีบั๊ก DAO รุ่นหลังจึงมี timelock มีช่องทางหยุดฉุกเฉิน (pause) และจำกัดจำนวนเงินที่ย้ายได้ต่อครั้ง ทีมจึงมีเวลาแก้ไขก่อนความเสียหายลุกลาม</li>
+          <li><strong>มุมมองทางกฎหมาย:</strong> ในปี 2017 ก.ล.ต. สหรัฐฯ (SEC) ออกรายงานว่าเหรียญ DAO เข้าข่ายหลักทรัพย์ (security) หลังรายงานนี้ ทางการสหรัฐฯ เริ่มกำกับการระดมทุนด้วยการออกเหรียญ (Initial Coin Offering, ICO) อย่างจริงจัง</li>
         </ul>
 
         <div class="callout exam">
@@ -614,12 +640,12 @@ modifier nonReentrant() {
       <section id="summary">
         <h2>สรุปท้ายบท</h2>
         <ul>
-          <li><strong>โจทย์:</strong> แอปทั่วไปให้ผู้ให้บริการถือกติกา ข้อมูล และเงิน ผู้ใช้จึงต้องเชื่อใจ DApp ย้ายส่วนนี้ไปไว้ใน smart contract และ DAO ย้ายอำนาจตัดสินใจไปไว้ในกติกาที่เขียนเป็นโค้ด</li>
-          <li><strong>11.1:</strong> DApp เก็บกติกาและข้อมูลสำคัญไว้บน chain ผู้ใช้ยืนยันตัวด้วยลายเซ็น และตรวจทุกอย่างได้เอง แต่ต้องแลกกับค่า gas ความเร็ว ความเป็นส่วนตัว และการแก้บั๊กที่ยาก DApp หลายตัวยังมีส่วนที่รวมศูนย์</li>
-          <li><strong>11.2:</strong> DApp ประกอบด้วย Frontend, Wallet, RPC node, Smart contract และที่เก็บไฟล์นอก chain อย่าง IPFS ซึ่งเรียกไฟล์ด้วย CID ที่มาจากค่าแฮชของเนื้อหา ไฟล์บน IPFS ต้องมีผู้ pin ไว้จึงจะไม่หาย</li>
-          <li><strong>11.3:</strong> ABI บอก frontend ว่า contract มีฟังก์ชันและ event อะไร เพื่อ encode calldata และ decode ค่าที่คืนมา ABI ไม่ได้อยู่บน chain provider ใช้อ่านโดยไม่ต้องใช้ key ส่วน signer อยู่ใน wallet และลงลายเซ็นธุรกรรมที่แก้ state หลังผู้ใช้ยืนยัน</li>
-          <li><strong>11.4:</strong> DAO มี governance token, proposal ที่ระบุคำสั่งจริง กติกาการโหวต และ timelock วงจรคือ propose, รอ voting delay, โหวต, queue แล้ว execute การนับเสียง ณ snapshot กันการโหวตซ้ำและ flash loan ส่วน timelock เปิดเวลาให้ผู้ไม่เห็นด้วยถอนตัว</li>
-          <li><strong>11.5:</strong> The DAO ระดมได้มากกว่า 11 ล้าน ETH และเสีย ETH ราว 3.6 ล้าน ETH ให้ช่องโหว่ reentrancy เพราะส่งเงินก่อนแก้ยอด ผลคือ hard fork ที่บล็อก 1,920,000 และการแยกเป็น ETH กับ ETC วิธีป้องกันคือ CEI, <code>nonReentrant</code> และ Pull over Push</li>
+          <li><strong>โจทย์:</strong> ในแอปทั่วไป ผู้ให้บริการถือกติกา ข้อมูล และเงิน ผู้ใช้จึงต้องเชื่อใจผู้ให้บริการ DApp ย้ายส่วนนี้ไปไว้ใน smart contract และ DAO ย้ายอำนาจตัดสินใจไปไว้ในกติกาที่เขียนเป็นโค้ด</li>
+          <li><strong>11.1:</strong> DApp เก็บกติกาและข้อมูลสำคัญไว้บน chain ผู้ใช้ยืนยันตัวด้วยลายเซ็น และตรวจทุกอย่างได้เอง แต่ต้องแลกด้วยค่า gas ความเร็วที่ช้าลง ความเป็นส่วนตัว และบั๊กที่แก้ได้ยาก DApp หลายตัวยังมีส่วนที่รวมศูนย์</li>
+          <li><strong>11.2:</strong> DApp ประกอบด้วย Frontend, Wallet, RPC node, Smart contract และ IPFS ซึ่งเป็นที่เก็บไฟล์นอก chain ไฟล์บน IPFS มี CID ที่คำนวณจากค่าแฮชของเนื้อหา และต้องมีผู้ pin ไว้จึงจะไม่หาย</li>
+          <li><strong>11.3:</strong> ABI บอก frontend ว่า contract มีฟังก์ชันและ event อะไร frontend จึง encode calldata และ decode ค่าที่คืนมาได้ ABI ไม่ได้อยู่บน chain provider ใช้อ่านข้อมูลโดยไม่ต้องใช้ key ส่วน signer อยู่ใน wallet และลงลายเซ็นธุรกรรมที่แก้ state เมื่อผู้ใช้ยืนยันแล้ว</li>
+          <li><strong>11.4:</strong> DAO มี governance token, proposal ที่ระบุคำสั่งจริง กติกาการโหวต และ timelock วงจรคือ propose, รอ voting delay, โหวต, queue แล้ว execute การนับเสียงจากยอด ณ snapshot กันการโหวตซ้ำและการยืมเหรียญด้วย flash loan ส่วน timelock ให้เวลาผู้ไม่เห็นด้วยถอนตัว</li>
+          <li><strong>11.5:</strong> The DAO ระดมทุนได้มากกว่า 11 ล้าน ETH แต่โค้ดส่งเงินก่อนแก้ยอด ผู้โจมตีจึงใช้ reentrancy ดึงเงินออกไปราว 3.6 ล้าน ETH ผลคือ hard fork ที่บล็อก 1,920,000 และ chain แยกเป็น ETH กับ ETC วิธีป้องกันคือ CEI, <code>nonReentrant</code> และ Pull over Push</li>
         </ul>
 
         <h3>คำศัพท์ที่ควรจำ</h3>
@@ -635,17 +661,17 @@ modifier nonReentrant() {
             <tr><td>EIP-1193</td><td>มาตรฐานที่ wallet ใช้เปิดช่องทาง <code>window.ethereum</code> ให้หน้าเว็บ</td></tr>
             <tr><td>IPFS</td><td>ระบบเก็บและส่งไฟล์แบบ peer-to-peer ที่เรียกไฟล์ด้วยค่าแฮชของเนื้อหา</td></tr>
             <tr><td>CID (Content Identifier)</td><td>ตัวระบุไฟล์บน IPFS ที่คำนวณจากเนื้อหา เนื้อหาเปลี่ยน CID ก็เปลี่ยน</td></tr>
-            <tr><td>pinning</td><td>การสั่งให้โหนดเก็บไฟล์บน IPFS ไว้ ไม่ลบทิ้ง</td></tr>
-            <tr><td>DAO (Decentralized Autonomous Organization)</td><td>องค์กรที่เขียนกติกาการตัดสินใจไว้ใน smart contract และมติมีผลผ่านโค้ด</td></tr>
+            <tr><td>pin (pinning)</td><td>สั่งให้โหนดเก็บไฟล์บน IPFS ไว้ถาวร ไม่ลบทิ้งตอน garbage collection</td></tr>
+            <tr><td>DAO (Decentralized Autonomous Organization)</td><td>องค์กรที่เขียนกติกาการตัดสินใจไว้ใน smart contract และ contract ทำตามมติเอง</td></tr>
             <tr><td>Governance token</td><td>เหรียญที่ใช้นับสิทธิ์ออกเสียงใน DAO</td></tr>
             <tr><td>Delegate</td><td>มอบสิทธิ์ออกเสียงของเหรียญให้ตัวเองหรือผู้แทน</td></tr>
             <tr><td>Proposal</td><td>ข้อเสนอที่มีคำสั่ง (target, value, calldata) พร้อมคำอธิบาย</td></tr>
-            <tr><td>Quorum (องค์ประชุม)</td><td>จำนวนเสียงขั้นต่ำที่ต้องมีผู้มาโหวต ข้อเสนอจึงจะผ่านได้</td></tr>
+            <tr><td>Quorum (องค์ประชุม)</td><td>จำนวนเสียงขั้นต่ำที่ต้องมาโหวต ข้อเสนอจึงจะผ่านได้</td></tr>
             <tr><td>Timelock</td><td>contract ที่บังคับให้คำสั่งรอครบเวลาก่อนมีผล</td></tr>
             <tr><td>Multisig</td><td>บัญชีที่ต้องมีลายเซ็นครบตามจำนวนที่กำหนด เช่น 3 จาก 5</td></tr>
-            <tr><td>Flash loan</td><td>การกู้โดยไม่มีหลักประกันที่ต้องคืนภายในธุรกรรมเดียว</td></tr>
-            <tr><td>Reentrancy</td><td>ช่องโหว่ที่ผู้ถูกเรียกเรียกฟังก์ชันเดิมกลับเข้ามาก่อน state จะอัปเดต</td></tr>
-            <tr><td>Checks-Effects-Interactions (CEI)</td><td>ลำดับการเขียนฟังก์ชัน ตรวจเงื่อนไข แก้ state แล้วจึงติดต่อภายนอก</td></tr>
+            <tr><td>Flash loan</td><td>การกู้โดยไม่มีหลักประกัน (collateral) และต้องคืนภายในธุรกรรมเดียว</td></tr>
+            <tr><td>Reentrancy</td><td>ช่องโหว่ที่ contract ปลายทางเรียกฟังก์ชันเดิมกลับเข้ามาก่อน state จะอัปเดต</td></tr>
+            <tr><td>Checks-Effects-Interactions (CEI)</td><td>ลำดับการเขียนฟังก์ชัน คือตรวจเงื่อนไข แก้ state แล้วจึงติดต่อ contract ภายนอก</td></tr>
             <tr><td><code>nonReentrant</code></td><td>modifier ของ OpenZeppelin ReentrancyGuard ที่ปฏิเสธการเรียกซ้อนเข้าฟังก์ชัน</td></tr>
             <tr><td>Code is law</td><td>หลักที่ว่าผลของ contract เป็นไปตามโค้ดเสมอ แม้ผลนั้นไม่ตรงกับเจตนาของผู้เขียน</td></tr>
           </table>
@@ -658,7 +684,7 @@ modifier nonReentrant() {
             <tr><td>ขนาด function selector</td><td>4 ไบต์ (เช่น <code>increment()</code> = <code>0xd09de08a</code>)</td></tr>
             <tr><td>ขนาดช่องข้อมูลของ ABI encoding</td><td>32 ไบต์ต่อค่า</td></tr>
             <tr><td>ค่าเขียน storage ช่องใหม่</td><td>ราว 20,000 gas ต่อ 32 ไบต์</td></tr>
-            <tr><td>ETH ที่ The DAO ระดมได้</td><td>มากกว่า 11 ล้าน ETH (เมษายน–พฤษภาคม 2016)</td></tr>
+            <tr><td>ETH ที่ The DAO ระดมได้</td><td>มากกว่า 11 ล้าน ETH ราว 14% ของ ETH ทั้งหมดในเวลานั้น (เมษายน–พฤษภาคม 2016)</td></tr>
             <tr><td>ETH ที่ผู้โจมตีดึงออกไป</td><td>ราว 3.6 ล้าน ETH (17 มิถุนายน 2016)</td></tr>
             <tr><td>ระยะล็อกเงินใน DAO ลูก</td><td>28 วัน</td></tr>
             <tr><td>บล็อกของ hard fork คืนเงิน</td><td>1,920,000 (20 กรกฎาคม 2016)</td></tr>
@@ -685,12 +711,12 @@ modifier nonReentrant() {
 
         <div class="q">
           <p>3. หน้าเว็บของ DApp ต้องแสดงค่าของ <code>count()</code> และมีปุ่มเรียก <code>increment()</code> ส่วนใดต้องใช้ provider ส่วนใดต้องใช้ signer และทำไมหน้าเว็บจึงไม่ควรถือ private key เอง</p>
-          <details><summary>ดูเฉลย</summary><div><code>count()</code> เป็นฟังก์ชัน <code>view</code> ใช้ provider เรียกผ่าน <code>eth_call</code> ได้ ไม่เสีย gas และไม่ต้องให้ผู้ใช้ยืนยัน <code>increment()</code> แก้ state จึงต้องใช้ signer ลงลายเซ็นธุรกรรม เสีย gas และผู้ใช้ต้องยืนยันใน wallet หน้าเว็บไม่ควรถือ key เพราะเว็บใดก็ตามที่ได้ key ไปจะย้ายเงินทั้งหมดได้ wallet จึงเก็บ key ไว้และให้หน้าเว็บขอลายเซ็นผ่าน EIP-1193 แทน</div></details>
+          <details><summary>ดูเฉลย</summary><div><code>count()</code> เป็นฟังก์ชัน <code>view</code> ใช้ provider เรียกผ่าน <code>eth_call</code> ได้ ไม่เสีย gas และไม่ต้องให้ผู้ใช้ยืนยัน <code>increment()</code> แก้ state จึงต้องใช้ signer ลงลายเซ็นธุรกรรม เสีย gas และผู้ใช้ต้องยืนยันใน wallet หน้าเว็บไม่ควรถือ key เพราะถ้าเว็บใดได้ key ไป เว็บนั้นจะย้ายเงินทั้งหมดของผู้ใช้ได้ wallet จึงเก็บ key ไว้และให้หน้าเว็บขอลายเซ็นผ่าน EIP-1193 แทน</div></details>
         </div>
 
         <div class="q">
           <p>4. นักพัฒนามี address ของ contract ที่ deploy แล้ว แต่ไม่มี ABI และ contract ไม่ได้ยืนยันซอร์สโค้ดบน Etherscan ทำไมจึงเรียกฟังก์ชันได้ยาก</p>
-          <details><summary>ดูเฉลย</summary><div>บน chain มีเพียง bytecode ซึ่งอ้างถึงฟังก์ชันด้วย selector 4 ไบต์ที่มาจากค่าแฮชของ function signature ค่าแฮชย้อนกลับไม่ได้ จึงหาชื่อและชนิดพารามิเตอร์จาก bytecode โดยตรงไม่ได้ และแปลค่าที่คืนมาไม่ได้เพราะไม่รู้ชนิดข้อมูล ถ้านักพัฒนารู้ function signature จากแหล่งอื่น ก็คำนวณ selector และ encode เองได้</div></details>
+          <details><summary>ดูเฉลย</summary><div>บน chain มีเพียง bytecode และ bytecode อ้างถึงฟังก์ชันด้วย selector 4 ไบต์ selector มาจากค่าแฮชของ function signature ซึ่งย้อนกลับไม่ได้ นักพัฒนาจึงหาชื่อและชนิดพารามิเตอร์จาก bytecode โดยตรงไม่ได้ และแปลค่าที่คืนมาไม่ได้เพราะไม่รู้ชนิดข้อมูล ทำได้เพียงเทียบ selector กับฐานข้อมูล signature อย่าง 4byte.directory ซึ่งไม่ครบทุกฟังก์ชัน ถ้านักพัฒนารู้ function signature จากแหล่งอื่น ก็คำนวณ selector และ encode เองได้</div></details>
         </div>
 
         <div class="q">
@@ -701,12 +727,12 @@ modifier nonReentrant() {
 
         <div class="q">
           <p>6. ทำไม DAO จำนวนมากจึงให้มติที่ผ่านแล้วรอใน timelock อีกหลายวันก่อนมีผล</p>
-          <details><summary>ดูเฉลย</summary><div>timelock เปิดเวลาระหว่างมติผ่านกับวันที่มีผล ผู้ที่ไม่เห็นด้วยจึงขายเหรียญหรือถอนเงินออกได้ก่อนคำสั่งทำงาน และชุมชนมีเวลาตรวจว่าข้อเสนอซ่อนคำสั่งอันตรายไว้หรือไม่ ถ้าไม่มี timelock ผู้ที่รวมเสียงได้มากพอจะผ่านข้อเสนอที่ย้ายเงินกองกลางแล้วให้มีผลทันที</div></details>
+          <details><summary>ดูเฉลย</summary><div>timelock เว้นระยะระหว่างวันที่มติผ่านกับวันที่มีผล ผู้ที่ไม่เห็นด้วยจึงขายเหรียญหรือถอนเงินออกได้ก่อนคำสั่งทำงาน และชุมชนมีเวลาตรวจว่าข้อเสนอซ่อนคำสั่งอันตรายไว้หรือไม่ ถ้าไม่มี timelock ผู้ที่รวมเสียงได้มากพอจะผ่านข้อเสนอที่ย้ายเงินกองกลางแล้วให้มีผลทันที</div></details>
         </div>
 
         <div class="q">
           <p>7. DAO แห่งหนึ่งนับเสียงจากยอดเหรียญในบัญชี ณ ขณะที่กดโหวต ผู้โจมตีใช้ประโยชน์จากกติกานี้ได้อย่างไร และควรแก้อย่างไร</p>
-          <details><summary>ดูเฉลย</summary><div>ผู้โจมตีใช้ flash loan กู้เหรียญจำนวนมาก โหวต แล้วคืนเหรียญในธุรกรรมเดียวกัน หรือโหวตแล้วโอนเหรียญไปอีกบัญชีเพื่อโหวตซ้ำ กรณี Beanstalk ในปี 2022 ใช้วิธีแรก ทางแก้คือนับเสียงจากยอดถือ ณ บล็อก snapshot ในอดีต เช่น <code>getPastVotes</code> เหรียญที่กู้มาภายหลังจึงไม่มีเสียง และเพิ่ม timelock ให้มติไม่มีผลทันที</div></details>
+          <details><summary>ดูเฉลย</summary><div>ผู้โจมตีใช้ flash loan กู้เหรียญจำนวนมาก โหวต แล้วคืนเหรียญในธุรกรรมเดียวกัน หรือโหวตแล้วโอนเหรียญไปอีกบัญชีเพื่อโหวตซ้ำ กรณี Beanstalk ในปี 2022 ใช้วิธีแรก โดยส่งข้อเสนอไว้ล่วงหน้าหนึ่งวัน แล้วกู้ โหวต สั่งให้ข้อเสนอมีผล และคืนเงินกู้ในธุรกรรมเดียว ทางแก้คือนับเสียงจากยอดถือ ณ บล็อก snapshot ในอดีต เช่น ใช้ <code>getPastVotes</code> เหรียญที่กู้มาภายหลังจึงไม่มีเสียง และเพิ่ม timelock ให้มติไม่มีผลทันที</div></details>
         </div>
 
         <div class="q">
@@ -723,13 +749,13 @@ modifier nonReentrant() {
 
         <div class="q">
           <p>9. ทำไมแนวทางปัจจุบันไม่แนะนำให้ใช้ <code>transfer()</code> ซึ่งส่ง gas ให้ผู้รับเพียง 2,300 เป็นวิธีหลักในการกัน reentrancy</p>
-          <details><summary>ดูเฉลย</summary><div>วิธีนี้พึ่งราคา gas ของ opcode ซึ่งเปลี่ยนได้เมื่อมีการอัปเกรดเครือข่าย เช่น EIP-1884 ขึ้นราคาบาง opcode จน contract บางตัวรับเงินผ่าน <code>transfer</code> ไม่ได้ และ wallet แบบ smart contract จำนวนมากต้องใช้ gas มากกว่า 2,300 เพื่อรับเงิน จึงแนะนำให้ใช้ <code>call</code> คู่กับ CEI หรือ <code>nonReentrant</code> แทน</div></details>
+          <details><summary>ดูเฉลย</summary><div>วิธีนี้พึ่งราคา gas ของ opcode ซึ่งเปลี่ยนได้เมื่อเครือข่ายอัปเกรด เช่น EIP-1884 ขึ้นราคาบาง opcode จน contract บางตัวรับเงินผ่าน <code>transfer</code> ไม่ได้ และ wallet แบบ smart contract หลายตัวต้องใช้ gas มากกว่า 2,300 เพื่อรับเงิน จึงแนะนำให้ใช้ <code>call</code> คู่กับ CEI หรือ <code>nonReentrant</code> แทน</div></details>
         </div>
 
         <div class="q">
           <p>10. หลัง hard fork เพื่อแก้ผลของ The DAO สายใดคงกติกาเดิมไว้</p>
           <ol><li>ก. Ethereum (ETH)</li><li>ข. Ethereum Classic (ETC)</li><li>ค. ทั้งสองสายเปลี่ยนกติกา</li><li>ง. ไม่มีสายใดแยกออกมา</li></ol>
-          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> สายที่ใช้ชื่อ Ethereum คือสายที่เปลี่ยนกติกาเพื่อย้ายเงินไปยัง contract คืนเงินที่บล็อก 1,920,000 ผู้ที่ยึดหลัก code is law รันกติกาเดิมต่อ สายนั้นจึงกลายเป็น Ethereum Classic (หัวข้อ 9.4)</div></details>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> สายที่ใช้ชื่อ Ethereum เปลี่ยนกติกาที่บล็อก 1,920,000 เพื่อย้ายเงินไปยัง contract คืนเงิน ส่วนผู้ที่ยึดหลัก code is law ยังรันกติกาเดิมต่อ สายนั้นจึงกลายเป็น Ethereum Classic (หัวข้อ 9.4)</div></details>
         </div>
       </section>
     </article>
@@ -750,11 +776,11 @@ modifier nonReentrant() {
         const s = [], log = [];
         let bank = 4, rec = 1, got = 0;
         const add = (depth, line, note) => {
-          if (line) log.push("  ".repeat(depth) + line);
+          if (line) log.push("    ".repeat(depth) + line);
           s.push({ log: log.join("\n"), bank, rec, got, note });
         };
-        add(0, "Attacker.attack()  ฝาก 1 ETH แล้วเรียก withdraw()",
-          "เริ่ม: Bank ถือ 4 ETH เป็นเงินฝากของผู้อื่น 3 ETH และของ Attacker 1 ETH");
+        add(0, "Attacker เรียก Bank.withdraw()",
+          "เริ่ม: Bank ถือ 4 ETH เป็นเงินฝากของผู้อื่น 3 ETH และของ Attacker 1 ETH ซึ่งฝากไว้ในธุรกรรมก่อนหน้า");
 
         if (mode === "vuln") {
           let d = 1;
@@ -791,7 +817,7 @@ modifier nonReentrant() {
             "ชั้นที่ 2 เห็นยอดเป็นศูนย์แล้ว require จึงล้มเหลว");
           bank = 4; rec = 1; got = 0;
           add(1, "  revert ไหลกลับ: receive() ล้มเหลว call คืน ok = false และ require(ok) ทำให้ชั้นที่ 1 revert",
-            "ธุรกรรมทั้งหมดย้อนกลับ Bank ยังมี 4 ETH ครบ ถ้า Attacker ถอนแบบปกติโดยไม่เรียกซ้ำ ก็ได้คืนเพียง 1 ETH ของตัวเอง");
+            "ธุรกรรมการถอนทั้งหมดย้อนกลับ Bank ยังมี 4 ETH ครบ ถ้า Attacker ถอนแบบปกติโดยไม่เรียกซ้ำ ก็ได้คืนเพียง 1 ETH ของตัวเอง");
         }
         return s;
       }
