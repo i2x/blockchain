@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 4 Bitcoin Core</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p1" data-chapter="ch04">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 1 Bitcoin</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 4 · ภาคปฏิบัติ</div>
+      <h1>Bitcoin Core: Mainnet, Testnet และ Regtest</h1>
+      <p class="lead">บทที่ 0–3 อธิบายว่า Bitcoin ทำงานอย่างไรตาม Whitepaper บทนี้ลงมือใช้งานจริงด้วย Bitcoin Core ซอฟต์แวร์ที่ full node ส่วนใหญ่ในเครือข่ายใช้ เนื้อหาครอบคลุมส่วนประกอบของโปรแกรม เครือข่ายทดสอบแต่ละแบบ การตั้งค่า คำสั่งพื้นฐาน วิธีอ่านธุรกรรม (transaction) แบบ UTXO และรูปแบบของ address</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: ทดลองกับเงินที่โอนแล้วเรียกคืนไม่ได้</a></li>
+        <li><a href="#s1">ส่วนประกอบของ Bitcoin Core: bitcoind, bitcoin-cli และ bitcoin-qt</a></li>
+        <li><a href="#s2">ความแตกต่างของ Mainnet, Testnet, Signet และ Regtest</a></li>
+        <li><a href="#s3">ไฟล์ bitcoin.conf พอร์ต และไดเรกทอรีข้อมูลของแต่ละเครือข่าย</a></li>
+        <li><a href="#s4">คำสั่งพื้นฐาน: getblockchaininfo, getnewaddress, getbalance, sendtoaddress, generatetoaddress</a></li>
+        <li><a href="#s5">UTXO model: การอ่าน input, output, เงินทอน และค่าธรรมเนียม</a></li>
+        <li><a href="#s6">รูปแบบ address: Legacy (1…), P2SH (3…), SegWit (bc1q…), Taproot (bc1p…) และ Testnet (tb1…)</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: ทดลองกับเงินที่โอนแล้วเรียกคืนไม่ได้</h2>
+
+        <p>สมมุติว่าเราเขียนระบบรับชำระเงินด้วย Bitcoin ให้ร้านค้า ก่อนเปิดใช้งานต้องทดสอบหลายร้อยครั้ง ทั้งการรับเงิน การทอนเงิน และกรณีที่ผิดพลาด ถ้าทดสอบบนเครือข่ายจริงจะพบปัญหาสามข้อ</p>
+        <ul>
+          <li><strong>เสียเงินจริง:</strong> ทุกธุรกรรมต้องจ่ายค่าธรรมเนียม (fee) และถ้าโปรแกรมมีข้อผิดพลาด เช่น ลืมใส่เงินทอน (change) เงินส่วนนั้นจะตกเป็นของผู้ขุด (miner) ทันที</li>
+          <li><strong>ย้อนกลับไม่ได้:</strong> บทที่ 1 อธิบายว่า Bitcoin ไม่มีตัวกลางที่ยกเลิกธุรกรรมให้ได้ ความผิดพลาดจึงแก้ไม่ได้</li>
+          <li><strong>ช้า:</strong> บล็อกใหม่เกิดเฉลี่ยทุก 10 นาที ถ้ารอ 6 confirmation การทดสอบแต่ละครั้งจะใช้เวลาราวหนึ่งชั่วโมง เราจะขุดบล็อกเองเพื่อเร่งเวลาก็ไม่ได้ เพราะคอมพิวเตอร์ทั่วไปแข่งกับผู้ขุดรายใหญ่ไม่ทัน</li>
+        </ul>
+        <p>Bitcoin Core จึงมีเครือข่ายหลายแบบที่ใช้กฎเดียวกับเครือข่ายจริง (mainnet) แต่เหรียญไม่มีมูลค่า และบางแบบสร้างบล็อกได้ทันทีตามคำสั่ง อีกเหตุผลหนึ่งที่ต้องรู้จัก Bitcoin Core มาจากบทที่ 3 บทนั้นสรุปว่าธุรกิจที่รับเงินบ่อยควรรัน full node ของตัวเอง และ full node ส่วนใหญ่ในเครือข่ายก็รัน Bitcoin Core</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำถาม</th><th>หัวข้อ</th></tr>
+            <tr><td>Bitcoin Core มีโปรแกรมอะไรบ้าง และสื่อสารกันอย่างไร</td><td>4.1</td></tr>
+            <tr><td>ควรทดสอบบนเครือข่ายใด และแต่ละเครือข่ายต่างกันอย่างไร</td><td>4.2</td></tr>
+            <tr><td>ตั้งค่าให้โหนดใช้เครือข่ายที่ต้องการได้อย่างไร และโหนดเก็บข้อมูลไว้ที่ใด</td><td>4.3</td></tr>
+            <tr><td>สร้าง address ขุดบล็อก และโอนเงินด้วยคำสั่งใด</td><td>4.4</td></tr>
+            <tr><td>ธุรกรรมที่ได้มีโครงสร้างอย่างไร เงินทอนและค่าธรรมเนียมอยู่ตรงไหน</td><td>4.5</td></tr>
+            <tr><td>ดูจาก address ได้อย่างไรว่าเป็นของเครือข่ายใดและเป็นแบบใด</td><td>4.6</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 4.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">4.1</span>ส่วนประกอบของ Bitcoin Core: bitcoind, bitcoin-cli และ bitcoin-qt</h2>
+
+        <h3>ทำไมต้องแยกเป็นหลายโปรแกรม</h3>
+        <p>full node ต้องทำงานตลอดเวลา ทั้งรับบล็อกจากเครือข่าย ตรวจธุรกรรม และส่งข้อมูลต่อให้โหนดอื่น แต่ผู้ใช้ต้องการสั่งงานเป็นครั้งคราว เช่น ขอ address ใหม่หรือโอนเงิน Bitcoin Core จึงแยก <strong>ตัวโหนดที่ทำงานเบื้องหลัง</strong> ออกจาก <strong>เครื่องมือสั่งงาน</strong> ทั้งสองส่วนคุยกันผ่าน JSON-RPC คือส่งคำสั่งและรับผลลัพธ์เป็น JSON ผ่าน HTTP เมื่อใช้มาตรฐานนี้ โปรแกรมที่เราเขียนเองจะเป็นภาษาใดก็สั่งงานโหนดได้เหมือนกัน</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>โปรแกรม</th><th>หน้าที่</th></tr>
+            <tr><td><code>bitcoind</code></td><td>ตัวโหนด (daemon) ทำงานเบื้องหลังโดยไม่มีหน้าจอ เชื่อมต่อเครือข่าย ตรวจบล็อกและธุรกรรม เก็บ UTXO set และ mempool มี wallet ในตัว และเปิด JSON-RPC server ให้สั่งงาน</td></tr>
+            <tr><td><code>bitcoin-cli</code></td><td>เครื่องมือบรรทัดคำสั่ง ส่งคำสั่ง RPC ไปยัง bitcoind ที่กำลังทำงานอยู่ แล้วแสดงผล bitcoin-cli เองไม่ได้เก็บหรือตรวจข้อมูลใด ๆ</td></tr>
+            <tr><td><code>bitcoin-qt</code></td><td>โหนดแบบมีหน้าจอ GUI ทำงานเหมือน bitcoind และมีหน้าต่าง Console สำหรับพิมพ์คำสั่ง RPC ได้โดยตรง</td></tr>
+          </table>
+        </div>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 260" role="img" aria-label="bitcoin-cli และโปรแกรมของเราส่งคำสั่งไปยัง bitcoind ผ่าน JSON-RPC พอร์ต 8332 bitcoind คุยกับโหนดอื่นผ่าน P2P พอร์ต 8333 และอ่านเขียนข้อมูลใน data directory">
+            <defs>
+              <marker id="arrCore" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <rect x="20" y="30" width="160" height="44" rx="8" fill="#f0ebe1"/>
+              <text x="100" y="57" text-anchor="middle" font-family="IBM Plex Mono, monospace">bitcoin-cli</text>
+              <rect x="20" y="100" width="160" height="48" rx="8" fill="#f0ebe1"/>
+              <text x="100" y="120" text-anchor="middle">โปรแกรมของเรา</text>
+              <text x="100" y="138" text-anchor="middle" font-size="11" fill="#6b655c">Python, JavaScript ฯลฯ</text>
+
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="182" y1="52" x2="286" y2="66" marker-end="url(#arrCore)"/>
+                <line x1="182" y1="124" x2="286" y2="110" marker-end="url(#arrCore)"/>
+                <line x1="482" y1="90" x2="596" y2="40" marker-start="url(#arrCore)" marker-end="url(#arrCore)"/>
+                <line x1="482" y1="90" x2="596" y2="90" marker-start="url(#arrCore)" marker-end="url(#arrCore)"/>
+                <line x1="482" y1="90" x2="596" y2="140" marker-start="url(#arrCore)" marker-end="url(#arrCore)"/>
+                <line x1="385" y1="162" x2="385" y2="204" marker-start="url(#arrCore)" marker-end="url(#arrCore)"/>
+              </g>
+              <text x="234" y="92" text-anchor="middle" font-size="11" fill="#6b655c">JSON-RPC</text>
+              <text x="234" y="106" text-anchor="middle" font-size="11" fill="#6b655c">พอร์ต 8332</text>
+
+              <rect x="290" y="20" width="190" height="140" rx="10" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.6"/>
+              <text x="385" y="44" text-anchor="middle" font-weight="700" font-family="IBM Plex Mono, monospace">bitcoind</text>
+              <g font-size="12" text-anchor="middle">
+                <text x="385" y="70">ตรวจบล็อกและธุรกรรม</text>
+                <text x="385" y="92">UTXO set และ mempool</text>
+                <text x="385" y="114">wallet</text>
+                <text x="385" y="136">JSON-RPC server</text>
+              </g>
+
+              <rect x="600" y="22" width="140" height="36" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="670" y="45" text-anchor="middle">โหนดอื่น</text>
+              <rect x="600" y="72" width="140" height="36" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="670" y="95" text-anchor="middle">โหนดอื่น</text>
+              <rect x="600" y="122" width="140" height="36" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="670" y="145" text-anchor="middle">โหนดอื่น</text>
+              <text x="620" y="182" text-anchor="middle" font-size="11" fill="#6b655c">P2P พอร์ต 8333 รับส่งบล็อกและธุรกรรม</text>
+
+              <text x="395" y="188" font-size="11" fill="#6b655c">อ่าน/เขียน</text>
+              <rect x="290" y="206" width="190" height="44" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="385" y="224" text-anchor="middle" font-size="12" font-weight="700">data directory</text>
+              <text x="385" y="241" text-anchor="middle" font-size="11" font-family="IBM Plex Mono, monospace">blocks/ chainstate/ wallets/</text>
+            </g>
+          </svg>
+          <figcaption>bitcoind อยู่ตรงกลาง รับคำสั่งจากฝั่งซ้ายผ่าน JSON-RPC คุยกับโหนดอื่นทางขวาผ่านโปรโตคอล P2P และเก็บข้อมูลไว้ใน data directory ด้านล่าง พอร์ตในภาพเป็นค่าของ mainnet ส่วน bitcoin-qt ทำงานแบบเดียวกับ bitcoind แต่มีหน้าจอ GUI เพิ่มเข้ามา</figcaption>
+        </figure>
+
+        <div class="callout">
+          <span class="h">bitcoin-cli รู้ได้อย่างไรว่าเราได้รับอนุญาต</span>
+          คำสั่ง RPC สั่งให้ wallet โอนเงินได้ ถ้าใครก็ส่งคำสั่งเข้าพอร์ต RPC ได้ เงินใน wallet ก็เสี่ยงทันที bitcoind จึงต้องตรวจว่าผู้ส่งคำสั่งได้รับอนุญาต ตามค่าเริ่มต้น ทุกครั้งที่ bitcoind เริ่มทำงาน โปรแกรมจะสร้างไฟล์ <code>.cookie</code> ที่มีรหัสผ่านแบบสุ่มไว้ใน data directory bitcoin-cli ที่รันบนเครื่องเดียวกันอ่านรหัสผ่านจากไฟล์นี้เพื่อยืนยันตัวตน (authentication) ผู้ที่ไม่มีสิทธิ์อ่านไฟล์ในเครื่องจึงสั่งงานโหนดไม่ได้ นอกจากนี้ ตามค่าเริ่มต้นโหนดรับคำสั่ง RPC จากเครื่องตัวเองเท่านั้น ถ้าต้องการสั่งงานจากเครื่องอื่น ต้องตั้ง <code>rpcauth</code> (ชื่อผู้ใช้และรหัสผ่าน) ร่วมกับ <code>rpcbind</code> และ <code>rpcallowip</code>
+        </div>
+      </section>
+
+      <!-- ==================== 4.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">4.2</span>ความแตกต่างของ Mainnet, Testnet, Signet และ Regtest</h2>
+
+        <h3>ทำไมเครือข่ายทดสอบแบบเดียวไม่พอ</h3>
+        <p>เครือข่ายทดสอบ (test network) แต่ละแบบแก้ปัญหาคนละด้าน testnet ใกล้เคียงเครือข่ายจริงที่สุดแต่ไม่เสถียร signet เป็นเครือข่ายสาธารณะที่เสถียร ส่วน regtest ตัดผู้ร่วมเครือข่ายออกทั้งหมดเพื่อให้เราควบคุมได้ทุกอย่าง</p>
+        <ul>
+          <li><strong>Testnet</strong> เป็นเครือข่ายสาธารณะที่ใช้ PoW เหมือนเครือข่ายจริง ความยาก (difficulty) จึงแกว่งตามผู้ขุดที่เข้าออก เมื่อผู้ขุดรายใหญ่เลิกขุด ความยากยังสูงค้างอยู่จนกว่าจะครบรอบปรับความยาก (2,016 บล็อก) บล็อกใหม่อาจไม่เกิดเป็นวัน ๆ testnet3 จึงมีกฎพิเศษว่า ถ้าไม่มีบล็อกใหม่เกิน 20 นาที บล็อกถัดไปใช้ความยากต่ำสุดได้ แต่ผู้ขุดบางรายตั้งเวลาในบล็อก (timestamp) ให้ห่างจากบล็อกก่อนเกิน 20 นาทีเอง แล้วสร้างบล็อกความยากต่ำสุดต่อกันหลายบล็อก ถ้าบล็อกสุดท้ายของรอบปรับความยากเป็นบล็อกความยากต่ำสุด testnet3 จะคำนวณความยากของทั้งรอบถัดไปจากบล็อกนั้น ความยากจึงลดลงไปที่ค่าต่ำสุดทั้งรอบ และเกิดบล็อกหลายพันบล็อกในเวลาสั้น ๆ เรียกว่า block storm</li>
+          <li><strong>Testnet4</strong> (BIP94) เป็นเครือข่ายที่ Bitcoin Core v28 เพิ่มเข้ามาแทน testnet3 ยังมีกฎ 20 นาทีอยู่ แต่ปิดช่องที่ทำให้ความยากของทั้งรอบกลับเป็นค่าต่ำสุด (และแก้ช่องโหว่ timewarp ด้วย) รุ่นเดียวกันนี้ประกาศเลิกใช้ (deprecate) testnet3 และจะเลิกรองรับในรุ่นต่อ ๆ ไป ตอนนี้ <code>-testnet</code> ยังใช้ได้ แต่งานใหม่ควรใช้ testnet4 หรือ signet</li>
+          <li><strong>Signet</strong> (BIP325) แก้ความไม่แน่นอนของ testnet โดยกำหนดว่านอกจาก PoW แล้ว บล็อกต้องมีลายเซ็น (signature) ของผู้ลงนาม (signer) ที่ระบุไว้ล่วงหน้าด้วย บล็อกจึงเกิดสม่ำเสมอราว 10 นาที และไม่มีใครก่อกวนเครือข่ายด้วยพลังประมวลผลได้ ข้อแลกเปลี่ยน (trade-off) คือ signet เสียความกระจายศูนย์ (decentralization) เพราะเครือข่ายต้องพึ่งผู้ลงนามกลุ่มเดียว แต่เหรียญไม่มีมูลค่าอยู่แล้ว ข้อเสียนี้จึงยอมรับได้</li>
+          <li><strong>Regtest</strong> เป็นเครือข่ายส่วนตัวที่อยู่บนเครื่องเราเครื่องเดียว ชื่อมาจาก regression test คือการทดสอบซ้ำหลังแก้โค้ดว่าส่วนที่เคยทำงานถูกยังถูกอยู่ ความยากต่ำมากจนสร้างบล็อกได้ทันทีด้วยคำสั่ง ผู้ใช้จึงควบคุมได้ทุกอย่าง และการทดสอบให้ผลเหมือนเดิมทุกครั้ง เหมาะกับการเรียนและการทดสอบอัตโนมัติ</li>
+        </ul>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>Mainnet</th><th>Testnet (3 และ 4)</th><th>Signet</th><th>Regtest</th></tr>
+            <tr><td>มูลค่าเหรียญ</td><td>มีมูลค่าจริง</td><td>ไม่มีมูลค่า</td><td>ไม่มีมูลค่า</td><td>ไม่มีมูลค่า</td></tr>
+            <tr><td>ได้เหรียญมาจาก</td><td>ซื้อหรือรับโอน</td><td>faucet (เว็บแจกเหรียญทดสอบ)</td><td>faucet</td><td>ขุดเองด้วย <code>generatetoaddress</code></td></tr>
+            <tr><td>การสร้างบล็อก</td><td>PoW แข่งกันทั่วโลก</td><td>PoW สาธารณะ ความยากแกว่ง</td><td>PoW และลายเซ็นของผู้ลงนาม</td><td>สร้างทันทีตามคำสั่ง</td></tr>
+            <tr><td>เวลาต่อบล็อก</td><td>ราว 10 นาที</td><td>ไม่แน่นอน</td><td>ราว 10 นาที สม่ำเสมอ</td><td>ตามที่สั่ง</td></tr>
+            <tr><td>ผู้ร่วมเครือข่าย</td><td>ทั่วโลก</td><td>สาธารณะ</td><td>สาธารณะ</td><td>เครื่องเราเท่านั้น</td></tr>
+            <tr><td>เหมาะกับ</td><td>ใช้งานจริง</td><td>ทดสอบกับโหนดจริงในสภาพที่ไม่แน่นอน</td><td>ทดสอบแอปกับเครือข่ายสาธารณะที่เสถียร</td><td>เรียน ทดลอง และทดสอบอัตโนมัติ</td></tr>
+          </table>
+        </div>
+
+        <h3>ทำไมเครือข่ายแต่ละแบบปนกันไม่ได้</h3>
+        <p>ถ้าเหรียญทดสอบที่ได้ฟรีจาก faucet ไปปนกับเหรียญจริงได้ ใครก็จ่ายเงินด้วยเหรียญที่ไม่มีมูลค่าได้ และถ้าโหนดของ mainnet รับบล็อกของ testnet มาตรวจ โหนดก็เสียแรงกับข้อมูลที่ไม่เกี่ยวข้อง แต่ละเครือข่ายจึงแยกจากกันสี่ชั้น แต่ละชั้นกันปัญหาต่างกัน</p>
+        <ul>
+          <li>Genesis block เป็นคนละบล็อก บล็อกของเครือข่ายหนึ่งจึงต่อเข้ากับสายของอีกเครือข่ายไม่ได้</li>
+          <li>ข้อความทุกข้อความในโปรโตคอล P2P ขึ้นต้นด้วย magic bytes ต่างกัน (ของ mainnet คือ <code>F9 BE B4 D9</code>) โหนดจึงทิ้งข้อความจากเครือข่ายอื่นได้ตั้งแต่ไบต์แรก</li>
+          <li>พอร์ตต่างกัน เครื่องเดียวจึงรันหลายเครือข่ายพร้อมกันได้</li>
+          <li>address มีคำนำหน้า (prefix) ต่างกัน wallet ของ mainnet จึงไม่ยอมส่งเงินไปยัง address ของ testnet ผู้ใช้ที่วาง address ผิดเครือข่ายก็ไม่เสียเงิน</li>
+        </ul>
+
+        <div class="callout">
+          <span class="h">กฎพิเศษของ regtest ที่ควรรู้</span>
+          รางวัลบล็อก (block reward) เริ่มที่ 50 BTC เหมือน mainnet แต่ halving เกิดทุก 150 บล็อก แทนที่จะเป็นทุก 210,000 บล็อก เราจึงทดลองเรื่อง halving ได้ภายในไม่กี่วินาที ส่วนกฎ coinbase maturity ยังเหมือน mainnet ทุกประการ (หัวข้อ 4.4)
+        </div>
+      </section>
+
+      <!-- ==================== 4.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">4.3</span>ไฟล์ bitcoin.conf พอร์ต และไดเรกทอรีข้อมูลของแต่ละเครือข่าย</h2>
+
+        <h3>ทำไมต้องมีไฟล์ตั้งค่า</h3>
+        <p>ตัวเลือก (option) ทุกตัวของ bitcoind ใส่ในบรรทัดคำสั่ง (command line) ได้ เช่น <code>bitcoind -regtest -txindex=1</code> แต่ต้องพิมพ์ซ้ำทุกครั้งที่เริ่มโปรแกรม และถ้าพิมพ์ไม่ครบ โหนดจะทำงานด้วยค่าที่ไม่ตรงกับที่ตั้งใจ ถ้าเขียนค่าเหล่านี้ไว้ในไฟล์ <code>bitcoin.conf</code> ใน data directory โหนดจะอ่านไปใช้เองทุกครั้งที่เริ่มทำงาน</p>
+
+<pre><code># bitcoin.conf สำหรับทดลองบน regtest
+regtest=1          # ใช้เครือข่าย regtest (ไม่ใส่ = mainnet)
+server=1           # เปิด JSON-RPC server (bitcoind เปิดให้อยู่แล้ว บรรทัดนี้จำเป็นเมื่อใช้ bitcoin-qt)
+txindex=1          # ทำดัชนีทุกธุรกรรม เพื่อเรียกดูธุรกรรมใดก็ได้ด้วย getrawtransaction
+
+[regtest]
+fallbackfee=0.0002 # ค่าธรรมเนียมสำรอง (BTC ต่อ kvB) เพราะ regtest ไม่มีข้อมูลให้ประมาณค่าธรรมเนียม
+# rpcport=18443    # ค่าเฉพาะเครือข่ายต้องอยู่ใต้ section ของเครือข่ายนั้น</code></pre>
+
+        <p>ค่าที่อยู่ใต้ section <code>[test]</code>, <code>[testnet4]</code>, <code>[signet]</code>, <code>[regtest]</code> หรือ <code>[main]</code> มีผลเฉพาะเครือข่ายนั้น ไฟล์เดียวจึงเก็บค่าของหลายเครือข่ายไว้ด้วยกันได้ ตัวเลือกที่ผูกกับเครือข่ายโดยตรง เช่น <code>port</code> และ <code>rpcport</code> ถ้าใส่ไว้นอก section โหนดจะใช้ค่านั้นกับ mainnet เท่านั้น เหตุผลคือ ถ้าค่าพอร์ตเดียวมีผลกับทุกเครือข่าย โหนด regtest กับโหนด mainnet บนเครื่องเดียวกันจะแย่งพอร์ตเดียวกัน และ bitcoin-cli อาจต่อผิดเครือข่ายโดยไม่รู้ตัว</p>
+
+        <h3>ไดเรกทอรีข้อมูล (data directory)</h3>
+        <p>ตำแหน่งเริ่มต้นบน Linux คือ <code>~/.bitcoin/</code> และบน macOS คือ <code>~/Library/Application Support/Bitcoin/</code> เครือข่ายทดสอบแต่ละแบบเก็บข้อมูลในไดเรกทอรีย่อยของตัวเอง ข้อมูลของแต่ละเครือข่ายจึงไม่ปนกัน</p>
+<pre><code>~/.bitcoin/
+├── bitcoin.conf      ไฟล์ตั้งค่า (ใช้ร่วมกันทุกเครือข่าย)
+├── blocks/           บล็อกดิบ (blk*.dat) และข้อมูล undo (rev*.dat) ไว้ถอยบล็อกออกเมื่อเกิด reorg
+├── chainstate/       UTXO set
+├── wallets/          ไฟล์ wallet
+├── debug.log         บันทึกการทำงาน ดูเมื่อเกิดปัญหา
+├── testnet3/         ข้อมูลของ testnet3 มีโครงสร้างเหมือนด้านบน
+├── testnet4/
+├── signet/
+└── regtest/</code></pre>
+
+        <h3>พอร์ตและค่าเฉพาะของแต่ละเครือข่าย</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>เครือข่าย</th><th>ตัวเลือก</th><th>section ใน conf</th><th>P2P</th><th>RPC</th><th>ไดเรกทอรีย่อย</th><th>address แบบ SegWit</th></tr>
+            <tr><td>Mainnet</td><td>(ค่าเริ่มต้น)</td><td><code>[main]</code></td><td>8333</td><td>8332</td><td>(ไดเรกทอรีหลัก)</td><td><code>bc1…</code></td></tr>
+            <tr><td>Testnet3</td><td><code>-testnet</code></td><td><code>[test]</code></td><td>18333</td><td>18332</td><td><code>testnet3/</code></td><td><code>tb1…</code></td></tr>
+            <tr><td>Testnet4</td><td><code>-testnet4</code></td><td><code>[testnet4]</code></td><td>48333</td><td>48332</td><td><code>testnet4/</code></td><td><code>tb1…</code></td></tr>
+            <tr><td>Signet</td><td><code>-signet</code></td><td><code>[signet]</code></td><td>38333</td><td>38332</td><td><code>signet/</code></td><td><code>tb1…</code></td></tr>
+            <tr><td>Regtest</td><td><code>-regtest</code></td><td><code>[regtest]</code></td><td>18444</td><td>18443</td><td><code>regtest/</code></td><td><code>bcrt1…</code></td></tr>
+          </table>
+        </div>
+        <p>ตัวเลือกเหล่านี้เขียนอีกแบบได้เป็น <code>-chain=regtest</code>, <code>-chain=signet</code> เป็นต้น</p>
+
+        <div class="callout warn">
+          <span class="h">ข้อผิดพลาดที่พบบ่อย</span>
+          ถ้ารัน <code>bitcoind -regtest</code> แต่สั่ง <code>bitcoin-cli getblockchaininfo</code> โดยไม่ใส่ <code>-regtest</code> bitcoin-cli จะเชื่อมต่อไปที่พอร์ต RPC ของ mainnet (8332) และหา cookie ในไดเรกทอรีของ mainnet จึงเชื่อมต่อไม่ได้ วิธีแก้คือใส่ตัวเลือกเครือข่ายเดียวกันทั้งสองฝั่ง หรือใส่ <code>regtest=1</code> ไว้ใน bitcoin.conf เพราะทั้งสองโปรแกรมอ่านไฟล์นี้ร่วมกัน
+        </div>
+      </section>
+
+      <!-- ==================== 4.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">4.4</span>คำสั่งพื้นฐาน: getblockchaininfo, getnewaddress, getbalance, sendtoaddress, generatetoaddress</h2>
+
+        <p>หัวข้อนี้ทดลองครบวงจร ตั้งแต่เริ่มโหนด ขุดเหรียญ โอนเงิน จนถึงยืนยันธุรกรรม ตัวอย่างนี้สร้าง wallet สองใบชื่อ alice และ bob ไว้บนโหนดเดียวกัน แทนผู้ใช้สองคน ทุกคำสั่งใส่ <code>-regtest</code> ไว้ ถ้าตั้ง <code>regtest=1</code> ใน bitcoin.conf แล้วก็ไม่ต้องใส่ ส่วน address, txid และค่าธรรมเนียมในผลลัพธ์เป็นค่าตัวอย่าง เมื่อทดลองจริงจะได้ค่าต่างออกไป</p>
+
+        <h3>1. เริ่มโหนดและตรวจสถานะ</h3>
+<pre><code>bitcoind -regtest -daemon
+bitcoin-cli -regtest getblockchaininfo</code></pre>
+<pre><code>{
+  "chain": "regtest",
+  "blocks": 0,
+  "headers": 0,
+  "bestblockhash": "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206",
+  "difficulty": 4.656542373906925e-10,
+  "initialblockdownload": true,
+  "size_on_disk": 293,
+  "pruned": false,
+  ...
+}</code></pre>
+        <p><code>getblockchaininfo</code> เป็นคำสั่งแรกที่ควรใช้เสมอ เพราะบอกว่าโหนดอยู่บนเครือข่ายใด (<code>chain</code>) และมีบล็อกกี่บล็อก (<code>blocks</code>) ตอนนี้มีเพียง Genesis block ที่ความสูง (height) 0 ค่า <code>difficulty</code> ต่ำมาก regtest จึงสร้างบล็อกได้ทันที</p>
+        <p>ค่า <code>initialblockdownload</code> บอกว่าโหนดยังอยู่ในช่วงดาวน์โหลดและตรวจบล็อกย้อนหลัง (initial block download) หรือไม่ บน mainnet ค่านี้เป็น <code>true</code> จนกว่าโหนดจะตามบล็อกล่าสุดทัน บน regtest ค่านี้ก็เป็น <code>true</code> เช่นกัน เพราะโหนดดูจากเวลาในบล็อกล่าสุด และ Genesis block ของ regtest มีเวลาเก่ามาก (ปี 2011) เมื่อขุดบล็อกแรก ค่านี้จะเปลี่ยนเป็น <code>false</code></p>
+
+        <h3>2. สร้าง wallet และ address</h3>
+<pre><code>bitcoin-cli -regtest createwallet "alice"
+bitcoin-cli -regtest createwallet "bob"
+bitcoin-cli -regtest -rpcwallet=alice getnewaddress
+bcrt1qg7x5l0r4m6s7ak8xw3... (address ของ alice)</code></pre>
+        <p>ตั้งแต่ Bitcoin Core v0.21 โหนดไม่สร้าง wallet ให้อัตโนมัติ ต้องสร้างเองด้วย <code>createwallet</code> เมื่อเปิด wallet ไว้มากกว่าหนึ่งใบ ต้องระบุ <code>-rpcwallet=ชื่อ</code> เพื่อบอกว่าคำสั่งนี้ใช้กับ wallet ใด</p>
+        <p><strong>ทำไมต้องขอ address ใหม่ทุกครั้ง</strong> ข้อมูลบน blockchain เปิดให้ทุกคนดู ถ้าใช้ address เดิมรับเงินทุกครั้ง ใครก็รวบรวมได้ว่า address นั้นได้รับเงินจากใครและมียอดเท่าใด Whitepaper ข้อ 10 จึงแนะนำให้ใช้คู่กุญแจ (key pair) ชุดใหม่ในทุกธุรกรรม <code>getnewaddress</code> ทำตามหลักนี้ คือสร้าง address ใหม่จาก wallet เดิมทุกครั้งที่เรียก ถึงแต่ละ address จะมีกุญแจคนละคู่ ก็ไม่ต้องสำรองข้อมูล (backup) ใหม่ เพราะ wallet ของ Bitcoin Core รุ่นปัจจุบันเป็นแบบ HD (hierarchical deterministic, BIP32) กุญแจทุกคู่คำนวณมาจาก seed เดียวกัน backup ครั้งเดียวจึงกู้คืน address ทุกตัวที่สร้างภายหลังได้</p>
+
+        <h3>3. ขุดบล็อกให้ได้เหรียญ</h3>
+<pre><code>bitcoin-cli -regtest generatetoaddress 101 bcrt1qg7x5l0r4m6s7ak8xw3...
+bitcoin-cli -regtest -rpcwallet=alice getbalance
+50.00000000
+bitcoin-cli -regtest -rpcwallet=alice getbalances
+{ "mine": { "trusted": 50.00000000, "untrusted_pending": 0.00000000, "immature": 5000.00000000 } }</code></pre>
+        <p><code>generatetoaddress</code> สร้างบล็อกตามจำนวนที่กำหนด และจ่ายรางวัลบล็อกเข้า address ที่ระบุ คำสั่งนี้ใช้ได้จริงเฉพาะบน regtest เพราะบน mainnet และ testnet CPU ของเครื่องเราหา nonce ที่ทำให้ block hash ต่ำกว่า target ได้ช้ากว่าผู้ขุดรายอื่นมาก ส่วนบน signet บล็อกต้องมีลายเซ็นของผู้ลงนาม เราจึงสร้างบล็อกเองไม่ได้เลย</p>
+
+        <h3>ทำไมขุด 101 บล็อกแต่ใช้ได้เพียง 50 BTC</h3>
+        <p>ขุดไป 101 บล็อก บล็อกละ 50 BTC รวม 5,050 BTC แต่ <code>getbalance</code> แสดงเพียง 50 BTC เพราะกฎ <strong>coinbase maturity</strong> กำหนดว่าเหรียญจาก coinbase transaction ต้องมีบล็อกต่อท้ายครบ 100 บล็อกก่อนจึงนำไปใช้ได้ ในตัวอย่างนี้ มีเพียงรางวัลของบล็อกที่ 1 ที่ครบเงื่อนไข รางวัลของอีก 100 บล็อกยังอยู่ในสถานะ <code>immature</code> รวม 5,000 BTC</p>
+        <p>กฎนี้แก้ปัญหาที่เกิดจากการแยกสายชั่วคราว (temporary fork) ในบทที่ 2 ถ้าบล็อกหนึ่งกลายเป็น stale block ธุรกรรมทั่วไปในบล็อกนั้นยังกลับเข้า mempool แล้วลงบล็อกในสายใหม่ได้ แต่ coinbase transaction ทำแบบนั้นไม่ได้ เพราะบล็อกในสายใหม่มี coinbase ของผู้ขุดคนใหม่อยู่แล้ว รางวัลของบล็อกเดิมจึงหายไปทั้งก้อน</p>
+        <p>ถ้าผู้ขุดนำรางวัลนั้นไปจ่ายให้คนอื่นแล้ว ธุรกรรมทุกทอดที่ต่อจากเหรียญนั้นจะใช้ไม่ได้ ผู้รับเงินทุกทอดจึงเสียเงินไปด้วย ทั้งที่ไม่ได้ทำอะไรผิด กฎ coinbase maturity จึงให้รอจนมีบล็อกต่อท้ายครบ 100 บล็อก ถึงตอนนั้น โอกาสที่บล็อกนั้นจะกลายเป็น stale block ต่ำจนแทบเป็นศูนย์ Whitepaper ไม่ได้กล่าวถึงกฎนี้ และคำอธิบายที่พบทั่วไปคือ ตัวเลข 100 เป็นค่าที่ตั้งไว้เผื่อเหลือมาก</p>
+
+        <h3>4. โอนเงินและดู mempool</h3>
+<pre><code>bitcoin-cli -regtest -rpcwallet=bob getnewaddress
+bcrt1qp3n8kd0y2c... (address ของ bob)
+bitcoin-cli -regtest -rpcwallet=alice sendtoaddress bcrt1qp3n8kd0y2c... 10
+6c1f8e0a54b3...     (txid ของธุรกรรมใหม่)
+bitcoin-cli -regtest getrawmempool
+[ "6c1f8e0a54b3..." ]</code></pre>
+        <p><code>sendtoaddress</code> สั่งให้ wallet ทำหลายขั้นในคำสั่งเดียว ได้แก่ เลือก UTXO ที่จะใช้ คำนวณค่าธรรมเนียม สร้าง output เงินทอน (ทั้งสามเรื่องนี้อธิบายในหัวข้อ 4.5) ลงลายเซ็น และประกาศ (broadcast) ธุรกรรมให้เครือข่าย ขั้นสุดท้ายนี้ตรงกับขั้นตอนที่ 1 ของ Whitepaper ข้อ 5 ธุรกรรมที่ประกาศแล้วแต่ยังไม่อยู่ในบล็อกจะรออยู่ใน <strong>mempool</strong> และดูรายการได้ด้วย <code>getrawmempool</code></p>
+
+        <h3>5. ยืนยันธุรกรรมด้วยการขุดบล็อก</h3>
+<pre><code>bitcoin-cli -regtest generatetoaddress 1 bcrt1qg7x5l0r4m6s7ak8xw3...
+bitcoin-cli -regtest -rpcwallet=bob getbalance
+10.00000000
+bitcoin-cli -regtest -rpcwallet=alice gettransaction 6c1f8e0a54b3...
+{ "amount": -10.00000000, "fee": -0.00002820, "confirmations": 1, ... }</code></pre>
+        <p>บน regtest ไม่มีผู้ขุดรายอื่น ธุรกรรมจะอยู่ใน mempool ไปเรื่อย ๆ จนกว่าเราจะขุดบล็อกเอง หลังขุดหนึ่งบล็อก bob มีเงิน 10 BTC และธุรกรรมมี 1 confirmation</p>
+        <p>ยอดของ alice เปลี่ยนสองทาง ทางแรก alice จ่าย 10 BTC และค่าธรรมเนียม 0.0000282 BTC ทางที่สอง เมื่อถึงความสูง 102 รางวัลของบล็อกที่ 2 มีบล็อกต่อท้ายครบ 100 บล็อกพอดี alice จึงได้ 50 BTC ที่ใช้ได้เพิ่มมา <code>getbalance</code> ของ alice จึงเป็น 50 − 10 − 0.0000282 + 50 = 89.9999718 BTC</p>
+
+        <h3>คำสั่งที่ควรรู้</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำสั่ง</th><th>หน้าที่</th></tr>
+            <tr><td><code>getblockchaininfo</code></td><td>สถานะของโหนด: เครือข่าย จำนวนบล็อก ความยาก และสถานะการดาวน์โหลด</td></tr>
+            <tr><td><code>createwallet "ชื่อ"</code></td><td>สร้าง wallet ใหม่</td></tr>
+            <tr><td><code>getnewaddress</code></td><td>สร้าง address ใหม่สำหรับรับเงิน</td></tr>
+            <tr><td><code>getbalance</code> / <code>getbalances</code></td><td>ยอดเงินที่ใช้ได้ / ยอดแยกตามสถานะ รวมเงินที่ยังไม่ครบ maturity</td></tr>
+            <tr><td><code>listunspent</code></td><td>รายการ UTXO ที่ wallet เป็นเจ้าของ</td></tr>
+            <tr><td><code>sendtoaddress addr จำนวน</code></td><td>โอนเงิน ได้ txid กลับมา</td></tr>
+            <tr><td><code>generatetoaddress n addr</code></td><td>ขุด n บล็อก รางวัลเข้า addr (ใช้บน regtest)</td></tr>
+            <tr><td><code>getrawmempool</code></td><td>รายการ txid ที่รอเข้าบล็อก</td></tr>
+            <tr><td><code>gettransaction txid</code></td><td>รายละเอียดธุรกรรมในมุมมองของ wallet</td></tr>
+            <tr><td><code>getrawtransaction txid true</code></td><td>ธุรกรรมฉบับเต็มที่ถอดรหัส (decode) แล้ว (ต้องเปิด <code>txindex</code> ถ้าไม่ใช่ธุรกรรมใน mempool)</td></tr>
+            <tr><td><code>getblockhash n</code> / <code>getblock hash</code></td><td>หา block hash ของบล็อกที่ความสูง n / ดูเนื้อหาของบล็อก</td></tr>
+            <tr><td><code>stop</code></td><td>ปิด bitcoind</td></tr>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <span class="h">sendtoaddress บน regtest ใหม่มักขึ้น error</span>
+          ถ้าไม่ตั้ง <code>fallbackfee</code> จะพบข้อความว่า Fee estimation failed เพราะโหนดประมาณค่าธรรมเนียม (fee estimation) จากสถิติในอดีตว่าธุรกรรมที่จ่าย fee rate ต่าง ๆ ต้องรอกี่บล็อกจึงได้เข้าบล็อก แต่ regtest ที่เพิ่งสร้างยังไม่มีสถิตินี้ แก้โดยตั้ง <code>fallbackfee</code> ใน bitcoin.conf ตามหัวข้อ 4.3
+        </div>
+      </section>
+
+      <!-- ==================== 4.5 ==================== -->
+      <section id="s5">
+        <h2><span class="no">4.5</span>UTXO model: การอ่าน input, output, เงินทอน และค่าธรรมเนียม</h2>
+
+        <h3>ทำไม Bitcoin ไม่เก็บยอดเงินเป็นตัวเลขในบัญชี</h3>
+        <p>บทที่ 1 นิยามเหรียญว่าเป็นสายโซ่ของลายเซ็น (chain of digital signatures) ไม่ใช่ตัวเลขยอดคงเหลือ ผู้รับจึงตรวจเองได้ว่าเหรียญก้อนนี้ส่งต่อกันมาถูกต้องทุกทอด ในทางปฏิบัติ Bitcoin เก็บเงินเป็นก้อน เรียกว่า <strong>UTXO (Unspent Transaction Output)</strong> คือ output ของธุรกรรมก่อนหน้าที่ยังไม่มีใครนำไปใช้ ยอดเงินใน wallet คือผลรวมของ UTXO ทุกก้อนที่ wallet มี private key ปลดล็อกได้ ข้อดีคือโหนดตรวจการใช้จ่ายซ้ำ (double-spending) ได้ง่าย เพียงดูว่าก้อนที่ input อ้างถึงยังอยู่ใน UTXO set หรือไม่ การเก็บเงินเป็นก้อนเป็นทางเลือกในการออกแบบของ Bitcoin ไม่ใช่ข้อบังคับของระบบที่ไม่มีตัวกลาง Ethereum เลือกเก็บยอดคงเหลือของแต่ละบัญชีแทน (บทที่ 5)</p>
+
+        <h3>กติกาของธุรกรรม</h3>
+        <ul>
+          <li><strong>Input</strong> อ้างถึง UTXO เดิมด้วย txid และลำดับของ output (<code>vout</code>) และแนบลายเซ็นที่ปลดล็อก UTXO นั้นได้</li>
+          <li>UTXO แต่ละก้อนต้อง <strong>ใช้ทั้งก้อน</strong> แบ่งใช้บางส่วนไม่ได้ เหมือนธนบัตรที่ฉีกครึ่งจ่ายไม่ได้ กติกานี้ทำให้ UTXO มีแค่สองสถานะ คือยังไม่ใช้ (อยู่ใน UTXO set) หรือใช้ไปแล้ว (ลบออก) โหนดจึงไม่ต้องจำว่าแต่ละก้อนเหลืออยู่เท่าใด ถ้ายอมให้ใช้บางส่วน ธุรกรรมหลายรายการจะอ้างถึงก้อนเดียวกันได้ และการตรวจ double-spending จะซับซ้อนขึ้นมาก</li>
+          <li><strong>Output</strong> คือก้อนเงินใหม่ที่ล็อกไว้ให้ผู้รับ ถ้า input รวมกันเกินยอดที่ต้องจ่าย ผู้จ่ายต้องสร้าง output <strong>เงินทอน</strong> กลับมาที่ address ของตัวเอง</li>
+          <li><strong>ค่าธรรมเนียม</strong> ไม่มีช่องให้ระบุในธุรกรรม แต่เป็นส่วนต่างระหว่างผลรวม input กับผลรวม output ผู้ขุดเก็บส่วนต่างนี้ผ่าน coinbase transaction</li>
+        </ul>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 252" role="img" aria-label="ธุรกรรมใช้ UTXO สองก้อนของ Alice ขนาด 0.3 และ 0.5 BTC สร้าง output ให้ Bob 0.6 BTC และเงินทอนกลับ Alice 0.1999 BTC ส่วนต่าง 0.0001 BTC เป็นค่าธรรมเนียม">
+            <defs>
+              <marker id="arrUtxo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <text x="120" y="24" text-anchor="middle" font-size="12" fill="#6b655c">Input: UTXO เดิม ใช้ทั้งก้อน</text>
+              <rect x="20" y="36" width="200" height="50" rx="8" fill="#f0ebe1"/>
+              <text x="120" y="56" text-anchor="middle" font-size="12" fill="#6b655c">UTXO ของ Alice</text>
+              <text x="120" y="76" text-anchor="middle" font-weight="700">0.3 BTC</text>
+              <rect x="20" y="116" width="200" height="50" rx="8" fill="#f0ebe1"/>
+              <text x="120" y="136" text-anchor="middle" font-size="12" fill="#6b655c">UTXO ของ Alice</text>
+              <text x="120" y="156" text-anchor="middle" font-weight="700">0.5 BTC</text>
+
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="222" y1="61" x2="298" y2="90" marker-end="url(#arrUtxo)"/>
+                <line x1="222" y1="141" x2="298" y2="116" marker-end="url(#arrUtxo)"/>
+                <line x1="462" y1="90" x2="538" y2="53" marker-end="url(#arrUtxo)"/>
+                <line x1="462" y1="110" x2="538" y2="118" marker-end="url(#arrUtxo)"/>
+              </g>
+              <line x1="462" y1="130" x2="538" y2="181" stroke="#b9b1a3" stroke-width="1.2" stroke-dasharray="4 4" marker-end="url(#arrUtxo)"/>
+
+              <rect x="300" y="40" width="160" height="130" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="380" y="88" text-anchor="middle" font-weight="700">ธุรกรรม</text>
+              <text x="380" y="110" text-anchor="middle" font-size="12">input รวม 0.8 BTC</text>
+              <text x="380" y="128" text-anchor="middle" font-size="12">ลายเซ็นของ Alice</text>
+
+              <text x="640" y="18" text-anchor="middle" font-size="12" fill="#6b655c">Output: UTXO ใหม่</text>
+              <rect x="540" y="28" width="200" height="50" rx="8" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.4"/>
+              <text x="640" y="48" text-anchor="middle" font-size="12" fill="#1f6e5a">output 0: ให้ Bob</text>
+              <text x="640" y="68" text-anchor="middle" font-weight="700">0.6 BTC</text>
+              <rect x="540" y="93" width="200" height="50" rx="8" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.4"/>
+              <text x="640" y="113" text-anchor="middle" font-size="12" fill="#b85a10">output 1: เงินทอนกลับ Alice</text>
+              <text x="640" y="133" text-anchor="middle" font-weight="700">0.1999 BTC</text>
+              <rect x="540" y="158" width="200" height="50" rx="8" fill="none" stroke="#b9b1a3" stroke-dasharray="4 4"/>
+              <text x="640" y="178" text-anchor="middle" font-size="12" fill="#6b655c">ส่วนต่าง ไม่มี output</text>
+              <text x="640" y="198" text-anchor="middle" font-size="12">ค่าธรรมเนียม 0.0001 BTC ให้ผู้ขุด</text>
+
+              <text x="380" y="240" text-anchor="middle" font-size="13">ค่าธรรมเนียม = 0.8 − (0.6 + 0.1999) = 0.0001 BTC</text>
+            </g>
+          </svg>
+          <figcaption>Alice ต้องจ่าย Bob 0.6 BTC แต่ไม่มี UTXO ก้อนใดใหญ่พอ จึงใช้สองก้อนรวม 0.8 BTC แล้วสร้างเงินทอนกลับให้ตัวเอง ส่วนที่ไม่ได้ระบุเป็น output คือค่าธรรมเนียม หลังธุรกรรมนี้ โหนดจะลบ UTXO 0.3 และ 0.5 ออกจาก UTXO set แล้วเพิ่ม UTXO ใหม่ 0.6 และ 0.1999 เข้าไปแทน</figcaption>
+        </figure>
+
+        <div class="callout warn">
+          <span class="h">ถ้าลืมสร้างเงินทอน</span>
+          ถ้าธุรกรรมใช้ UTXO 1 BTC เพื่อจ่าย 0.1 BTC โดยไม่มี output เงินทอน ส่วนต่าง 0.9 BTC จะกลายเป็นค่าธรรมเนียมของผู้ขุดทันที และเรียกคืนไม่ได้ ความผิดพลาดแบบนี้เคยเกิดขึ้นจริงกับผู้ที่ประกอบธุรกรรมเองทีละขั้น และเป็นเหตุผลหนึ่งที่ควรทดลองบน regtest ก่อน
+        </div>
+
+        <h3>อ่านธุรกรรมจาก getrawtransaction</h3>
+        <p>ตัวอย่างนี้เป็นธุรกรรมของ Alice ตามแผนภาพด้านบน (input 0.3 และ 0.5 BTC) ไม่ใช่ธุรกรรม 10 BTC ในหัวข้อ 4.4 ผลลัพธ์ได้จาก <code>getrawtransaction txid true</code> และตัดบางฟิลด์ออก</p>
+<pre><code>{
+  "txid": "9b7d2e41c0f8...",
+  "vin": [
+    { "txid": "a1b2c3...", "vout": 0, "txinwitness": [ "3044...", "02f9..." ] },
+    { "txid": "d4e5f6...", "vout": 1, "txinwitness": [ "3045...", "03a1..." ] }
+  ],
+  "vout": [
+    { "value": 0.60000000, "n": 0, "scriptPubKey": { "address": "bcrt1q...bob",   "type": "witness_v0_keyhash" } },
+    { "value": 0.19990000, "n": 1, "scriptPubKey": { "address": "bcrt1q...alice", "type": "witness_v0_keyhash" } }
+  ]
+}</code></pre>
+        <ul>
+          <li><code>vin</code> แต่ละรายการชี้ไปยัง output เดิมด้วยคู่ <code>txid</code> กับ <code>vout</code> และมีลายเซ็นกับ public key อยู่ใน <code>txinwitness</code> (สำหรับ address แบบ SegWit) ระวังชื่อซ้ำ ฟิลด์ <code>vout</code> ภายใน <code>vin</code> เป็นเลขลำดับ output ของธุรกรรมก่อนหน้า (ตรงกับค่า <code>n</code> ในธุรกรรมนั้น) ไม่ใช่รายการ output ของธุรกรรมนี้</li>
+          <li><code>vin</code> <strong>ไม่มีจำนวนเงิน</strong> เพราะจำนวนเงินบันทึกอยู่แล้วใน output เดิมที่ input อ้างถึง และโหนดค้นจาก UTXO set เองได้ ถ้าจะคำนวณค่าธรรมเนียมจากผลลัพธ์นี้ จึงต้องเปิดดูธุรกรรมก่อนหน้าด้วย ตั้งแต่ Bitcoin Core v25 ถ้าใช้ <code>getrawtransaction txid 2</code> (verbosity 2) โหนดจะค้น output เดิมมาแสดงใน <code>prevout</code> ของแต่ละ input และคำนวณ <code>fee</code> ให้</li>
+          <li><code>vout</code> แต่ละรายการมีจำนวนเงิน (<code>value</code>) ลำดับ (<code>n</code>) และสคริปต์ล็อก (locking script หรือ <code>scriptPubKey</code>) คือเงื่อนไขที่ผู้ใช้เงินก้อนนี้ต้องทำให้ครบ output เหล่านี้จะกลายเป็น UTXO และธุรกรรมถัดไปอ้างถึงได้ด้วย txid ของธุรกรรมนี้คู่กับค่า <code>n</code></li>
+        </ul>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ: UTXO เทียบกับ Account model</span>
+          Bitcoin ใช้ UTXO: เงินเป็นก้อน ใช้ทั้งก้อน มีเงินทอน และค่าธรรมเนียมคือส่วนต่างของ input กับ output Ethereum (บทที่ 5) ใช้ Account model: แต่ละบัญชีมียอดคงเหลือเป็นตัวเลข การโอนคือลดยอดของผู้ส่งแล้วเพิ่มยอดของผู้รับ และใช้ตัวนับ nonce ของบัญชี (คนละตัวกับ nonce ใน PoW ของบทที่ 2) กันไม่ให้ใครนำธุรกรรมเดิมมาส่งซ้ำ UTXO model ไม่ต้องมีตัวนับนี้ เพราะ UTXO แต่ละก้อนใช้ได้ครั้งเดียว ธุรกรรมที่ส่งซ้ำจะอ้างถึงก้อนที่ใช้ไปแล้ว โหนดจึงปฏิเสธเอง
+        </div>
+      </section>
+
+      <!-- ==================== 4.6 ==================== -->
+      <section id="s6">
+        <h2><span class="no">4.6</span>รูปแบบ address: Legacy (1…), P2SH (3…), SegWit (bc1q…), Taproot (bc1p…) และ Testnet (tb1…)</h2>
+
+        <h3>ทำไม address จึงมีหลายแบบ</h3>
+        <p>address ไม่ได้เป็นแค่ตัวระบุผู้รับ แต่บอก wallet ของผู้จ่ายว่าต้องสร้าง output ด้วย <strong>สคริปต์ล็อก (locking script) แบบใด</strong> เมื่อ Bitcoin เพิ่มเงื่อนไขแบบใหม่ที่ประหยัดค่าธรรมเนียมกว่าหรือทำได้มากกว่า ก็ต้องมี address รูปแบบใหม่ให้ wallet แยกแยะได้ แบบเก่ายังใช้ต่อได้ เพราะเหรียญจำนวนมากยังล็อกไว้ด้วยเงื่อนไขเก่า ถ้ายกเลิกแบบเก่า เหรียญเหล่านั้นจะใช้ไม่ได้อีก นอกจากนี้ address ทุกแบบมี checksum อยู่ในตัว ถ้าพิมพ์ผิดหนึ่งตัว wallet จะตรวจพบและไม่ยอมส่งเงิน</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>แบบ</th><th>ขึ้นต้น (mainnet)</th><th>ขึ้นต้น (testnet / regtest)</th><th>การเข้ารหัส</th><th>ลักษณะเด่น</th></tr>
+            <tr><td>P2PKH (Legacy)</td><td><code>1…</code></td><td><code>m…</code> หรือ <code>n…</code></td><td>Base58Check</td><td>แบบแรกของ Bitcoin ล็อกด้วยแฮชของ public key ค่าธรรมเนียมสูงที่สุด</td></tr>
+            <tr><td>P2SH</td><td><code>3…</code></td><td><code>2…</code></td><td>Base58Check</td><td>ล็อกด้วยแฮชของสคริปต์ (script hash) ตาม BIP16 ปี 2012 ก่อนมี P2SH ผู้จ่ายต้องใส่สคริปต์ multisig ทั้งชุดลงใน output และจ่ายค่าธรรมเนียมส่วนนั้นแทนผู้รับ P2SH ให้ผู้จ่ายใส่เพียงแฮช ผู้รับเป็นคนเปิดเผยสคริปต์ตอนใช้เงิน ใช้กับ multisig และ wrapped SegWit (SegWit ที่ห่อไว้ใน P2SH เพื่อให้ wallet รุ่นเก่าส่งเงินมาได้)</td></tr>
+            <tr><td>P2WPKH / P2WSH (Native SegWit)</td><td><code>bc1q…</code></td><td><code>tb1q…</code> / <code>bcrt1q…</code></td><td>Bech32 (BIP173)</td><td>SegWit version 0 เปิดใช้ปี 2017 ลายเซ็นแยกไปอยู่ในส่วน witness ซึ่งคิด weight ต่ำกว่าข้อมูลส่วนอื่น ค่าธรรมเนียมจึงต่ำลง</td></tr>
+            <tr><td>P2TR (Taproot)</td><td><code>bc1p…</code></td><td><code>tb1p…</code> / <code>bcrt1p…</code></td><td>Bech32m (BIP350)</td><td>SegWit version 1 เปิดใช้ปี 2021 ใช้ลายเซ็น Schnorr และไม่ต้องเปิดเผยเงื่อนไขที่ไม่ได้ใช้ คนภายนอกจึงดูไม่ออกว่าเหรียญล็อกด้วยเงื่อนไขซับซ้อนหรือไม่ (privacy ดีขึ้น)</td></tr>
+          </table>
+        </div>
+
+        <h3>ตัวอย่าง</h3>
+<pre><code>1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa             P2PKH  address ที่รับรางวัลของ Genesis block
+3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy             P2SH
+bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4     P2WPKH 42 ตัวอักษร (ตัวอย่างจาก BIP173)
+bc1p…                                          P2TR   62 ตัวอักษร</code></pre>
+
+        <h3>ทำไมตัวอักษรหลัง bc1 จึงเป็น q หรือ p</h3>
+        <p>ส่วน <code>bc</code> เรียกว่า human-readable part (HRP) ทำหน้าที่เป็นคำนำหน้า (prefix) ที่บอกเครือข่าย (testnet และ signet ใช้ <code>tb</code> ส่วน regtest ใช้ <code>bcrt</code>) ตัว <code>1</code> คือตัวคั่น (separator) และตัวถัดมาคือ <strong>witness version</strong> ที่เข้ารหัสแล้ว ชุดตัวอักษรของ Bech32 ใช้ <code>q</code> แทนค่า 0 และใช้ <code>p</code> แทนค่า 1 SegWit v0 จึงขึ้นต้นด้วย <code>bc1q</code> และ Taproot ซึ่งเป็น v1 จึงขึ้นต้นด้วย <code>bc1p</code></p>
+
+        <div class="callout">
+          <span class="h">ทำไมรูปแบบการเข้ารหัสจึงต่างกัน</span>
+          Base58 ตัดตัวอักษรที่ดูคล้ายกันออก ได้แก่ <code>0</code>, <code>O</code>, <code>I</code> และ <code>l</code> เพื่อให้อ่านผิดน้อยลง Bech32 ไม่ผสมตัวพิมพ์เล็กกับตัวพิมพ์ใหญ่ (ปกติใช้ตัวพิมพ์เล็ก) จึงอ่านออกเสียงและพิมพ์ได้ง่ายกว่า และ checksum ของ Bech32 ตรวจจับข้อผิดพลาดได้ดีกว่า ภายหลังนักพัฒนาพบว่า ถ้า address ลงท้ายด้วย <code>p</code> แล้วมีคนเติมหรือลบตัว <code>q</code> หน้าตัวนั้น checksum ของ Bech32 ตรวจไม่พบ จึงออก Bech32m (BIP350) มาใช้กับ witness version 1 ขึ้นไป ส่วน SegWit v0 ยังใช้ Bech32 เหมือนเดิม
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          ต้องดูตัวอักษรขึ้นต้นแล้วบอกได้ทั้งเครือข่ายและชนิดของ address เช่น <code>tb1q…</code> คือ Native SegWit บน testnet หรือ signet ส่วน <code>bcrt1…</code> คือ regtest และ <code>3…</code> คือ P2SH บน mainnet
+        </div>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li><strong>โจทย์:</strong> ธุรกรรมบน mainnet เสียเงินจริง ย้อนกลับไม่ได้ และช้า นักพัฒนาจึงต้องทดสอบบนเครือข่ายที่ใช้กฎเดียวกันแต่เหรียญไม่มีมูลค่า</li>
+          <li><strong>4.1:</strong> bitcoind คือตัวโหนด bitcoin-cli ส่งคำสั่งผ่าน JSON-RPC และ bitcoin-qt คือโหนดที่มี GUI</li>
+          <li><strong>4.2:</strong> testnet ใช้ PoW แบบสาธารณะและไม่เสถียร (testnet3 ประกาศเลิกใช้แล้ว งานใหม่ควรใช้ testnet4) signet เพิ่มลายเซ็นของผู้ลงนามเพื่อให้บล็อกสม่ำเสมอ regtest เป็นเครือข่ายส่วนตัวที่ขุดได้ทันที แต่ละเครือข่ายแยกกันด้วย Genesis block, magic bytes, พอร์ต และคำนำหน้า address</li>
+          <li><strong>4.3:</strong> ตั้งค่าใน bitcoin.conf ค่าเฉพาะเครือข่ายใส่ใต้ section <code>[test]</code>, <code>[testnet4]</code>, <code>[signet]</code> หรือ <code>[regtest]</code> และข้อมูลแต่ละเครือข่ายอยู่ในไดเรกทอรีย่อยของตัวเอง</li>
+          <li><strong>4.4:</strong> กฎ coinbase maturity กำหนดให้รอ 100 บล็อก บน regtest จึงต้องขุด 101 บล็อกก่อนจะใช้รางวัลของบล็อกแรกได้ ธุรกรรมที่ส่งแล้วจะรออยู่ใน mempool จนกว่าจะมีคนขุดบล็อกใหม่</li>
+          <li><strong>4.5:</strong> UTXO ต้องใช้ทั้งก้อน ส่วนเกินต้องทอนกลับ ค่าธรรมเนียมคือผลรวม input ลบผลรวม output</li>
+          <li><strong>4.6:</strong> <code>1…</code> P2PKH, <code>3…</code> P2SH, <code>bc1q…</code> SegWit v0, <code>bc1p…</code> Taproot ส่วน <code>tb1…</code> คือ testnet/signet และ <code>bcrt1…</code> คือ regtest</li>
+        </ul>
+
+        <h3>ตัวเลขที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>รายการ</th><th>ค่า</th></tr>
+            <tr><td>พอร์ต mainnet</td><td>P2P 8333, RPC 8332</td></tr>
+            <tr><td>พอร์ต testnet3</td><td>P2P 18333, RPC 18332</td></tr>
+            <tr><td>พอร์ต testnet4</td><td>P2P 48333, RPC 48332</td></tr>
+            <tr><td>พอร์ต regtest</td><td>P2P 18444, RPC 18443</td></tr>
+            <tr><td>พอร์ต signet</td><td>P2P 38333, RPC 38332</td></tr>
+            <tr><td>Coinbase maturity</td><td>100 บล็อก (regtest จึงขุด 101 บล็อก)</td></tr>
+            <tr><td>Halving บน regtest</td><td>ทุก 150 บล็อก</td></tr>
+            <tr><td>SegWit / Taproot เปิดใช้</td><td>สิงหาคม 2017 / พฤศจิกายน 2021</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. ทีมต้องการรันชุดทดสอบอัตโนมัติที่ต้องสร้างบล็อกหลายร้อยบล็อกภายในไม่กี่วินาที และได้ผลเหมือนเดิมทุกครั้ง ควรใช้เครือข่ายใด</p>
+          <ol><li>ก. Mainnet</li><li>ข. Testnet</li><li>ค. Signet</li><li>ง. Regtest</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ง. Regtest</strong> เป็นเครือข่ายส่วนตัวที่สร้างบล็อกได้ทันทีด้วย <code>generatetoaddress</code> testnet และ signet เป็นเครือข่ายสาธารณะที่ต้องรอบล็อกตามเวลาจริง</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. นักศึกษาขุด 101 บล็อกบน regtest แล้วพบว่า <code>getbalance</code> แสดง 50 BTC ไม่ใช่ 5,050 BTC เพราะเหตุใด</p>
+          <details><summary>ดูเฉลย</summary><div>กฎ <strong>coinbase maturity</strong> กำหนดให้รางวัลบล็อกต้องมีบล็อกต่อท้ายครบ 100 บล็อกก่อนจึงใช้ได้ มีเพียงรางวัลของบล็อกที่ 1 ที่ครบเงื่อนไข อีก 5,000 BTC ยังเป็น immature กฎนี้มีไว้เพราะถ้าบล็อกกลายเป็น stale block รางวัลใน coinbase ของบล็อกนั้นจะหายไปด้วย ธุรกรรมทุกทอดที่ใช้เหรียญนั้นต่อจะใช้ไม่ได้ และผู้รับเงินที่ไม่ได้ทำผิดจะเสียเงิน เมื่อรอจนมีบล็อกต่อท้าย 100 บล็อก โอกาสที่จะเกิดเหตุนี้ต่ำจนแทบเป็นศูนย์</div></details>
+        </div>
+
+        <div class="q">
+          <p>3. ธุรกรรมหนึ่งมี input สองรายการ ขนาด 0.5 และ 0.3 BTC มี output ให้ผู้รับ 0.6 BTC และเงินทอน 0.199 BTC ค่าธรรมเนียมเป็นเท่าใด</p>
+          <details><summary>ดูเฉลย</summary><div>0.8 − (0.6 + 0.199) = <strong>0.001 BTC</strong> ค่าธรรมเนียมไม่มีช่องระบุในธุรกรรม แต่เป็นส่วนต่างระหว่างผลรวม input กับผลรวม output</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. รัน <code>bitcoind -regtest -daemon</code> แล้วสั่ง <code>bitcoin-cli getblockchaininfo</code> แต่เชื่อมต่อไม่ได้ สาเหตุคืออะไร</p>
+          <details><summary>ดูเฉลย</summary><div>คำสั่ง bitcoin-cli ไม่ได้ใส่ <code>-regtest</code> จึงเชื่อมต่อไปที่พอร์ต RPC ของ mainnet (8332) และหา cookie ในไดเรกทอรีของ mainnet แทนที่จะใช้พอร์ต 18443 และไดเรกทอรี <code>regtest/</code> แก้โดยใส่ <code>-regtest</code> หรือตั้ง <code>regtest=1</code> ใน bitcoin.conf</div></details>
+        </div>
+
+        <div class="q">
+          <p>5. address <code>tb1qxy2k…</code> เป็นของเครือข่ายใด และเป็นแบบใด</p>
+          <ol><li>ก. Mainnet, Taproot</li><li>ข. Testnet หรือ Signet, Native SegWit v0</li><li>ค. Regtest, Legacy</li><li>ง. Testnet, P2SH</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> <code>tb</code> คือคำนำหน้าของ testnet และ signet ตัว <code>q</code> หลัง <code>1</code> คือ witness version 0 ถ้าเป็น regtest จะขึ้นต้นด้วย <code>bcrt1</code> และถ้าเป็น Taproot จะเป็น <code>tb1p</code></div></details>
+        </div>
+
+        <div class="q">
+          <p>6. ทำไม <code>vin</code> ในผลลัพธ์ของ <code>getrawtransaction</code> จึงไม่มีจำนวนเงิน</p>
+          <details><summary>ดูเฉลย</summary><div>เพราะ input แค่อ้างถึง output เดิมด้วยคู่ <code>txid</code> และ <code>vout</code> จำนวนเงินบันทึกไว้แล้วใน output นั้น และโหนดค้นจาก UTXO set เองได้ ถ้าบันทึกจำนวนเงินซ้ำใน input จะเปลืองพื้นที่ และข้อมูลสองแห่งอาจขัดแย้งกัน</div></details>
+        </div>
+
+        <div class="q">
+          <p>7. ความแตกต่างหลักระหว่าง Signet กับ Testnet คืออะไร และ Signet แลกกับสิ่งใด</p>
+          <details><summary>ดูเฉลย</summary><div>บล็อกบน Signet ต้องมีลายเซ็นของผู้ลงนามที่กำหนดไว้ล่วงหน้า บล็อกจึงเกิดสม่ำเสมอและไม่มีใครก่อกวนเครือข่ายด้วยพลังประมวลผลได้ ต่างจาก Testnet ที่ใช้ PoW สาธารณะและความยากแกว่ง สิ่งที่แลกไปคือความกระจายศูนย์ (decentralization) เพราะการสร้างบล็อกต้องพึ่งผู้ลงนามกลุ่มเดียว</div></details>
+        </div>
+
+        <div class="q">
+          <p>8. ผู้ใช้นำ UTXO ขนาด 1 BTC ไปจ่ายร้านค้า 0.1 BTC โดยลืมใส่ output เงินทอน จะเกิดอะไรขึ้น</p>
+          <details><summary>ดูเฉลย</summary><div>ส่วนต่าง <strong>0.9 BTC</strong> กลายเป็นค่าธรรมเนียมของผู้ขุดที่นำธุรกรรมนั้นเข้าบล็อก และเรียกคืนไม่ได้ เหตุผลคือ UTXO ต้องใช้ทั้งก้อน และส่วนที่ไม่ได้ระบุเป็น output จะนับเป็นค่าธรรมเนียม</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+</body>
+</html>

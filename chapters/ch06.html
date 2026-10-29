@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 6 Counter Storage: Smart Contract แรก</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p2" data-chapter="ch06">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 2 Ethereum และ Smart Contract</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 6 · ภาคปฏิบัติ</div>
+      <h1>Counter Storage: Smart Contract แรก</h1>
+      <p class="lead">บทที่ 5 อธิบายว่า Ethereum เก็บสถานะ (state) อย่างไร รันโปรแกรมบน EVM อย่างไร และคิดค่า gas อย่างไร บทนี้ลงมือเขียนตัวนับ (Counter) ซึ่งเป็น contract ที่เล็กที่สุดแต่ยังต้องจำข้อมูลข้ามธุรกรรม (transaction) Counter เก็บตัวเลขไว้เพียงหนึ่งตัว เนื้อหาครอบคลุมโค้ดทีละบรรทัด ที่เก็บข้อมูลหลักสามแบบของ EVM ที่ผู้เขียนต้องเลือกเอง (storage, memory และ calldata) เหตุที่การแก้ค่าต้องเสีย gas แต่การอ่านค่าไม่ต้องเสีย การ deploy และทดสอบบน Remix และการเพิ่ม require, owner และ event ให้ contract ใช้งานได้จริง</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: ตัวนับที่ไม่มีใครแอบแก้ได้</a></li>
+        <li><a href="#s1">เขียน Counter contract ทีละบรรทัด</a></li>
+        <li><a href="#s2">ความแตกต่างของ storage, memory และ calldata</a></li>
+        <li><a href="#s3">ธุรกรรมที่เปลี่ยนสถานะ (เสีย gas) กับการเรียกอ่านด้วย view / pure (ไม่เสีย gas)</a></li>
+        <li><a href="#s4">Deploy และทดสอบบน Remix</a></li>
+        <li><a href="#s5">ต่อยอดด้วย require, owner และ event</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: ตัวนับที่ไม่มีใครแอบแก้ได้</h2>
+
+        <p>สมมุติว่าชมรมหนึ่งต้องการนับจำนวนผู้ลงชื่อเข้าร่วมกิจกรรม แล้วประกาศผลให้สมาชิกทุกคนเห็น วิธีที่ง่ายที่สุดคือเก็บตัวเลขไว้ในฐานข้อมูลบนเซิร์ฟเวอร์ของชมรม แต่วิธีนี้มีจุดอ่อนสามข้อ</p>
+        <ul>
+          <li><strong>ผู้ดูแลแก้ตัวเลขได้:</strong> ผู้ที่เข้าถึงฐานข้อมูลเปลี่ยนตัวเลขได้ทุกเมื่อ และสมาชิกตรวจย้อนหลังไม่ได้ว่าใครเปลี่ยนไว้เมื่อใด</li>
+          <li><strong>เซิร์ฟเวอร์ล่มได้:</strong> ถ้าเซิร์ฟเวอร์ปิด ก็ไม่มีใครเพิ่มหรืออ่านตัวเลขได้</li>
+          <li><strong>สมาชิกต้องเชื่อใจผู้ดูแล:</strong> ปัญหานี้คือปัญหาตัวกลาง (trusted third party) แบบเดียวกับที่บทที่ 1 อธิบายไว้สำหรับระบบการเงิน</li>
+        </ul>
+        <p>บทที่ 5 (หัวข้อ 5.1) อธิบายว่า UTXO model ของ Bitcoin ไม่เหมาะกับโจทย์นี้ สถานะที่ต้องแก้ร่วมกันต้องอยู่ใน UTXO ก้อนเดียว ทุกครั้งที่แก้ต้องใช้ก้อนเดิมจนหมดแล้วสร้างก้อนใหม่ และเมื่อผู้ใช้สองคนส่งธุรกรรมพร้อมกัน ธุรกรรมทั้งสองจะชนกันที่ UTXO ก้อนเดียว Ethereum เก็บตัวเลขไว้ใน world state ที่แก้ทับได้ ถ้าเขียนตัวนับเป็น smart contract ตัวเลขจะอยู่ใน world state และทุกโหนดเก็บสำเนาไว้ ทุกครั้งที่ตัวเลขเปลี่ยน ต้องมีธุรกรรมที่ลงลายเซ็น (signature) และทุกโหนดตรวจซ้ำ ไม่มีใครแก้ตัวเลขเงียบ ๆ ได้ และไม่มีเซิร์ฟเวอร์กลางให้ปิด</p>
+        <p>Counter มีโค้ดเพียงไม่กี่บรรทัด แต่ต้องตอบคำถามเดียวกับแอปขนาดใหญ่ทุกข้อ บทนี้จึงใช้ Counter เป็นตัวอย่างตลอดทั้งบท</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำถามที่ Counter ต้องตอบ</th><th>หัวข้อ</th></tr>
+            <tr><td>โค้ดแต่ละบรรทัดทำอะไร และตัวเลขเก็บไว้ที่ใด</td><td>6.1</td></tr>
+            <tr><td>ข้อมูลใดต้องอยู่ถาวร ข้อมูลใดใช้ชั่วคราว และแต่ละแบบมีราคาเท่าใด</td><td>6.2</td></tr>
+            <tr><td>ทำไมการเพิ่มตัวเลขต้องเสีย gas แต่การอ่านตัวเลขไม่ต้องเสีย</td><td>6.3</td></tr>
+            <tr><td>นำโค้ดขึ้น blockchain อย่างไร และทดสอบอย่างไรโดยไม่เสียเงินจริง</td><td>6.4</td></tr>
+            <tr><td>ใครมีสิทธิ์ทำอะไร จะกันค่าที่ไม่ถูกต้องอย่างไร และแอปรู้ได้อย่างไรว่าตัวเลขเปลี่ยน</td><td>6.5</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 6.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">6.1</span>เขียน Counter contract ทีละบรรทัด</h2>
+
+        <h3>ทำไมเริ่มจากตัวนับ</h3>
+        <p>โปรแกรมที่เล็กที่สุดซึ่งยังต้องจำข้อมูลข้ามธุรกรรมคือโปรแกรมที่เก็บตัวเลขหนึ่งตัว เพิ่มค่าได้ ลดค่าได้ และอ่านค่าได้ ถ้าเข้าใจว่าตัวเลขตัวเดียวนี้อยู่ที่ใด ใครแก้ได้ และแก้แล้วเสียค่าใช้จ่ายเท่าใด ก็นำหลักเดียวกันไปเข้าใจ contract ที่ซับซ้อนกว่านี้ได้ เช่น ยอดเหรียญของ ERC-20 ในบทที่ 12 ก็คือตัวเลขใน storage จำนวนมากที่เพิ่มลดตามกติกา</p>
+
+<pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+contract Counter {
+    uint256 public count;
+
+    function increment() public {
+        count += 1;
+    }
+
+    function decrement() public {
+        count -= 1;
+    }
+
+    function getCount() public view returns (uint256) {
+        return count;
+    }
+}</code></pre>
+
+        <h3>ความหมายของแต่ละบรรทัด</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>บรรทัด</th><th>ความหมาย</th><th>มีไว้เพื่อ</th></tr>
+            <tr><td><code>// SPDX-License-Identifier: MIT</code></td><td>ระบุสัญญาอนุญาต (license) ของซอร์สโค้ด</td><td>ซอร์สโค้ดของ contract มักเปิดเผยต่อสาธารณะบน block explorer บรรทัดนี้บอกผู้อ่านว่านำโค้ดไปใช้ต่อได้ภายใต้เงื่อนไขใด ถ้าไม่ใส่ คอมไพเลอร์จะเตือน แต่ยังคอมไพล์ผ่าน</td></tr>
+            <tr><td><code>pragma solidity ^0.8.20;</code></td><td>ใช้คอมไพเลอร์รุ่น 0.8.20 ขึ้นไป แต่ไม่ถึง 0.9.0</td><td>ภาษา Solidity เปลี่ยนพฤติกรรมระหว่างรุ่น เช่น รุ่น 0.8 เริ่มตรวจตัวเลขล้น (overflow) ให้อัตโนมัติ ถ้าคอมไพล์ด้วยรุ่นอื่น โค้ดเดียวกันอาจทำงานต่างไป ความผิดพลาดแบบนี้แก้ทีหลังไม่ได้ เพราะ contract แก้โค้ดหลัง deploy ไม่ได้ จึงต้องกำหนดรุ่นคอมไพเลอร์ไว้ตั้งแต่ต้น</td></tr>
+            <tr><td><code>contract Counter { … }</code></td><td>ประกาศ contract ชื่อ Counter คล้ายการประกาศ class</td><td>ทุกครั้งที่ deploy จะได้ contract ตัวใหม่ที่มี address และ storage ของตัวเอง deploy สองครั้งจึงได้ตัวนับสองตัวที่แยกจากกัน</td></tr>
+            <tr><td><code>uint256 public count;</code></td><td>state variable ชนิดจำนวนเต็มไม่ติดลบ 256 บิต ค่าเริ่มต้นเป็น 0</td><td>ตัวแปรที่ประกาศไว้นอกฟังก์ชันอยู่ใน <strong>storage</strong> ค่าจึงอยู่ต่อหลังธุรกรรมจบ (หัวข้อ 6.2) คำว่า <code>public</code> ทำให้คอมไพเลอร์สร้างฟังก์ชันอ่านค่า (getter) ชื่อ <code>count()</code> ให้อัตโนมัติ</td></tr>
+            <tr><td><code>function increment() public</code></td><td>ฟังก์ชันที่ใครก็เรียกได้ และไม่ได้ระบุ <code>view</code> หรือ <code>pure</code></td><td>ฟังก์ชันนี้แก้ค่าใน storage ผู้เรียกจึงต้องส่งธุรกรรมและเสีย gas (หัวข้อ 6.3)</td></tr>
+            <tr><td><code>count += 1;</code></td><td>อ่าน count จาก storage บวกหนึ่ง แล้วเขียนกลับ</td><td>EVM แปลบรรทัดนี้เป็น opcode <code>SLOAD</code> (อ่าน storage) <code>ADD</code> และ <code>SSTORE</code> (เขียน storage) ค่า gas ส่วนใหญ่ของฟังก์ชันมาจาก <code>SSTORE</code></td></tr>
+            <tr><td><code>count -= 1;</code></td><td>ลดค่าลงหนึ่ง</td><td>ถ้า count เป็น 0 อยู่แล้ว ผลลบจะติดลบ ซึ่งชนิด <code>uint256</code> เก็บไม่ได้ Solidity 0.8 ขึ้นไปจึงหยุดการทำงานและย้อนสถานะทั้งหมด (revert) ด้วยรหัส <code>Panic(0x11)</code> ก่อนรุ่น 0.8 ค่าจะวนกลับไปเป็นค่าสูงสุดของ <code>uint256</code> คือ 2<sup>256</sup> − 1</td></tr>
+            <tr><td><code>function getCount() public view returns (uint256)</code></td><td>ฟังก์ชันที่อ่าน count แล้วคืนค่า</td><td><code>view</code> บอกคอมไพเลอร์และผู้เรียกว่าฟังก์ชันนี้อ่านสถานะได้แต่แก้ไม่ได้ ผู้เรียกจากภายนอกจึงไม่ต้องส่งธุรกรรม (หัวข้อ 6.3)</td></tr>
+          </table>
+        </div>
+
+        <div class="callout">
+          <span class="h">getCount() ซ้ำกับ count()</span>
+          เมื่อประกาศ <code>uint256 public count</code> แล้ว คอมไพเลอร์สร้าง <code>count()</code> ให้อยู่แล้ว ฟังก์ชัน <code>getCount()</code> จึงทำหน้าที่ซ้ำกัน ตัวอย่างในชั้นเรียนมักเขียนไว้เพื่อแสดงรูปแบบของฟังก์ชัน <code>view</code> ถ้าเปลี่ยน count เป็น <code>private</code> จะไม่มี getter อัตโนมัติ และต้องเขียน <code>getCount()</code> เอง แต่ข้อมูลยังเปิดให้ทุกคนอ่านได้จาก storage ตามที่หัวข้อ 5.6 เตือนไว้
+        </div>
+
+        <h3>contract ไม่มีลูปรอคำสั่ง</h3>
+        <p>โปรแกรมบนเซิร์ฟเวอร์ทั่วไปมีลูปหลักที่ทำงานตลอดเวลาและรอรับคำขอ แต่ Counter ไม่มีฟังก์ชัน <code>main</code> และไม่มีลูปใดทำงานอยู่เบื้องหลัง เหตุผลมาจากหัวข้อ 5.2 คือ contract เริ่มทำงานเองไม่ได้ โค้ดจะรันเมื่อมีธุรกรรมหรือการเรียกเข้ามาเท่านั้น รันจบแล้วก็หยุด สิ่งที่เหลืออยู่ระหว่างการเรียกแต่ละครั้งมีเพียงค่าใน storage ถ้าต้องการให้ตัวนับเพิ่มเองทุกชั่วโมง ต้องมีผู้ส่งธุรกรรมมาเรียกทุกชั่วโมง ไม่มีวิธีตั้งเวลาไว้ใน contract</p>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          state variable ที่ไม่ได้กำหนดค่าเริ่มต้นจะมีค่าเริ่มต้นตามชนิด เช่น <code>uint256</code> เป็น 0 และ <code>address</code> เป็น <code>0x000…0</code> ส่วน state variable ที่ประกาศเป็น <code>public</code> จะได้ getter ชื่อเดียวกับตัวแปรโดยอัตโนมัติ และ getter นั้นเป็นฟังก์ชัน <code>view</code>
+        </div>
+      </section>
+
+      <!-- ==================== 6.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">6.2</span>ความแตกต่างของ storage, memory และ calldata</h2>
+
+        <h3>ทำไม EVM ต้องมีที่เก็บข้อมูลหลายแบบ</h3>
+        <p>ข้อมูลในโปรแกรมมีอายุต่างกัน ตัวเลขของ Counter ต้องอยู่ต่อไปหลังธุรกรรมจบ เพื่อให้ธุรกรรมถัดไปบวกต่อได้ ส่วนค่าระหว่างคำนวณ เช่น ข้อความที่ต่อกันเพื่อส่งคืน ใช้เสร็จแล้วก็ทิ้งได้ ต้นทุนของสองกรณีนี้ต่างกันมาก ข้อมูลที่อยู่ถาวรต้องเก็บไว้ในเครื่องของทุก full node ทั่วโลกไปตลอด ส่วนข้อมูลชั่วคราวใช้ RAM ของโหนดเพียงไม่กี่มิลลิวินาที</p>
+        <p>ถ้า EVM มีที่เก็บแบบเดียว จะเกิดปัญหาไม่ทางใดก็ทางหนึ่ง ถ้าทุกอย่างอยู่ถาวร ค่าระหว่างคำนวณทุกค่าต้องจ่ายราคาของข้อมูลถาวร และ world state จะโตเร็วจนโหนดทั่วไปเก็บไม่ไหว ถ้าทุกอย่างหายเมื่อจบการเรียก Counter ก็จำตัวเลขไม่ได้ EVM จึงแยกที่เก็บตามอายุของข้อมูล และตั้งราคาแต่ละแบบตามภาระที่โหนดต้องแบก</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 282" role="img" aria-label="ธุรกรรม increment สองครั้งต่อกัน ในแต่ละธุรกรรม calldata มี selector 0xd09de08a ซึ่งอ่านได้อย่างเดียว และ memory ใช้เก็บค่าระหว่างคำนวณ ทั้งสองหายไปเมื่อจบการเรียก ส่วน storage เก็บ count ต่อเนื่องข้ามธุรกรรม จาก 0 เป็น 1 และจาก 1 เป็น 2">
+            <defs>
+              <marker id="arrLoc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <text x="320" y="22" text-anchor="middle" font-weight="700" fill="#4a52c0">ธุรกรรมที่ 1: increment()</text>
+              <text x="600" y="22" text-anchor="middle" font-weight="700" fill="#4a52c0">ธุรกรรมที่ 2: increment()</text>
+
+              <rect x="210" y="34" width="220" height="164" rx="10" fill="none" stroke="#b9b1a3" stroke-dasharray="5 4"/>
+              <rect x="490" y="34" width="220" height="164" rx="10" fill="none" stroke="#b9b1a3" stroke-dasharray="5 4"/>
+
+              <text x="20" y="72" font-weight="700">calldata</text>
+              <text x="20" y="90" font-size="11" fill="#6b655c">ข้อมูลที่ส่งมากับการเรียก</text>
+              <text x="20" y="130" font-weight="700">memory</text>
+              <text x="20" y="148" font-size="11" fill="#6b655c">พื้นที่ทดชั่วคราว</text>
+              <text x="20" y="238" font-weight="700">storage</text>
+              <text x="20" y="256" font-size="11" fill="#6b655c">อยู่ถาวรบน chain</text>
+
+              <rect x="222" y="50" width="196" height="42" rx="7" fill="#f0ebe1"/>
+              <text x="320" y="68" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12">0xd09de08a</text>
+              <text x="320" y="85" text-anchor="middle" font-size="11" fill="#6b655c">อ่านได้อย่างเดียว</text>
+              <rect x="502" y="50" width="196" height="42" rx="7" fill="#f0ebe1"/>
+              <text x="600" y="68" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12">0xd09de08a</text>
+              <text x="600" y="85" text-anchor="middle" font-size="11" fill="#6b655c">อ่านได้อย่างเดียว</text>
+
+              <rect x="222" y="108" width="196" height="42" rx="7" fill="#fff" stroke="#b9b1a3"/>
+              <text x="320" y="126" text-anchor="middle" font-size="12">ค่าระหว่างคำนวณ</text>
+              <text x="320" y="143" text-anchor="middle" font-size="11" fill="#6b655c">ล้างทิ้งเมื่อจบการเรียก</text>
+              <rect x="502" y="108" width="196" height="42" rx="7" fill="#fff" stroke="#b9b1a3"/>
+              <text x="600" y="126" text-anchor="middle" font-size="12">เริ่มว่างใหม่</text>
+              <text x="600" y="143" text-anchor="middle" font-size="11" fill="#6b655c">ไม่เห็นค่าของธุรกรรมที่ 1</text>
+
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="320" y1="160" x2="320" y2="218" marker-start="url(#arrLoc)" marker-end="url(#arrLoc)"/>
+                <line x1="600" y1="160" x2="600" y2="218" marker-start="url(#arrLoc)" marker-end="url(#arrLoc)"/>
+              </g>
+              <text x="330" y="186" font-size="11" fill="#6b655c">SLOAD / SSTORE</text>
+              <text x="610" y="186" font-size="11" fill="#6b655c">SLOAD / SSTORE</text>
+
+              <rect x="140" y="220" width="605" height="44" rx="8" fill="#eceefb" stroke="#5a63d8" stroke-width="1.4"/>
+              <g text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13">
+                <text x="175" y="247">0</text>
+                <text x="320" y="247" font-weight="700" fill="#1f6e5a">count: 0 → 1</text>
+                <text x="460" y="247">1</text>
+                <text x="600" y="247" font-weight="700" fill="#1f6e5a">count: 1 → 2</text>
+                <text x="728" y="247">2</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>calldata และ memory มีให้โค้ดใช้เฉพาะระหว่างการเรียกหนึ่งครั้ง (calldata ยังอยู่ในประวัติของบล็อก แต่ contract อ่านย้อนหลังไม่ได้) ธุรกรรมที่ 2 จึงเห็น memory ว่างเปล่า ค่าเดียวที่ส่งต่อจากธุรกรรมที่ 1 ไปถึงธุรกรรมที่ 2 คือ count ใน storage ส่วน <code>0xd09de08a</code> คือ function selector ของ <code>increment()</code> (หัวข้อ 5.4)</figcaption>
+        </figure>
+
+        <h3>storage แบ่งเป็น slot</h3>
+        <p>storage ของแต่ละ contract แบ่งเป็นช่อง (slot) ช่องละ 32 ไบต์ คอมไพเลอร์วาง state variable ลงช่องตามลำดับที่ประกาศ <code>count</code> ของ Counter จึงอยู่ที่ slot 0 ช่องที่ไม่เคยเขียนจะอ่านได้ค่า 0 ทุกช่อง ค่าเริ่มต้นของ state variable จึงเป็น 0 โดยไม่ต้องเขียนอะไรลง storage ตอน deploy</p>
+
+        <h3>เปรียบเทียบที่เก็บข้อมูลแต่ละแบบ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>storage</th><th>memory</th><th>calldata</th><th>stack</th></tr>
+            <tr><td>อยู่นานเท่าใด</td><td>ถาวร จนกว่าจะมีธุรกรรมมาแก้</td><td>เฉพาะระหว่างการเรียกหนึ่งครั้ง</td><td>เฉพาะระหว่างการเรียกหนึ่งครั้ง (ข้อมูลยังอยู่ในประวัติของบล็อก)</td><td>เฉพาะระหว่างการคำนวณ</td></tr>
+            <tr><td>แก้ค่าได้</td><td>ได้</td><td>ได้</td><td>ไม่ได้ อ่านอย่างเดียว</td><td>ได้</td></tr>
+            <tr><td>ราคา gas โดยประมาณ</td><td>แพงที่สุด<br>อ่าน (SLOAD): 2,100 เมื่ออ่านช่องนั้นครั้งแรกในธุรกรรม (cold) และ 100 ในครั้งต่อไป (warm)<br>เขียนช่องที่เป็น 0 ให้เป็นค่าอื่น: ราว 20,000<br>แก้ช่องที่มีค่าอยู่แล้ว: ราว 2,900</td><td>ถูก ราว 3 gas ต่อ 32 ไบต์ แต่ยิ่งใช้พื้นที่มาก ค่าขยายพื้นที่ (memory expansion) ยิ่งเพิ่มเร็ว</td><td>คิดตามขนาดของ data ในธุรกรรม ราว 4–16 gas ต่อไบต์ (ไบต์ศูนย์ / ไม่ใช่ศูนย์) ธุรกรรมที่ส่ง data จำนวนมากแต่คำนวณน้อยต้องจ่ายอย่างน้อยตามราคาขั้นต่ำที่สูงกว่านี้ (EIP-7623)</td><td>ถูกที่สุด ราว 3 gas ต่อคำสั่ง</td></tr>
+            <tr><td>ใช้กับ</td><td>state variable ทุกตัว เช่น <code>count</code></td><td>ตัวแปรชั่วคราวชนิด reference เช่น string หรือ array ที่สร้างในฟังก์ชัน</td><td>parameter ของฟังก์ชันที่ไม่ต้องแก้ค่า โดยเฉพาะฟังก์ชัน <code>external</code></td><td>ตัวแปรภายในฟังก์ชันชนิด value เช่น <code>uint256 x</code></td></tr>
+          </table>
+        </div>
+        <p>สิ่งที่ควรจำคือลำดับราคา การเขียน storage ช่องใหม่ (ราว 20,000 gas) แพงกว่าการเขียน memory (ราว 3 gas) หลายพันเท่า เพราะทุกโหนดต้องเก็บข้อมูลใน storage ไว้ตลอดไป (หัวข้อ 5.5) การเขียนช่องที่เป็น 0 ให้เป็นค่าอื่นแพงที่สุด เพราะเท่ากับเพิ่มข้อมูลใหม่ให้ทุกโหนดต้องเก็บ ส่วนการแก้ช่องที่มีค่าอยู่แล้ว (ราว 2,900 gas) ไม่ได้ทำให้ world state โตขึ้น จึงถูกกว่ามาก</p>
+        <p>ตารางใส่ stack ไว้เพื่อเทียบราคา แต่ผู้เขียน Solidity ไม่ได้เลือกใช้ stack เอง คอมไพเลอร์วางตัวแปรชนิด value ภายในฟังก์ชันลง stack ให้ ที่เก็บที่ผู้เขียนต้องเลือกจึงมีสามแบบ คือ storage, memory และ calldata</p>
+
+        <div class="callout">
+          <span class="h">ตัวเลข gas บน Sepolia ต่างจากบทนี้</span>
+          ตัวเลข gas ในบทนี้ใช้กติกาบน mainnet และ Remix VM รุ่นก่อนการอัปเกรด Glamsterdam เช่นเดียวกับหัวข้อ 5.5 Sepolia เปิดใช้ Glamsterdam แล้วตั้งแต่ 6 ตุลาคม 2026 การอัปเกรดนี้ปรับราคา gas ของงานบางประเภท เช่น การเขียน state ใหม่ ค่า gas ที่เห็นบน Sepolia และ Etherscan จึงต่างจากตัวเลขในบทนี้ บทนี้ไม่ใส่ตัวเลขใหม่ไว้ เพราะราคาเหล่านี้อาจยังปรับอีกก่อนขึ้น mainnet
+        </div>
+
+        <h3>เมื่อใดต้องเขียน data location</h3>
+        <p>data location คือคำว่า <code>storage</code>, <code>memory</code> หรือ <code>calldata</code> ที่เขียนกำกับตัวแปรเพื่อบอกว่าข้อมูลอยู่ที่ใด ชนิดข้อมูลแบบ value (value type) เช่น <code>uint256</code>, <code>bool</code> และ <code>address</code> มีขนาดไม่เกิน 32 ไบต์ คัดลอกได้ถูก คอมไพเลอร์จึงจัดที่เก็บให้เอง ส่วนชนิดแบบ reference (reference type) ได้แก่ <code>string</code>, <code>bytes</code>, array, <code>struct</code> และ <code>mapping</code> (mapping อยู่ได้เฉพาะใน storage) ข้อมูลชนิดนี้อาจยาวมาก การคัดลอกจากที่หนึ่งไปอีกที่หนึ่งจึงเสีย gas ตามขนาด</p>
+        <p>ตั้งแต่ Solidity 0.5 ตัวแปรชนิด reference ต้องระบุ data location ทุกครั้งในสามกรณี คือเมื่อเป็น parameter, ค่าที่คืน (return value) หรือตัวแปรภายในฟังก์ชัน คอมไพเลอร์ไม่เดาให้ เพราะถ้าเลือกผิด โปรแกรมจะเสีย gas มากขึ้นหรือทำงานผิด</p>
+
+<pre><code>contract NameBoard {
+    string[] public names;                         // state variable อยู่ใน storage เสมอ
+
+    // รับข้อความเป็น calldata: อ่านจากข้อมูลที่ส่งมาได้เลย ไม่ต้องคัดลอกลง memory
+    function addName(string calldata name) external {
+        names.push(name);                          // คัดลอกจาก calldata ลง storage
+    }
+
+    // ต้องสร้างข้อความใหม่ จึงคืนค่าเป็น memory
+    function greet(string calldata name) external pure returns (string memory) {
+        return string.concat("Hello, ", name);
+    }
+}</code></pre>
+
+        <h3>ตัวแปร storage กับตัวแปร memory ให้ผลต่างกัน</h3>
+        <p>ถ้าตัวแปรภายในฟังก์ชันรับค่ามาจากข้อมูลใน storage คำว่า <code>storage</code> หรือ <code>memory</code> จะกำหนดว่าตัวแปรนั้นเป็น <strong>ตัวอ้างอิง (reference)</strong> ไปยังข้อมูลจริง หรือเป็น <strong>สำเนา (copy)</strong> ผลของสองแบบต่างกันมาก</p>
+
+<pre><code>struct Player { string name; uint256 score; }
+Player[] public players;
+
+function addScore(uint256 i) external {
+    Player storage p = players[i];   // p อ้างอิงข้อมูลจริงใน storage
+    p.score += 10;                   // แก้ค่าใน storage ทันที
+}
+
+function addScoreWrong(uint256 i) external {
+    Player memory p = players[i];    // คัดลอกข้อมูลมาไว้ใน memory
+    p.score += 10;                   // แก้เฉพาะสำเนา จบการเรียกแล้วสำเนาหายไป
+}</code></pre>
+
+        <div class="callout warn">
+          <span class="h">ฟังก์ชันที่ดูเหมือนทำงาน แต่ไม่ได้บันทึกอะไร</span>
+          <code>addScoreWrong</code> คอมไพล์ผ่าน รันได้ และเสีย gas แต่คะแนนใน storage ไม่เปลี่ยนเลย คอมไพเลอร์ให้คำใบ้ไว้แล้ว คือเตือนว่าฟังก์ชันนี้ควรเป็น <code>view</code> เพราะไม่ได้เขียน storage ถ้าเห็นคำเตือนนี้กับฟังก์ชันที่ตั้งใจให้แก้ข้อมูล ให้ตรวจ data location ก่อน
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          parameter ของฟังก์ชัน <code>external</code> ที่ไม่ต้องแก้ค่า ควรประกาศเป็น <code>calldata</code> เพราะอ่านจากข้อมูลที่ส่งมาได้โดยตรง ถ้าประกาศเป็น <code>memory</code> EVM ต้องคัดลอกข้อมูลทั้งก้อนลง memory ก่อน และเสีย gas เพิ่มตามขนาดข้อมูล ข้อแลกเปลี่ยน (trade-off) คือแก้ค่าตัวแปร <code>calldata</code> ไม่ได้ ส่วน state variable ระบุ data location ไม่ได้ เพราะอยู่ใน storage เสมอ
+        </div>
+      </section>
+
+      <!-- ==================== 6.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">6.3</span>ธุรกรรมที่เปลี่ยนสถานะ (เสีย gas) กับการเรียกอ่านด้วย view / pure (ไม่เสีย gas)</h2>
+
+        <h3>ทำไมการแก้ค่ากับการอ่านค่าจึงต่างกัน</h3>
+        <p>เมื่อมีคนกด <code>increment()</code> ตัวเลขใน world state ต้องเปลี่ยนพร้อมกันในทุกโหนด ถ้าโหนดหนึ่งเห็น count เป็น 5 แต่อีกโหนดเห็นเป็น 6 เครือข่ายก็ตกลงเรื่อง state root ไม่ได้ (หัวข้อ 5.4) การแก้ค่าจึงต้องผ่านขั้นตอนเดียวกับการโอนเงิน คือผู้เรียกลงลายเซ็นเพื่อยืนยันว่าเป็นผู้สั่ง ธุรกรรมต้องเข้าบล็อก และทุกโหนดต้องรันซ้ำ ผู้เรียกจ่ายค่า gas เพื่อชดเชยงานที่ทุกโหนดทำ และเพื่อให้ผู้ที่ส่งธุรกรรมขยะ (spam) ต้องเสียเงิน</p>
+        <p>การอ่านค่าไม่ได้เปลี่ยนอะไร เครือข่ายจึงไม่ต้องตกลงร่วมกัน full node ทุกตัวมี world state ครบอยู่ในเครื่องแล้ว โหนดที่เราเชื่อมต่ออยู่จึงรันฟังก์ชัน <code>view</code> บนสำเนาของตัวเองแล้วตอบกลับได้ทันที ไม่ต้องลงลายเซ็น ไม่ต้องรอบล็อก และไม่ต้องจ่าย gas ให้ใคร</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 316" role="img" aria-label="เส้นทางของการเขียนและการอ่าน การเรียก increment ต้องลงลายเซ็น ผ่าน mempool เข้าบล็อก และทุกโหนดรันซ้ำ จึงเสีย gas และต้องรอ การเรียก count ส่ง eth_call ไปยังโหนดเดียว โหนดรันบนสำเนา world state ของตัวเองแล้วตอบกลับทันทีโดยไม่เสีย gas">
+            <defs>
+              <marker id="arrRw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <text x="15" y="24" font-weight="700" fill="#4a52c0">เขียน: เรียก increment() ด้วยธุรกรรม</text>
+              <g font-size="12" text-anchor="middle">
+                <rect x="15" y="38" width="160" height="58" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="95" y="62" font-weight="700">1. wallet ลงลายเซ็น</text>
+                <text x="95" y="82">ธุรกรรม increment()</text>
+                <rect x="205" y="38" width="160" height="58" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="285" y="62" font-weight="700">2. รออยู่ใน mempool</text>
+                <text x="285" y="82">กระจายไปทุกโหนด</text>
+                <rect x="395" y="38" width="160" height="58" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="475" y="62" font-weight="700">3. proposer ใส่ลงบล็อก</text>
+                <text x="475" y="82">บล็อกใหม่ราวทุก 12 วินาที</text>
+                <rect x="585" y="38" width="160" height="58" rx="8" fill="#eceefb" stroke="#5a63d8" stroke-width="1.4"/>
+                <text x="665" y="62" font-weight="700">4. ทุกโหนดรันซ้ำ</text>
+                <text x="665" y="82">count = 1 ทุกเครื่อง</text>
+              </g>
+              <g stroke="#6b655c" stroke-width="1.2">
+                <line x1="177" y1="67" x2="203" y2="67" marker-end="url(#arrRw)"/>
+                <line x1="367" y1="67" x2="393" y2="67" marker-end="url(#arrRw)"/>
+                <line x1="557" y1="67" x2="583" y2="67" marker-end="url(#arrRw)"/>
+              </g>
+              <text x="15" y="124" font-size="12" fill="#6b655c">ต้องมีลายเซ็น · จ่าย gas · รอเข้าบล็อก · ทุกโหนดได้ผลเดียวกัน · ผู้เรียกได้ transaction hash ไม่ได้ค่าที่ฟังก์ชันคืน</text>
+
+              <line x1="15" y1="144" x2="745" y2="144" stroke="#e4ddd0" stroke-width="1.5"/>
+
+              <text x="15" y="172" font-weight="700" fill="#1f6e5a">อ่าน: เรียก count() หรือ getCount() ด้วย eth_call</text>
+              <g font-size="12" text-anchor="middle">
+                <rect x="15" y="186" width="160" height="58" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="95" y="210" font-weight="700">แอป หรือ Remix</text>
+                <text x="95" y="230">ส่ง eth_call</text>
+                <rect x="205" y="186" width="160" height="58" rx="8" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.4"/>
+                <text x="285" y="210" font-weight="700">โหนดที่เชื่อมต่ออยู่</text>
+                <text x="285" y="230">โหนดเดียว</text>
+                <rect x="395" y="186" width="350" height="58" rx="8" fill="#fff" stroke="#b9b1a3" stroke-dasharray="5 4"/>
+                <text x="570" y="210">รันฟังก์ชันบนสำเนา world state ในเครื่องของโหนด</text>
+                <text x="570" y="230" fill="#6b655c">ไม่สร้างธุรกรรม ไม่มีโหนดอื่นเกี่ยวข้อง</text>
+              </g>
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="177" y1="215" x2="203" y2="215" marker-end="url(#arrRw)"/>
+                <line x1="367" y1="215" x2="393" y2="215" marker-end="url(#arrRw)"/>
+                <path d="M285,246 L285,262 L95,262 L95,248" marker-end="url(#arrRw)"/>
+              </g>
+              <text x="190" y="280" font-size="12" text-anchor="middle">ส่งค่า count กลับทันที</text>
+              <text x="15" y="306" font-size="12" fill="#6b655c">ไม่ต้องลงลายเซ็น · ไม่เข้าบล็อก · ไม่เสีย gas · คำตอบมาจากโหนดที่เราเลือกถามเพียงโหนดเดียว</text>
+            </g>
+          </svg>
+          <figcaption>การแก้ค่าต้องให้ทุกโหนดตกลงร่วมกัน จึงต้องผ่านบล็อกและเสีย gas การอ่านค่าใช้สำเนา world state ที่โหนดมีอยู่แล้ว โหนดเดียวก็ตอบได้</figcaption>
+        </figure>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>ธุรกรรม (transaction)</th><th>การเรียกอ่าน (call)</th></tr>
+            <tr><td>ใช้กับ</td><td>ฟังก์ชันที่แก้สถานะ เช่น <code>increment()</code></td><td>ฟังก์ชัน <code>view</code> และ <code>pure</code> เช่น <code>count()</code></td></tr>
+            <tr><td>JSON-RPC ที่ใช้</td><td><code>eth_sendRawTransaction</code></td><td><code>eth_call</code></td></tr>
+            <tr><td>ลงลายเซ็น</td><td>ต้องลง และ MetaMask จะขึ้นหน้าต่างให้ยืนยัน</td><td>ไม่ต้องลง และ MetaMask ไม่ขึ้นหน้าต่าง</td></tr>
+            <tr><td>เข้าบล็อก</td><td>เข้า และอยู่ในประวัติของ chain ตลอดไป</td><td>ไม่เข้า ไม่มีร่องรอยบน chain</td></tr>
+            <tr><td>ค่า gas</td><td>จ่ายจริงตาม gas ที่ใช้</td><td>ไม่จ่าย แต่โหนดมักตั้งเพดาน gas ไว้กันการเรียกที่หนักเกินไป</td></tr>
+            <tr><td>เวลา</td><td>รอเข้าบล็อก ราว 12 วินาทีขึ้นไป</td><td>ได้คำตอบทันที</td></tr>
+            <tr><td>ค่าที่ผู้เรียกได้รับ</td><td>transaction hash และ receipt (สถานะสำเร็จ, gas ที่ใช้, event log) ไม่ได้ค่าที่ฟังก์ชันคืน</td><td>ค่าที่ฟังก์ชันคืน</td></tr>
+            <tr><td>ปุ่มใน Remix</td><td>สีส้ม (สีแดงถ้าเป็น <code>payable</code>)</td><td>สีฟ้า</td></tr>
+          </table>
+        </div>
+
+        <h3>view กับ pure ต่างกันอย่างไร</h3>
+        <p>เครื่องมือฝั่งผู้ใช้ เช่น Remix หรือ MetaMask ต้องรู้ว่าฟังก์ชันใดเรียกด้วย <code>eth_call</code> ได้ และฟังก์ชันใดต้องส่งเป็นธุรกรรม ข้อมูลนี้มาจาก state mutability (หัวข้อ 5.6) ที่ผู้เขียนประกาศไว้ คอมไพเลอร์บันทึกค่านี้ลงใน ABI และ Remix ใช้ค่านี้เลือกสีปุ่ม ตอนคอมไพล์ คอมไพเลอร์ยังตรวจด้วยว่าคำประกาศตรงกับสิ่งที่โค้ดทำจริง ถ้าฟังก์ชัน <code>view</code> พยายามเขียน storage คอมไพเลอร์จะแจ้ง error ถ้าฟังก์ชันที่ไม่ได้ระบุ state mutability อ่านข้อมูลอย่างเดียว คอมไพเลอร์จะเตือนว่าควรระบุเป็น <code>view</code> หรือ <code>pure</code></p>
+<pre><code>function getCount() public view returns (uint256) {
+    return count;                    // อ่าน storage จึงเป็น view
+}
+
+function double(uint256 x) public pure returns (uint256) {
+    return x * 2;                    // ใช้เฉพาะ parameter จึงเป็น pure
+}</code></pre>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>การกระทำ</th><th>ไม่ระบุ</th><th><code>view</code></th><th><code>pure</code></th></tr>
+            <tr><td>คำนวณจาก parameter</td><td>ได้</td><td>ได้</td><td>ได้</td></tr>
+            <tr><td>อ่าน state variable, <code>address(this).balance</code></td><td>ได้</td><td>ได้</td><td>ไม่ได้</td></tr>
+            <tr><td>อ่าน <code>msg.sender</code>, <code>block.timestamp</code>, <code>block.number</code></td><td>ได้</td><td>ได้</td><td>ไม่ได้</td></tr>
+            <tr><td>เขียน state variable, <code>emit</code> event, ส่ง ETH, สร้าง contract, เรียกฟังก์ชันที่ไม่ใช่ view/pure</td><td>ได้</td><td>ไม่ได้</td><td>ไม่ได้</td></tr>
+          </table>
+        </div>
+        <p><code>pure</code> สัญญาว่าผลลัพธ์ขึ้นกับ parameter เท่านั้น เรียกด้วยค่าเดิมกี่ครั้งก็ได้ผลเดิม ส่วน <code>msg.sender</code> และข้อมูลของบล็อกมาจากบริบทของการเรียก (execution context) และเปลี่ยนไปตามผู้เรียกหรือบล็อก ค่าเหล่านี้จึงนับเป็นการอ่านสถานะ ฟังก์ชันที่ใช้ค่าเหล่านี้จึงเป็น <code>pure</code> ไม่ได้ และต้องประกาศอย่างน้อยเป็น <code>view</code></p>
+
+        <div class="callout warn">
+          <span class="h">"view ไม่เสีย gas" มีเงื่อนไข</span>
+          ฟังก์ชัน <code>view</code> และ <code>pure</code> ไม่เสีย gas เฉพาะเมื่อเรียกจากภายนอกด้วย <code>eth_call</code> เท่านั้น ถ้าฟังก์ชันที่แก้สถานะเรียก <code>getCount()</code> ภายในธุรกรรม หรือ contract อื่นเรียก <code>getCount()</code> ระหว่างธุรกรรม คำสั่งของ <code>getCount()</code> ก็รันอยู่ในธุรกรรมนั้น และ gas ที่ใช้นับรวมกับค่าธรรมเนียมของธุรกรรม
+        </div>
+
+        <h3>ทำไมฟังก์ชันที่แก้สถานะจึงคืนค่าให้ผู้เรียกไม่ได้</h3>
+        <p>ถ้าเขียน <code>function increment() public returns (uint256)</code> แล้วเรียกผ่าน MetaMask แอปจะไม่ได้ตัวเลขใหม่กลับมา เพราะตอนที่ wallet ส่งธุรกรรม ฟังก์ชันยังไม่ได้รัน ฟังก์ชันจะรันจริงเมื่อธุรกรรมเข้าบล็อก ซึ่งอาจเป็นอีกหลายวินาทีต่อมา นอกจากนี้ receipt ของธุรกรรมก็ไม่ได้เก็บค่าที่ฟังก์ชันคืนไว้ แอปจึงมีสองทางเลือก คือรอให้ธุรกรรมเข้าบล็อกแล้วเรียก <code>count()</code> อีกครั้ง หรืออ่าน event ที่ contract บันทึกไว้ใน receipt (หัวข้อ 6.5) ค่าที่คืนจากฟังก์ชันแบบนี้ยังมีประโยชน์เมื่อ contract อื่นเรียกใช้ภายในธุรกรรมเดียวกัน</p>
+
+        <div class="callout">
+          <span class="h">อ่านฟรี แต่ต้องเชื่อโหนดที่ถาม</span>
+          ผลของ <code>eth_call</code> มาจากโหนดเดียว ถ้าโหนดนั้นเป็นของผู้ให้บริการ RPC ภายนอก (RPC provider) เช่น Infura หรือ Alchemy และตอบค่าผิด แอปก็ได้ค่าผิด ปัญหานี้คล้ายข้อจำกัดของ SPV ในหัวข้อ 3.5 ผู้ที่ต้องการความมั่นใจสูงจึงรัน full node ของตัวเอง หรือขอ Merkle proof ที่ผูกกับ <code>stateRoot</code> ใน header ของบล็อกมาตรวจเอง (หัวข้อ 5.4)
+        </div>
+      </section>
+
+      <!-- ==================== 6.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">6.4</span>Deploy และทดสอบบน Remix</h2>
+
+        <h3>deploy คือธุรกรรมที่สร้างบัญชีใหม่</h3>
+        <p>โค้ด Solidity ที่เขียนเสร็จยังอยู่ในเครื่องของเรา โหนดอื่นไม่รู้จักโค้ดนี้ และ EVM ก็รันภาษา Solidity โดยตรงไม่ได้ ขั้นแรกจึงต้องคอมไพล์โค้ดให้เป็น bytecode ถ้าจะให้ทุกโหนดรัน Counter ได้ bytecode ของ Counter ต้องเข้าไปอยู่ใน world state และวิธีเดียวที่จะเปลี่ยน world state ได้คือส่งธุรกรรม ธุรกรรม deploy จึงเป็นธุรกรรมธรรมดาที่มีลักษณะพิเศษสองข้อ คือฟิลด์ <code>to</code> ว่าง และฟิลด์ <code>data</code> บรรจุ <strong>creation bytecode</strong> (หัวข้อ 5.4)</p>
+        <p>creation bytecode มีสองส่วน ส่วนแรกคือ init code ที่รัน constructor ครั้งเดียว ส่วนที่สองคือ <strong>runtime bytecode</strong> เมื่อ init code รันเสร็จ จะคืน runtime bytecode ออกมา แล้วเครือข่ายเก็บไว้เป็น code ของบัญชีใหม่ คอมไพเลอร์แยกสองส่วนนี้เพราะโค้ดตั้งค่าเริ่มต้นใช้เพียงครั้งเดียว ถ้าเก็บไว้ใน code ของ contract ทุกโหนดต้องเก็บโค้ดที่ไม่มีวันใช้อีก และอาจมีคนเรียก constructor ซ้ำเพื่อตั้งค่าใหม่ได้</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 258" role="img" aria-label="ธุรกรรม deploy จาก Alice ที่มี nonce 5 ช่อง to ว่าง และ data เป็น creation bytecode EVM รัน init code ซึ่งรวม constructor แล้วคืน runtime bytecode เครือข่ายสร้าง contract account ใหม่ที่ address คำนวณจาก address ของ Alice และ nonce 5 บัญชีใหม่มี code เป็น runtime bytecode และ storage ที่ count เป็น 0">
+            <defs>
+              <marker id="arrDep" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <rect x="10" y="22" width="240" height="160" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="130" y="46" text-anchor="middle" font-weight="700">ธุรกรรม deploy</text>
+              <g font-size="12">
+                <text x="24" y="74">from: Alice (nonce = 5)</text>
+                <text x="24" y="98">to: <tspan fill="#c2412d" font-weight="700">(ว่าง)</tspan></text>
+                <text x="24" y="122">data: creation bytecode</text>
+                <text x="24" y="140" fill="#6b655c">  + ค่าที่ส่งให้ constructor</text>
+                <text x="24" y="166" fill="#6b655c">ค่า gas และลายเซ็นของ Alice</text>
+              </g>
+
+              <line x1="252" y1="102" x2="286" y2="102" stroke="#6b655c" stroke-width="1.3" marker-end="url(#arrDep)"/>
+
+              <rect x="288" y="56" width="176" height="92" rx="10" fill="#f0ebe1"/>
+              <text x="376" y="82" text-anchor="middle" font-weight="700">EVM</text>
+              <g font-size="12" text-anchor="middle">
+                <text x="376" y="106">รัน init code และ constructor</text>
+                <text x="376" y="126">แล้วคืน runtime bytecode</text>
+              </g>
+
+              <line x1="466" y1="102" x2="498" y2="102" stroke="#6b655c" stroke-width="1.3" marker-end="url(#arrDep)"/>
+
+              <rect x="500" y="12" width="250" height="180" rx="10" fill="#eceefb" stroke="#5a63d8" stroke-width="1.5"/>
+              <text x="625" y="36" text-anchor="middle" font-weight="700">Contract account ใหม่</text>
+              <g font-size="12">
+                <text x="514" y="62">address = 20 ไบต์ท้ายของ</text>
+                <text x="514" y="80" font-family="IBM Plex Mono, monospace" font-size="11.5">keccak256(rlp(Alice, 5))</text>
+                <text x="514" y="110">code: runtime bytecode</text>
+                <text x="514" y="128" fill="#6b655c">  (ไม่มี constructor แล้ว)</text>
+                <text x="514" y="156">storage: slot 0 (count) = 0</text>
+                <text x="514" y="178">balance: 0 ETH</text>
+              </g>
+
+              <g font-size="12">
+                <text x="10" y="222">address ของ contract ขึ้นกับผู้ deploy และ nonce เท่านั้น ผู้ deploy จึงรู้ address ล่วงหน้าได้</text>
+                <text x="10" y="244">และไม่มีใครสร้าง contract ทับ address เดิมได้ เพราะ nonce ของผู้ส่งเพิ่มขึ้นทุกธุรกรรม</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>ธุรกรรม deploy ไม่มีผู้รับ เครือข่ายรัน creation bytecode เพื่อตั้งค่าเริ่มต้น แล้วเก็บเฉพาะ runtime bytecode ไว้เป็น code ของบัญชีใหม่ ตัวอย่างนี้ใช้การสร้างแบบ CREATE ซึ่งเป็นแบบปกติเมื่อ deploy จาก EOA</figcaption>
+        </figure>
+
+        <h3>ขั้นตอนบน Remix VM</h3>
+        <p>หัวข้อ 5.7 แนะนำให้เริ่มจาก Remix VM ซึ่งเป็น blockchain จำลองในเบราว์เซอร์ เหตุผลเดียวกับ Regtest ในบทที่ 4 คือธุรกรรมยืนยันทันที ไม่เสียเงินจริง และลองผิดได้ไม่จำกัด</p>
+        <ol>
+          <li>เปิด <code>remix.ethereum.org</code> ในแท็บ File Explorer สร้างไฟล์ <code>Counter.sol</code> แล้ววางโค้ดจากหัวข้อ 6.1</li>
+          <li>ในแท็บ Solidity Compiler เลือกรุ่นคอมไพเลอร์ที่ตรงกับ <code>pragma</code> คือ 0.8.20 ขึ้นไปแต่ต่ำกว่า 0.9 แล้วกด Compile Counter.sol เมื่อคอมไพล์ผ่าน ด้านล่างของแท็บจะมีปุ่มคัดลอก ABI และ Bytecode</li>
+          <li>ในแท็บ Deploy &amp; Run Transactions ตั้ง Environment เป็น <strong>Remix VM</strong> (Remix อาจแสดงชื่อรุ่นอัปเกรดของ Ethereum ต่อท้าย เช่น Remix VM (Cancun)) ช่อง Account มีบัญชีทดสอบหลายบัญชีพร้อม ETH ปลอม เลือก Contract เป็น Counter แล้วกด <strong>Deploy</strong></li>
+          <li>ใต้หัวข้อ Deployed Contracts จะมี Counter พร้อม address ใหม่ กดขยายเพื่อดูปุ่มของแต่ละฟังก์ชัน ปุ่มสีฟ้าคือ <code>count</code> และ <code>getCount</code> ปุ่มสีส้มคือ <code>increment</code> และ <code>decrement</code></li>
+          <li>ทดลองตามตารางด้านล่าง แล้วสังเกตผลใน Console ใต้หน้าต่างแก้โค้ด</li>
+        </ol>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ทดลอง</th><th>ผลที่ควรเห็น</th><th>เหตุผล</th></tr>
+            <tr><td>กด <code>count</code> ทันทีหลัง deploy</td><td>ได้ 0 และ Console แสดงเป็น call ไม่มี transaction hash</td><td>ค่าเริ่มต้นของ <code>uint256</code> คือ 0 และ getter เป็น <code>view</code> (หัวข้อ 6.1, 6.3) Console ยังแสดง transaction cost และ execution cost พร้อมหมายเหตุ "Cost only applies when called by a contract" ตัวเลขนี้คือค่าที่จะเสียเมื่อ contract อื่นเรียกฟังก์ชันนี้ภายในธุรกรรม การกดจากภายนอกไม่เสีย gas จริง</td></tr>
+            <tr><td>กด <code>increment</code> แล้วกด <code>count</code></td><td>ได้ 1 และ Console แสดงธุรกรรมที่มี status สำเร็จ และ transaction cost ราว 43,000 gas</td><td>21,000 คือค่าพื้นฐานของทุกธุรกรรม ส่วนที่เหลือส่วนใหญ่มาจากการเขียน slot ที่เป็น 0 ให้เป็นค่าอื่น</td></tr>
+            <tr><td>กด <code>increment</code> อีกครั้ง</td><td>ได้ 2 แต่ transaction cost ลดลงเหลือราว 26,000 gas</td><td>slot มีค่าอยู่แล้ว การแก้ค่าที่ไม่ใช่ 0 จึงถูกกว่าการเขียนลงช่องที่เป็น 0 มาก (หัวข้อ 6.2)</td></tr>
+            <tr><td>เปลี่ยน Account เป็นบัญชีอื่น แล้วกด <code>increment</code></td><td>สำเร็จ และ count เพิ่มขึ้น</td><td>ฟังก์ชันเป็น <code>public</code> และไม่ได้ตรวจสิทธิ์ผู้เรียก ใครก็เรียกได้ ตัวนับผู้ลงชื่อต้องเปิดให้ทุกคนเพิ่มค่าได้อยู่แล้ว แต่ฟังก์ชันที่อันตรายกว่า เช่น การล้างค่า ต้องจำกัดสิทธิ์ (หัวข้อ 6.5 ใช้ <code>onlyOwner</code> กับ <code>reset()</code>)</td></tr>
+            <tr><td>กด <code>decrement</code> จนเหลือ 0 แล้วกดอีกครั้ง</td><td>ธุรกรรม revert และ count ยังเป็น 0</td><td>Solidity 0.8 ตรวจการลบจนติดลบให้อัตโนมัติ (หัวข้อ 6.1)</td></tr>
+            <tr><td>ดูยอด ETH ของบัญชีในช่อง Account</td><td>ลดลงเล็กน้อยหลังทุกธุรกรรม แต่ไม่ลดเมื่อกดปุ่มสีฟ้า</td><td>ธุรกรรมต้องจ่ายค่า gas แม้แต่ธุรกรรมที่ revert ก็ยังจ่ายส่วนที่ใช้ไปแล้ว ส่วน call ไม่เสีย gas</td></tr>
+          </table>
+        </div>
+        <p>ตัวเลข gas ในตารางเป็นค่าประมาณ ค่าจริงขึ้นกับรุ่นคอมไพเลอร์ การตั้งค่า optimizer และรุ่นของ EVM ที่ Remix VM จำลอง สิ่งที่ควรสังเกตคือครั้งแรกแพงกว่าครั้งต่อไปชัดเจน</p>
+
+        <h3>อ่านผลใน Console</h3>
+        <p>เมื่อกดขยายรายการธุรกรรมใน Console จะเห็นฟิลด์เดียวกับที่หัวข้อ 5.4 อธิบายไว้ ฟิลด์ที่ควรรู้จักมีดังนี้</p>
+        <ul>
+          <li><strong>status:</strong> ธุรกรรมสำเร็จหรือ revert</li>
+          <li><strong>from / to:</strong> บัญชีที่เรียก และ contract กับฟังก์ชันที่เรียก ถ้าเป็นธุรกรรม deploy ช่อง to จะแสดงว่าเป็นการสร้าง contract</li>
+          <li><strong>transaction cost / execution cost:</strong> transaction cost คือ gas ทั้งหมดที่ธุรกรรมใช้ ส่วน execution cost คือ gas ของการรันโค้ดบน EVM ไม่รวมค่าพื้นฐาน 21,000 และค่าของ data ที่ส่งมา</li>
+          <li><strong>input / decoded input:</strong> data ที่ส่งไปจริง เช่น <code>0xd09de08a</code> สำหรับ <code>increment()</code> และค่าที่ Remix แปลกลับให้อ่านง่าย</li>
+          <li><strong>decoded output:</strong> ค่าที่ฟังก์ชันคืน เห็นได้ใน Remix VM เพราะ Remix รันธุรกรรมเองในเบราว์เซอร์ แต่แอปจริงที่ส่งธุรกรรมผ่านโหนดไม่ได้รับค่านี้ (หัวข้อ 6.3)</li>
+          <li><strong>logs:</strong> event ที่ธุรกรรมบันทึกไว้ Counter รุ่นแรกยังไม่มี event ช่องนี้จึงว่าง</li>
+        </ul>
+
+        <h3>ย้ายไป Sepolia และเผยแพร่ซอร์สโค้ด</h3>
+        <p>เมื่อทดสอบบน Remix VM ผ่านแล้ว ขั้นต่อไปคือ testnet สาธารณะ เพื่อดูพฤติกรรมบนเครือข่ายจริงที่มีหลายโหนด มีค่า gas และต้องรอบล็อก ค่า gas ที่เห็นบน Sepolia จะไม่ตรงกับตารางข้างบน เพราะ Sepolia เปิดใช้ Glamsterdam แล้ว (หัวข้อ 6.2)</p>
+        <ol>
+          <li>เปิด MetaMask ด้วยบัญชีสำหรับทดสอบ เลือกเครือข่าย Sepolia และขอ SepoliaETH จาก faucet (หัวข้อ 5.7)</li>
+          <li>ใน Remix เปลี่ยน Environment เป็น <strong>Injected Provider - MetaMask</strong> แล้วกด Deploy MetaMask จะแสดงค่าธรรมเนียมโดยประมาณและขอให้ยืนยัน</li>
+          <li>รอให้ธุรกรรมเข้าบล็อก แล้วนำ address ของ contract ไปค้นใน <code>sepolia.etherscan.io</code></li>
+          <li>ลองกด <code>increment</code> MetaMask จะขึ้นหน้าต่างทุกครั้ง แต่เมื่อกด <code>count</code> จะไม่มีหน้าต่างขึ้น เพราะเป็น call</li>
+          <li>ลองกด <code>decrement</code> ตอนที่ count เป็น 0 ก่อนส่ง Remix จะเรียก <code>eth_estimateGas</code> ให้โหนดจำลองธุรกรรมล่วงหน้า เมื่อพบว่าธุรกรรมจะ revert Remix จะเปิดหน้าต่าง Gas estimation ถามว่าจะบังคับส่ง (force send) หรือไม่ MetaMask บางรุ่นก็เตือนซ้ำในหน้ายืนยัน ผู้ใช้ยังกดยืนยันส่งได้ แต่ธุรกรรมจะเข้าบล็อกในสถานะล้มเหลว และยังเสียค่า gas ส่วนที่ใช้ไป</li>
+        </ol>
+        <p>หน้า contract บน Etherscan แสดงเพียง bytecode เพราะ chain เก็บไว้แค่ bytecode ผู้ใช้ทั่วไปอ่าน bytecode ไม่ออก จึงตรวจไม่ได้ว่า contract ทำอะไรจริง ผู้ deploy ที่ต้องการให้ผู้อื่นเชื่อใจ contract จึงควร <strong>verify</strong> ซอร์สโค้ด คือส่งโค้ด รุ่นคอมไพเลอร์ และการตั้งค่าที่ใช้ให้ Etherscan คอมไพล์ซ้ำ ถ้าได้ bytecode ตรงกับที่อยู่บน chain Etherscan จะแสดงซอร์สโค้ด และเปิดแท็บ Read Contract กับ Write Contract ให้เรียกฟังก์ชันจากหน้าเว็บได้ Remix ก็มี plugin สำหรับ verify ให้ใช้เช่นกัน</p>
+        <p>Counter เป็นโค้ดตัวอย่างที่มีคน deploy และ verify ไว้มาก ถ้า bytecode ตรงกับ contract อื่นที่ verify ไว้แล้ว Etherscan อาจแสดงซอร์สโค้ดแบบ Similar Match ให้ตั้งแต่ก่อน verify การแสดงผลนี้มาจากการจับคู่โดยอัตโนมัติ ไม่ใช่การยืนยันจากผู้ deploy</p>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          ธุรกรรม deploy มีฟิลด์ <code>to</code> ว่าง และ data คือ creation bytecode constructor รันครั้งเดียวตอน deploy และไม่อยู่ใน runtime bytecode address ของ contract ที่สร้างด้วย CREATE คำนวณจาก address ของผู้ deploy กับ nonce ของผู้ deploy ไม่ได้ขึ้นกับเนื้อหาของโค้ด
+        </div>
+
+        <div class="callout warn">
+          <span class="h">deploy ใหม่ไม่ได้แก้ contract เดิม</span>
+          ถ้าแก้โค้ดใน Remix แล้วกด Deploy อีกครั้ง จะได้ contract ตัวใหม่ที่ address ใหม่และ count เริ่มจาก 0 contract ตัวเดิมยังอยู่ที่ address เดิมพร้อมค่าเดิม เพราะ code ของ contract ที่ deploy แล้วแก้ไม่ได้ (หัวข้อ 5.3) แอปที่ใช้งานอยู่ต้องเปลี่ยนไปเรียก address ใหม่เอง
+        </div>
+      </section>
+
+      <!-- ==================== 6.5 ==================== -->
+      <section id="s5">
+        <h2><span class="no">6.5</span>ต่อยอดด้วย require, owner และ event</h2>
+
+        <h3>Counter รุ่นแรกยังมีปัญหาอะไร</h3>
+        <p>การทดลองในหัวข้อ 6.4 แสดงปัญหาของ Counter รุ่นแรกสามข้อ ถ้าจะนำตัวนับไปใช้นับผู้ลงชื่อของชมรมจริง ต้องแก้ทั้งสามข้อ</p>
+        <ul>
+          <li><strong>error ไม่บอกสาเหตุ:</strong> เมื่อลดค่าต่ำกว่า 0 ผู้ใช้เห็นเพียง Panic code ไม่รู้ว่าทำผิดตรงไหน</li>
+          <li><strong>ไม่ได้แบ่งสิทธิ์:</strong> ถ้าเพิ่มฟังก์ชัน <code>reset()</code> ให้ตั้งค่ากลับเป็น 0 ใครก็เรียกได้ ผู้ไม่หวังดีจะล้างตัวเลขทิ้งเมื่อใดก็ได้</li>
+          <li><strong>แอปไม่รู้ว่าตัวเลขเปลี่ยน:</strong> หน้าเว็บของชมรมต้องการแสดงว่าใครลงชื่อเมื่อใด แต่ฟังก์ชันที่แก้สถานะคืนค่าให้แอปไม่ได้ (หัวข้อ 6.3) และถ้าเก็บประวัติทุกครั้งไว้ใน storage ค่า gas จะสูงมาก</li>
+        </ul>
+
+<pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+contract OwnedCounter {
+    uint256 public count;                        // slot 0
+    address public owner;                        // slot 1
+
+    event CountChanged(address indexed by, uint256 newCount);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "not owner");
+        _;
+    }
+
+    constructor() {
+        owner = msg.sender;                      // ผู้ deploy เป็น owner
+    }
+
+    function increment() external {
+        count += 1;
+        emit CountChanged(msg.sender, count);
+    }
+
+    function decrement() external {
+        require(count > 0, "count is already zero");
+        count -= 1;
+        emit CountChanged(msg.sender, count);
+    }
+
+    function reset() external onlyOwner {
+        count = 0;
+        emit CountChanged(msg.sender, 0);
+    }
+}</code></pre>
+
+        <h3>require: ตรวจเงื่อนไขก่อนแก้สถานะ</h3>
+        <p><code>require(เงื่อนไข, "ข้อความ")</code> ตรวจเงื่อนไขที่ต้องเป็นจริงก่อนทำงานต่อ ถ้าเงื่อนไขเป็นเท็จ EVM จะ revert ทันที ผลมีสี่ข้อ</p>
+        <ol>
+          <li>ทุกค่าที่ธุรกรรมนี้แก้ไว้กลับเป็นค่าเดิม</li>
+          <li>event ที่ emit ไปแล้วในธุรกรรมนี้หายไปด้วย</li>
+          <li>ผู้เรียกได้รับข้อความ error เช่น <code>"count is already zero"</code> ซึ่งอ่านเข้าใจได้กว่า <code>Panic(0x11)</code></li>
+          <li>ผู้เรียกจ่าย gas เฉพาะส่วนที่ใช้ไปจนถึงจุด revert ส่วนที่เหลือของ gas limit ได้คืน</li>
+        </ol>
+        <p>EVM ย้อนทุกอย่างกลับแทนที่จะหยุดค้างไว้กลางทาง เพราะสถานะที่ทำไปครึ่งเดียวอันตรายกว่าการไม่ทำเลย ตัวอย่างเช่น ฟังก์ชันโอนเงินที่หักยอดผู้ส่งแล้วแต่ยังไม่ได้เพิ่มยอดผู้รับ ถ้าหยุดตรงนั้น เงินจะหายไปจากระบบ ธุรกรรมจึงสำเร็จทั้งหมดหรือไม่เกิดผลเลย (atomic) ควรวาง <code>require</code> ไว้ต้นฟังก์ชัน เพื่อให้ธุรกรรมที่จะล้มเหลวหยุดก่อนใช้ gas กับคำสั่งที่แพง</p>
+        <p>Solidity ตั้งแต่ 0.8.4 มี custom error ให้ใช้แทนข้อความ เช่น <code>error NotOwner();</code> คู่กับ <code>if (msg.sender != owner) revert NotOwner();</code> วิธีนี้ประหยัด gas กว่าเพราะไม่ต้องเก็บข้อความยาวไว้ใน bytecode และไม่ต้องส่งข้อความกลับ</p>
+
+        <h3>owner: บันทึกผู้ deploy ไว้ตั้งแต่ constructor</h3>
+        <p>contract ต้องรู้ว่าใครมีสิทธิ์ใช้ <code>reset()</code> แต่ blockchain ไม่มีระบบบัญชีผู้ใช้และรหัสผ่านแบบเว็บทั่วไป สิ่งที่ contract รู้แน่นอนคือ <code>msg.sender</code> ซึ่งเครือข่ายยืนยันให้แล้วจากลายเซ็นของธุรกรรม (หัวข้อ 5.6) constructor จึงบันทึก <code>msg.sender</code> ตอน deploy ไว้เป็น <code>owner</code> ใน storage จากนั้น modifier <code>onlyOwner</code> จะเทียบผู้เรียกกับค่านี้ทุกครั้ง</p>
+        <p>constructor รันได้ครั้งเดียว และ contract ไม่มีฟังก์ชันอื่นที่แก้ <code>owner</code> จึงไม่มีใครแย่งสิทธิ์ไปได้ภายหลัง ข้อเสียที่ตามมาคือถ้า owner ทำ private key หาย ก็ไม่มีใครเรียก <code>reset()</code> ได้อีก contract จริงจึงมักเพิ่มฟังก์ชันโอนสิทธิ์ (transfer ownership) ไว้ด้วย</p>
+        <p>owner ในที่นี้ต่างจากผู้ดูแลฐานข้อมูลในโจทย์ตอนต้นบท owner ทำได้เฉพาะสิ่งที่โค้ดอนุญาต คือตั้ง count กลับเป็น 0 แต่ตั้งเป็นตัวเลขอื่นตามใจไม่ได้ ทุกครั้งที่เรียก <code>reset()</code> ยังมี event บันทึกไว้ให้สมาชิกทุกคนตรวจย้อนหลังได้ ส่วน <code>increment()</code> และ <code>decrement()</code> ยังเปิดให้ทุกบัญชีเรียกได้เหมือนเดิม เพราะตัวนับผู้ลงชื่อต้องให้ทุกคนลงชื่อได้</p>
+
+        <div class="callout warn">
+          <span class="h">ห้ามใช้ tx.origin ตรวจสิทธิ์</span>
+          <code>tx.origin</code> คือ EOA ที่เริ่มธุรกรรม ส่วน <code>msg.sender</code> คือผู้เรียกโดยตรง ถ้าตรวจสิทธิ์ด้วย <code>tx.origin == owner</code> ผู้โจมตีจะสร้าง contract ขึ้นมาหนึ่งตัว แล้วล่อให้ owner ส่งธุรกรรมมาเรียก contract นั้น เมื่อ contract ของผู้โจมตีเรียก <code>reset()</code> ต่อ ค่า <code>tx.origin</code> ยังเป็น owner การตรวจสิทธิ์จึงผ่าน แม้ผู้เรียกโดยตรงจะเป็น contract ของผู้โจมตี การตรวจด้วย <code>msg.sender</code> ไม่มีช่องโหว่นี้ เพราะ <code>msg.sender</code> จะเป็น address ของ contract หลอก
+        </div>
+
+        <h3>event: แจ้งแอปว่าตัวเลขเปลี่ยน</h3>
+        <p><code>emit CountChanged(msg.sender, count)</code> บันทึกข้อมูลลงใน log ของ receipt (หัวข้อ 5.6) แอปของชมรมติดตาม event นี้แล้วแสดงรายชื่อผู้ลงชื่อได้ ส่วนเวลาได้จาก timestamp ของบล็อกที่มี log นั้นอยู่ event ถูกกว่า storage เพราะ log ไม่ได้อยู่ใน world state โหนดจึงไม่ต้องเก็บไว้ให้ธุรกรรมถัดไปอ่าน ข้อแลกเปลี่ยน (trade-off) คือ contract อ่าน event ย้อนหลังไม่ได้ ข้อมูลที่ contract ต้องใช้ตัดสินใจจึงยังต้องอยู่ใน storage</p>
+        <p>คำว่า <code>indexed</code> หน้า <code>by</code> ทำให้แอปกรองเฉพาะ event ของ address หนึ่งได้ เช่น ดูว่าสมาชิกคนหนึ่งกดเพิ่มไปกี่ครั้ง event ยังแก้ปัญหาในหัวข้อ 6.3 ที่ธุรกรรมคืนค่าให้แอปไม่ได้ เพราะ <code>newCount</code> อยู่ใน receipt ที่แอปอ่านได้หลังธุรกรรมเข้าบล็อก</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>กลไก</th><th>ปัญหาที่แก้</th><th>ถ้าไม่มี</th></tr>
+            <tr><td><code>require</code></td><td>หยุดก่อนแก้สถานะเมื่อข้อมูลไม่ถูกต้อง และบอกเหตุผล</td><td>ผู้ใช้เห็น error ที่ไม่บอกสาเหตุ หรือ contract เก็บค่าที่ผิดเงื่อนไขไว้</td></tr>
+            <tr><td><code>owner</code> + <code>onlyOwner</code></td><td>จำกัดฟังก์ชันอันตรายให้ผู้มีสิทธิ์เท่านั้น</td><td>ใครก็เรียก <code>reset()</code> และล้างข้อมูลได้</td></tr>
+            <tr><td><code>event</code></td><td>แจ้งแอปนอก chain ว่าเกิดอะไรขึ้น ในราคาถูกกว่า storage</td><td>แอปต้องเรียก <code>count()</code> ซ้ำเรื่อย ๆ เพื่อดูว่าค่าเปลี่ยนหรือไม่ และไม่รู้ว่าใครเป็นผู้เปลี่ยน</td></tr>
+          </table>
+        </div>
+
+        <h3>ทดลอง: จำลอง OwnedCounter</h3>
+        <p>ตัวจำลองนี้ทำงานตามกติกาของ OwnedCounter ข้างบน บัญชี A เป็นผู้ deploy จึงเป็น owner ลองเรียกแต่ละฟังก์ชันจากทั้งสองบัญชี แล้วสังเกตว่าธุรกรรม revert เมื่อใด event เกิดขึ้นเมื่อใด และการเขียน count ครั้งแรกแพงกว่าครั้งต่อไปเท่าใด ค่า gas ในตัวจำลองคำนวณจากราคาของ opcode หลักเท่านั้น ค่าใน Remix จะสูงกว่าเล็กน้อย</p>
+        <div class="hash-demo" id="ctrsim">
+          <label for="simAcc">เรียกจากบัญชี (msg.sender)</label>
+          <select id="simAcc">
+            <option value="A">บัญชี A (ผู้ deploy จึงเป็น owner)</option>
+            <option value="B">บัญชี B</option>
+          </select>
+          <div class="row">
+            <button type="button" class="btn" data-fn="increment">increment()</button>
+            <button type="button" class="btn" data-fn="decrement">decrement()</button>
+            <button type="button" class="btn" data-fn="reset">reset()</button>
+            <button type="button" class="btn primary" data-fn="count">count()</button>
+          </div>
+          <div class="stat" id="simState"></div>
+          <div class="diff" id="simResult"></div>
+          <label>event log (เรียงจากล่าสุด)</label>
+          <output id="simLog"></output>
+        </div>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li><strong>โจทย์:</strong> ตัวนับบนเซิร์ฟเวอร์กลางต้องเชื่อใจผู้ดูแล Counter บน Ethereum เก็บตัวเลขไว้ใน world state ทุกการแก้ค่าต้องเป็นธุรกรรมที่ลงลายเซ็นและทุกโหนดตรวจซ้ำ</li>
+          <li><strong>6.1:</strong> <code>uint256 public count</code> เป็น state variable ใน storage ค่าเริ่มต้น 0 และได้ getter <code>count()</code> อัตโนมัติ Solidity 0.8 revert เมื่อลบจนติดลบ contract ไม่มีลูปรอคำสั่ง รันเมื่อมีผู้เรียกเท่านั้น</li>
+          <li><strong>6.2:</strong> storage อยู่ถาวรและแพงที่สุด memory ใช้ชั่วคราวระหว่างการเรียก calldata เป็นข้อมูลที่ส่งมาและอ่านได้อย่างเดียว ตัวแปรชนิด reference ต้องระบุ data location และตัวแปร <code>storage</code> เป็นตัวอ้างอิง ส่วนตัวแปร <code>memory</code> เป็นสำเนา</li>
+          <li><strong>6.3:</strong> การแก้สถานะต้องให้ทุกโหนดตกลงร่วมกัน จึงต้องส่งธุรกรรม เข้าบล็อก และเสีย gas การเรียก <code>view</code>/<code>pure</code> จากภายนอกใช้ <code>eth_call</code> โหนดเดียวตอบได้และไม่เสีย gas แต่ถ้าเรียกภายในธุรกรรมก็เสีย gas</li>
+          <li><strong>6.4:</strong> deploy คือธุรกรรมที่ <code>to</code> ว่างและ data เป็น creation bytecode constructor รันครั้งเดียว address ของ contract คำนวณจากผู้ deploy กับ nonce ทดสอบใน Remix VM ก่อน แล้วจึงขึ้น Sepolia และ verify ซอร์สโค้ด</li>
+          <li><strong>6.5:</strong> <code>require</code> revert ทั้งธุรกรรมเมื่อเงื่อนไขไม่ผ่าน <code>owner</code> บันทึกจาก <code>msg.sender</code> ใน constructor และตรวจด้วย modifier ส่วน <code>event</code> แจ้งแอปว่าใครเปลี่ยนค่าเป็นเท่าใดในราคาถูกกว่า storage แต่ contract อ่าน event ย้อนหลังไม่ได้</li>
+        </ul>
+
+        <h3>คำศัพท์ที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำ</th><th>ความหมาย</th></tr>
+            <tr><td>state variable</td><td>ตัวแปรที่ประกาศนอกฟังก์ชัน อยู่ใน storage ของ contract</td></tr>
+            <tr><td>storage / memory / calldata</td><td>ที่เก็บถาวร / ที่ทดชั่วคราว / ข้อมูลที่ส่งมากับการเรียกซึ่งอ่านได้อย่างเดียว</td></tr>
+            <tr><td><code>view</code> / <code>pure</code></td><td>อ่านสถานะได้แต่แก้ไม่ได้ / ไม่อ่านและไม่แก้สถานะ</td></tr>
+            <tr><td><code>eth_call</code></td><td>คำสั่ง JSON-RPC ที่ให้โหนดรันฟังก์ชันในเครื่องแล้วคืนผล โดยไม่สร้างธุรกรรม</td></tr>
+            <tr><td>creation bytecode / runtime bytecode</td><td>โค้ดที่ส่งไปตอน deploy ซึ่งรวม constructor / โค้ดที่เก็บไว้เป็น code ของ contract</td></tr>
+            <tr><td>revert</td><td>ย้อนทุกค่าที่ธุรกรรมแก้ไว้ ผู้เรียกยังจ่าย gas ส่วนที่ใช้ไปแล้ว</td></tr>
+            <tr><td><code>msg.sender</code> / <code>tx.origin</code></td><td>ผู้เรียกโดยตรง / EOA ที่เริ่มธุรกรรม ใช้ <code>msg.sender</code> ตรวจสิทธิ์</td></tr>
+            <tr><td><code>event</code>, <code>emit</code>, <code>indexed</code></td><td>ประกาศรูปแบบของ log, บันทึก log, ทำให้ใช้ parameter นั้นกรองค้นหาได้</td></tr>
+          </table>
+        </div>
+
+        <h3>ตัวเลขที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>รายการ</th><th>ค่า</th></tr>
+            <tr><td>ขนาดของ storage slot</td><td>32 ไบต์ (256 บิต)</td></tr>
+            <tr><td>gas พื้นฐานของทุกธุรกรรม</td><td>21,000</td></tr>
+            <tr><td>อ่าน storage (SLOAD)</td><td>2,100 ครั้งแรกในธุรกรรม (cold) / 100 ครั้งต่อไป (warm)</td></tr>
+            <tr><td>เขียน storage จาก 0 เป็นค่าอื่น</td><td>ราว 20,000</td></tr>
+            <tr><td>แก้ค่า storage ที่ไม่ใช่ 0</td><td>ราว 2,900 (รวมค่าอ่านครั้งแรกเป็นราว 5,000)</td></tr>
+            <tr><td><code>increment()</code> ของ Counter ครั้งแรก / ครั้งต่อไป</td><td>ราว 43,000 / 26,000 gas</td></tr>
+            <tr><td>function selector ของ <code>increment()</code></td><td><code>0xd09de08a</code></td></tr>
+            <tr><td>Panic code เมื่อเลขล้นหรือติดลบ</td><td><code>0x11</code></td></tr>
+            <tr><td>สีปุ่มใน Remix</td><td>ฟ้า = view/pure · ส้ม = แก้สถานะ · แดง = payable</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. หลัง deploy Counter แล้วยังไม่มีใครเรียกฟังก์ชันใด ค่าของ <code>count</code> เป็นเท่าใด และทำไมไม่ต้องเขียนค่าเริ่มต้นไว้ในโค้ด</p>
+          <details><summary>ดูเฉลย</summary><div><strong>0</strong> storage slot ที่ไม่เคยเขียนจะอ่านได้ค่า 0 เสมอ state variable ชนิด <code>uint256</code> จึงมีค่าเริ่มต้นเป็น 0 โดยไม่ต้องเขียนอะไรลง storage ตอน deploy และไม่ต้องเสีย gas สำหรับค่านี้</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. ฟังก์ชัน <code>function setNote(string ___ note) external</code> นำ <code>note</code> ไปเก็บลง state variable ทันทีโดยไม่แก้ค่าระหว่างทาง ควรเติม data location ใดจึงประหยัด gas ที่สุด</p>
+          <ol><li>ก. <code>storage</code></li><li>ข. <code>memory</code></li><li>ค. <code>calldata</code></li><li>ง. ไม่ต้องระบุ</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> <code>calldata</code> อ่านจากข้อมูลที่ส่งมาได้โดยตรง ถ้าใช้ <code>memory</code> EVM ต้องคัดลอกข้อความลง memory ก่อนแล้วจึงคัดลอกลง storage อีกครั้ง parameter ของฟังก์ชัน <code>external</code> ระบุเป็น <code>storage</code> ไม่ได้ เพราะผู้เรียกจากภายนอกส่งมาได้เฉพาะข้อมูล ไม่ได้ส่งตำแหน่งใน storage ของ contract มา ส่วน <code>string</code> เป็นชนิด reference จึงต้องระบุ data location</div></details>
+        </div>
+
+        <div class="q">
+          <p>3. จากโค้ดด้านล่าง ถ้า <code>players[0].score</code> เป็น 50 แล้วเรียก <code>addScoreWrong(0)</code> สำเร็จ ค่า <code>players[0].score</code> จะเป็นเท่าใด เพราะอะไร</p>
+<pre><code>function addScoreWrong(uint256 i) external {
+    Player memory p = players[i];
+    p.score += 10;
+}</code></pre>
+          <details><summary>ดูเฉลย</summary><div><strong>ยังเป็น 50</strong> <code>Player memory p</code> คือสำเนาที่คัดลอกจาก storage มาไว้ใน memory การบวก 10 แก้เฉพาะสำเนา เมื่อจบการเรียกสำเนาก็หายไป ถ้าต้องการแก้ค่าจริงต้องประกาศเป็น <code>Player storage p</code> ซึ่งเป็นตัวอ้างอิงไปยังข้อมูลใน storage</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. ทำไมกดปุ่ม <code>count</code> ใน Remix ที่เชื่อม MetaMask แล้ว MetaMask ไม่ขึ้นหน้าต่างให้ยืนยัน แต่กด <code>increment</code> แล้วขึ้น</p>
+          <details><summary>ดูเฉลย</summary><div><code>count()</code> เป็น getter แบบ <code>view</code> Remix จึงส่ง <code>eth_call</code> ให้โหนดรันในเครื่องแล้วตอบกลับ ไม่ต้องสร้างธุรกรรม ไม่ต้องลงลายเซ็น และไม่เสีย gas ส่วน <code>increment()</code> แก้ storage และทุกโหนดต้องได้ค่าใหม่ตรงกัน ผู้เรียกจึงต้องส่งธุรกรรมที่ลงลายเซ็นด้วย private key และจ่าย gas MetaMask จึงขอให้ผู้ใช้ยืนยันก่อนส่ง</div></details>
+        </div>
+
+        <div class="q">
+          <p>5. ข้อใดถูกต้องเกี่ยวกับฟังก์ชัน <code>view</code></p>
+          <ol><li>ก. ไม่เสีย gas ไม่ว่าจะเรียกจากที่ใด</li><li>ข. เขียน state variable ได้ถ้าไม่ได้ส่ง ETH</li><li>ค. ถ้าฟังก์ชันที่แก้สถานะเรียกใช้ภายในธุรกรรม gas ที่ใช้จะนับรวมในธุรกรรมนั้น</li><li>ง. อ่าน <code>msg.sender</code> ไม่ได้</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> ฟังก์ชัน <code>view</code> ไม่เสีย gas เฉพาะเมื่อเรียกจากภายนอกด้วย <code>eth_call</code> ข้อ ก จึงผิด ข้อ ข ผิดเพราะ <code>view</code> เขียน state ไม่ได้เลย ข้อ ง ผิดเพราะ <code>view</code> อ่าน <code>msg.sender</code> ได้ ฟังก์ชันที่อ่านไม่ได้คือ <code>pure</code></div></details>
+        </div>
+
+        <div class="q">
+          <p>6. นักศึกษาเขียน <code>function increment() public returns (uint256)</code> ให้คืนค่า count ใหม่ แต่หน้าเว็บที่ส่งธุรกรรมผ่าน MetaMask ไม่เคยได้ตัวเลขนี้กลับมา เกิดจากอะไร และควรแก้อย่างไร</p>
+          <details><summary>ดูเฉลย</summary><div>ตอนที่ส่งธุรกรรม ฟังก์ชันยังไม่ได้รัน ฟังก์ชันจะรันเมื่อธุรกรรมเข้าบล็อก สิ่งที่หน้าเว็บได้กลับมาคือ transaction hash และ receipt ซึ่งไม่เก็บค่าที่ฟังก์ชันคืน วิธีแก้คือ emit event เช่น <code>CountChanged(msg.sender, count)</code> แล้วให้หน้าเว็บอ่านจาก log ใน receipt หรือรอธุรกรรมเข้าบล็อกแล้วเรียก <code>count()</code> อีกครั้ง</div></details>
+        </div>
+
+        <div class="q">
+          <p>7. ใน OwnedCounter บัญชีที่ไม่ใช่ owner เรียก <code>reset()</code> ขณะที่ count เป็น 7 จะเกิดอะไรขึ้นกับ count, event และค่า gas</p>
+          <details><summary>ดูเฉลย</summary><div>modifier <code>onlyOwner</code> ตรวจ <code>require(msg.sender == owner)</code> ไม่ผ่าน ธุรกรรมจึง revert ด้วยข้อความ <code>"not owner"</code> count ยังเป็น 7 ไม่มี event เกิดขึ้น ผู้เรียกยังต้องจ่าย gas ส่วนที่ใช้ไปจนถึงจุด revert ได้แก่ค่าพื้นฐาน 21,000 และค่าอ่าน <code>owner</code> จาก storage ส่วนที่เหลือของ gas limit ได้คืน</div></details>
+        </div>
+
+        <div class="q">
+          <p>8. address ของ contract ที่ deploy จาก EOA ด้วยวิธีปกติ (CREATE) คำนวณจากข้อมูลใด</p>
+          <ol><li>ก. ค่าแฮชของซอร์สโค้ด Solidity</li><li>ข. address ของผู้ deploy และ nonce ของผู้ deploy</li><li>ค. หมายเลขบล็อกที่ธุรกรรมเข้าไป</li><li>ง. public key ของ contract</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> address คือ 20 ไบต์ท้ายของ <code>keccak256(rlp(address ผู้ deploy, nonce))</code> ผู้ deploy จึงรู้ address ล่วงหน้าได้ และ deploy โค้ดเดิมซ้ำจะได้ address ใหม่ทุกครั้งเพราะ nonce เพิ่มขึ้น contract ไม่มี private key จึงไม่มี public key (ข้อ ง)</div></details>
+        </div>
+
+        <div class="q">
+          <p>9. ทำไม <code>increment()</code> ครั้งแรกหลัง deploy ใช้ gas ราว 43,000 แต่ครั้งที่สองใช้เพียงราว 26,000</p>
+          <details><summary>ดูเฉลย</summary><div>ครั้งแรกเป็นการเขียน slot ที่เป็น 0 ให้เป็นค่าอื่น ซึ่งเท่ากับเพิ่มข้อมูลใหม่ให้ทุกโหนดต้องเก็บ จึงคิดราว 20,000 gas ครั้งที่สอง slot มีค่าอยู่แล้ว เป็นเพียงการแก้ค่าเดิม จึงคิดราว 2,900 gas ทั้งสองครั้งยังมีค่าพื้นฐาน 21,000 และค่าอ่าน storage 2,100 เท่ากัน</div></details>
+        </div>
+
+        <div class="q">
+          <p>10. contract หนึ่งตรวจสิทธิ์ด้วย <code>require(tx.origin == owner)</code> ผู้โจมตีใช้ช่องโหว่นี้ได้อย่างไร</p>
+          <details><summary>ดูเฉลย</summary><div>ผู้โจมตีสร้าง contract หลอก แล้วล่อให้ owner ส่งธุรกรรมมาเรียก เช่น อ้างว่าเป็นการรับรางวัล contract หลอกจะเรียกฟังก์ชันที่ต้องใช้สิทธิ์ของ contract เป้าหมายต่อ ในการเรียกนั้น <code>tx.origin</code> ยังเป็น owner เพราะ owner เป็นผู้เริ่มธุรกรรม การตรวจจึงผ่าน ถ้าตรวจด้วย <code>msg.sender</code> ค่าจะเป็น address ของ contract หลอก และการตรวจจะไม่ผ่าน</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+  <script>
+    // จำลอง OwnedCounter: ค่า gas คิดจากราคา opcode หลักเท่านั้น (ค่าประมาณ)
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const OWNER = "A";
+      const NAME = { A: "บัญชี A", B: "บัญชี B" };
+      const G = { base: 21000, sloadCold: 2100, set: 20000, reset: 2900, noop: 100, log: 1381, refund: 4800 };
+      const fmt = (n) => n.toLocaleString("en-US");
+      let count = 0;
+      const logs = [];
+
+      function gasLine(parts) {
+        const total = parts.reduce((s, p) => s + p[0], 0);
+        const text = parts.map((p, i) => (i === 0 ? "" : p[0] < 0 ? " − " : " + ") + fmt(Math.abs(p[0])) + " " + p[1]).join("");
+        return `${text} ≈ <strong>${fmt(total)} gas</strong>`;
+      }
+
+      function renderState() {
+        $("simState").innerHTML =
+          `storage slot 0 (count) = <strong>${count}</strong> · slot 1 (owner) = ${NAME[OWNER]}`;
+        $("simLog").innerHTML = logs.length
+          ? logs.slice(-6).reverse().map((l) => l).join("<br>")
+          : "ยังไม่มี event";
+      }
+
+      function revert(msg, parts) {
+        $("simResult").innerHTML =
+          `<strong>revert:</strong> "${msg}" · count ไม่เปลี่ยน · ไม่มี event เกิดขึ้น<br>` +
+          `ยังต้องจ่าย gas ส่วนที่ใช้ไปแล้ว: ${gasLine(parts)}`;
+      }
+
+      function success(fnName, sender, parts) {
+        logs.push(`#${logs.length + 1} CountChanged(by: ${NAME[sender]}, newCount: ${count})`);
+        $("simResult").innerHTML =
+          `<strong>ธุรกรรม ${fnName} สำเร็จ</strong> · emit CountChanged<br>${gasLine(parts)}`;
+      }
+
+      function call(fn) {
+        const sender = $("simAcc").value;
+        const base = [G.base, "ค่าพื้นฐาน"];
+        if (fn === "count") {
+          $("simResult").innerHTML =
+            `<strong>call (eth_call):</strong> count() คืนค่า ${count} · ไม่ใช่ธุรกรรม ไม่มีลายเซ็น ไม่เสีย gas`;
+        } else if (fn === "increment") {
+          const write = count === 0 ? [G.set, "เขียน slot ที่เป็น 0"] : [G.reset, "แก้ค่าที่ไม่ใช่ 0"];
+          count += 1;
+          success("increment()", sender, [base, [G.sloadCold, "อ่าน count"], write, [G.log, "event"]]);
+        } else if (fn === "decrement") {
+          if (count === 0) {
+            revert("count is already zero", [base, [G.sloadCold, "อ่าน count"]]);
+          } else {
+            const parts = [base, [G.sloadCold, "อ่าน count"], [G.reset, "แก้ค่าที่ไม่ใช่ 0"], [G.log, "event"]];
+            count -= 1;
+            if (count === 0) parts.push([-G.refund, "คืนเมื่อล้าง slot เป็น 0"]);
+            success("decrement()", sender, parts);
+          }
+        } else if (fn === "reset") {
+          if (sender !== OWNER) {
+            revert("not owner", [base, [G.sloadCold, "อ่าน owner"]]);
+          } else {
+            const parts = [base, [G.sloadCold, "อ่าน owner"], [G.sloadCold, "เข้าถึง slot ของ count"]];
+            if (count === 0) {
+              parts.push([G.noop, "เขียนค่าเดิม"]);
+            } else {
+              parts.push([G.reset, "แก้ค่าที่ไม่ใช่ 0"]);
+            }
+            parts.push([G.log, "event"]);
+            if (count !== 0) parts.push([-G.refund, "คืนเมื่อล้าง slot เป็น 0"]);
+            count = 0;
+            success("reset()", sender, parts);
+          }
+        }
+        renderState();
+      }
+
+      document.querySelectorAll("#ctrsim [data-fn]").forEach((b) =>
+        b.addEventListener("click", () => call(b.dataset.fn)));
+      $("simResult").textContent = "เลือกบัญชี แล้วกดปุ่มเพื่อเรียกฟังก์ชัน";
+      renderState();
+    })();
+  </script>
+</body>
+</html>

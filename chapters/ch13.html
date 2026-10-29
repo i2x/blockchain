@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 13 Oracle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p4" data-chapter="ch13">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 4 แอปพลิเคชันและระบบนิเวศ</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 13 · ข้อมูลภายนอกเชน</div>
+      <h1>Oracle</h1>
+      <p class="lead">Smart contract ตรวจได้ทุกอย่างที่อยู่บนเชน เช่น ยอดเงิน ลายเซ็น และสถานะของ contract อื่น แต่แอปจำนวนมากต้องรู้เรื่องนอกเชนด้วย เช่น ราคา ETH เป็นดอลลาร์ ผลการแข่งขัน หรือเที่ยวบินล่าช้าหรือไม่ บทนี้อธิบายว่าทำไม contract จึงดึงข้อมูลเหล่านี้เองไม่ได้ Oracle นำข้อมูลเข้ามาด้วยรูปแบบใด ทำไมต้องกระจายศูนย์ ความเสี่ยงที่เกิดขึ้นจริง และตัวอย่างการใช้งาน ได้แก่ price feed ประกันภัย และการสุ่มเลขด้วย VRF</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: contract ที่มองไม่เห็นโลกภายนอก</a></li>
+        <li><a href="#s1">Oracle problem: เหตุที่ smart contract ดึงข้อมูลภายนอกเองไม่ได้</a></li>
+        <li><a href="#s2">รูปแบบการทำงาน: Inbound / Outbound และ Push / Pull</a></li>
+        <li><a href="#s3">Oracle แบบรวมศูนย์กับแบบกระจายศูนย์ (Chainlink)</a></li>
+        <li><a href="#s4">ความเสี่ยง: การปั่นราคา และจุดล้มเหลวเดียว (Single point of failure)</a></li>
+        <li><a href="#s5">ตัวอย่างการใช้งาน: Price feed ใน DeFi, ประกันภัย และการสุ่มเลขด้วย VRF</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: contract ที่มองไม่เห็นโลกภายนอก</h2>
+
+        <p>สมมติว่าเราเขียน contract ให้กู้ยืม (lending) ผู้กู้ฝาก ETH เป็นหลักประกัน (collateral) แล้วกู้ stablecoin ที่มีมูลค่าเท่ากับดอลลาร์ออกไป กติกาคือ ถ้ามูลค่าหลักประกันลดลงจนเกือบเท่ายอดหนี้ ใครก็ได้มาชำระหนี้แทนแล้วรับหลักประกันไปในราคาลด เพื่อให้ผู้ให้กู้ไม่ขาดทุน กติกานี้เขียนเป็นโค้ดได้ทุกบรรทัด ยกเว้นตัวเลขเดียว คือ <strong>ตอนนี้ 1 ETH มีค่ากี่ดอลลาร์</strong></p>
+
+        <p>ราคานี้ไม่ได้อยู่บน Ethereum ราคาเกิดจากการซื้อขายในตลาดจำนวนมากทั่วโลก ทั้งตลาดแบบรวมศูนย์ (centralized exchange) และตลาดบนเชนอื่น ๆ โจทย์เดียวกันเกิดกับแอปอีกหลายแบบ</p>
+        <ul>
+          <li><strong>ประกันเที่ยวบินล่าช้า:</strong> ต้องรู้ว่าเที่ยวบินลงจอดช้ากว่ากำหนดกี่ชั่วโมง</li>
+          <li><strong>ประกันพืชผล:</strong> ต้องรู้ปริมาณน้ำฝนของพื้นที่หนึ่งในฤดูกาลนี้</li>
+          <li><strong>เกมและการแจก NFT:</strong> ต้องการตัวเลขสุ่มที่ไม่มีใครทำนายหรือเลือกได้ (บทที่ 12)</li>
+          <li><strong>สะพานข้ามเชน (cross-chain bridge):</strong> ต้องรู้ว่ามีธุรกรรมเกิดขึ้นบน blockchain อีกสายหนึ่ง</li>
+        </ul>
+
+        <p>ส่วนประกอบที่นำข้อมูลนอกเชนเข้ามาให้ contract ใช้ เรียกว่า <strong>Oracle</strong> ชื่อนี้มาจากผู้ทำนายในตำนานกรีกที่ผู้คนไปถามคำตอบ คำตอบของ oracle มีผลกับเงินใน contract โดยตรง ใครคุมคำตอบได้ก็คุมเงินได้ บทนี้จึงไล่ตอบคำถามต่อไปนี้</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำถาม</th><th>คำตอบโดยย่อ</th><th>หัวข้อ</th></tr>
+            <tr><td>ทำไม contract จึงเรียก API ราคาเองไม่ได้</td><td>ทุกโหนดต้องรันได้ผลเดียวกัน (deterministic) ข้อมูลภายนอกจึงต้องเข้ามาเป็นธุรกรรม</td><td>13.1</td></tr>
+            <tr><td>ข้อมูลไหลเข้าออกแบบใด และใครเป็นผู้เริ่ม</td><td>Inbound / Outbound และ Push / Pull</td><td>13.2</td></tr>
+            <tr><td>ถ้าผู้ส่งข้อมูลโกง จะป้องกันอย่างไร</td><td>ใช้หลายโหนดและหลายแหล่งข้อมูล แล้วรวมด้วยค่ามัธยฐาน (median)</td><td>13.3</td></tr>
+            <tr><td>ระบบที่มี oracle แล้วยังพังได้อย่างไร</td><td>การปั่นราคาด้วย flash loan และจุดล้มเหลวเดียว</td><td>13.4</td></tr>
+            <tr><td>ใช้ oracle ทำอะไรได้บ้าง</td><td>Price feed, ประกันภัยแบบ parametric และ VRF</td><td>13.5</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 13.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">13.1</span>Oracle problem: เหตุที่ smart contract ดึงข้อมูลภายนอกเองไม่ได้</h2>
+
+        <h3>ทุกโหนดต้องรันซ้ำแล้วได้ผลเดียวกัน</h3>
+        <p>หัวข้อ 5.3 อธิบายว่า Ethereum ไม่ได้เชื่อผลที่ผู้สร้างบล็อกประกาศ ทุกโหนดรันทุกธุรกรรมเองบน EVM แล้วเทียบว่าได้ state root ตรงกับที่อยู่ใน header หรือไม่ การตรวจนี้ใช้ได้ก็ต่อเมื่อการรันเป็นแบบ <strong>deterministic</strong> คือ ข้อมูลตั้งต้นชุดเดียวกันต้องให้ผลเดียวกันเสมอ ไม่ว่าจะรันที่เครื่องใดหรือเมื่อใด</p>
+
+        <p>ลองนึกว่า EVM มีคำสั่งเรียก API ได้ แล้ว contract ขอราคา ETH จากเว็บไซต์หนึ่ง จะเกิดปัญหาสามข้อ</p>
+        <ul>
+          <li><strong>คนละเวลา คนละคำตอบ:</strong> โหนดแต่ละเครื่องได้รับบล็อกในเวลาต่างกันเล็กน้อย ราคาในตลาดเปลี่ยนทุกวินาที โหนดแต่ละเครื่องจึงได้ราคาต่างกัน และได้ state root ต่างกัน</li>
+          <li><strong>โหนดที่เข้ามาทีหลังต้องรันซ้ำ:</strong> โหนดใหม่ที่ sync ย้อนหลังต้องรันธุรกรรมเก่าทุกรายการ ถ้าธุรกรรมของปีที่แล้วเรียก API อีกครั้ง โหนดนั้นจะได้ราคาของวันนี้ หรือพบว่าเว็บไซต์ปิดไปแล้ว</li>
+          <li><strong>เจ้าของ API มีอำนาจเหนือเครือข่าย:</strong> เจ้าของเว็บไซต์ตอบแต่ละโหนดไม่เหมือนกันได้ และทำให้เครือข่ายแตกเป็นหลายสายได้</li>
+        </ul>
+        <p>Ethereum จึงไม่มี opcode สำหรับเรียกเครือข่ายภายนอกเลย contract อ่านได้เฉพาะ state บนเชนและข้อมูลที่มากับธุรกรรม ข้อมูลภายนอกจึงต้องมีผู้ส่งเข้ามา <strong>เป็นธุรกรรม</strong> เมื่อค่าเข้าไปอยู่ในบล็อกแล้ว ทุกโหนดในทุกเวลาก็อ่านได้ค่าเดียวกัน</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 290" role="img" aria-label="ฝั่งซ้าย ถ้า contract เรียก API เอง โหนด A ได้ราคา 2,001.5 โหนด B ได้ 2,002.1 โหนด C ที่ sync ในปีถัดไปพบว่า API ปิดแล้ว ทำให้ state root ไม่ตรงกัน ฝั่งขวา oracle ส่งราคา 2,001.5 เข้ามาเป็นธุรกรรมในบล็อก N ทุกโหนดอ่านค่าเดียวกันจากบล็อกและได้ state root ตรงกัน">
+            <defs>
+              <marker id="arrDet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <!-- ซ้าย -->
+              <text x="185" y="22" text-anchor="middle" font-weight="700" fill="#c2412d">ถ้า contract เรียก API เอง</text>
+              <rect x="115" y="40" width="140" height="36" rx="7" fill="#f0ebe1"/>
+              <text x="185" y="63" text-anchor="middle">API ราคา ETH</text>
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="160" y1="78" x2="74" y2="146" marker-end="url(#arrDet)"/>
+                <line x1="185" y1="78" x2="185" y2="146" marker-end="url(#arrDet)"/>
+                <line x1="210" y1="78" x2="296" y2="146" marker-end="url(#arrDet)"/>
+              </g>
+              <g font-size="12">
+                <rect x="20" y="150" width="106" height="64" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="73" y="170" text-anchor="middle" font-weight="700">โหนด A</text>
+                <text x="73" y="187" text-anchor="middle" font-size="11" fill="#6b655c">10:00:01</text>
+                <text x="73" y="204" text-anchor="middle">ได้ 2,001.5</text>
+                <rect x="132" y="150" width="106" height="64" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="185" y="170" text-anchor="middle" font-weight="700">โหนด B</text>
+                <text x="185" y="187" text-anchor="middle" font-size="11" fill="#6b655c">10:00:04</text>
+                <text x="185" y="204" text-anchor="middle">ได้ 2,002.1</text>
+                <rect x="244" y="150" width="106" height="64" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="297" y="170" text-anchor="middle" font-weight="700">โหนด C</text>
+                <text x="297" y="187" text-anchor="middle" font-size="11" fill="#6b655c">sync ปีถัดไป</text>
+                <text x="297" y="204" text-anchor="middle">API ปิดแล้ว</text>
+                <text x="73" y="238" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#c2412d">root 0x7a…</text>
+                <text x="185" y="238" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#c2412d">root 0x3c…</text>
+                <text x="297" y="238" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#c2412d">รันไม่จบ</text>
+              </g>
+              <text x="185" y="272" text-anchor="middle" font-size="12" font-weight="700" fill="#c2412d">state root ไม่ตรงกัน เครือข่ายตกลงกันไม่ได้</text>
+
+              <line x1="380" y1="14" x2="380" y2="280" stroke="#e4ddd0" stroke-width="1.5"/>
+
+              <!-- ขวา -->
+              <text x="572" y="22" text-anchor="middle" font-weight="700" fill="#1f6e5a">Oracle ส่งค่าเข้ามาเป็นธุรกรรม</text>
+              <rect x="400" y="40" width="140" height="36" rx="7" fill="#f0ebe1"/>
+              <text x="470" y="63" text-anchor="middle">Oracle (นอกเชน)</text>
+              <rect x="590" y="40" width="150" height="36" rx="7" fill="#fff" stroke="currentColor"/>
+              <text x="665" y="63" text-anchor="middle" font-size="12">tx: price = 2,001.5</text>
+              <line x1="542" y1="58" x2="586" y2="58" stroke="#6b655c" stroke-width="1.2" marker-end="url(#arrDet)"/>
+              <rect x="470" y="94" width="204" height="32" rx="7" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="572" y="115" text-anchor="middle" font-size="12">บล็อก N บันทึกค่า 2,001.5</text>
+              <line x1="650" y1="78" x2="636" y2="92" stroke="#6b655c" stroke-width="1.2" marker-end="url(#arrDet)"/>
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="545" y1="128" x2="458" y2="146" marker-end="url(#arrDet)"/>
+                <line x1="572" y1="128" x2="572" y2="146" marker-end="url(#arrDet)"/>
+                <line x1="600" y1="128" x2="684" y2="146" marker-end="url(#arrDet)"/>
+              </g>
+              <g font-size="12">
+                <rect x="404" y="150" width="106" height="64" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="457" y="170" text-anchor="middle" font-weight="700">โหนด A</text>
+                <text x="457" y="187" text-anchor="middle" font-size="11" fill="#6b655c">อ่านจากบล็อก</text>
+                <text x="457" y="204" text-anchor="middle">ได้ 2,001.5</text>
+                <rect x="519" y="150" width="106" height="64" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="572" y="170" text-anchor="middle" font-weight="700">โหนด B</text>
+                <text x="572" y="187" text-anchor="middle" font-size="11" fill="#6b655c">อ่านจากบล็อก</text>
+                <text x="572" y="204" text-anchor="middle">ได้ 2,001.5</text>
+                <rect x="634" y="150" width="106" height="64" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="687" y="170" text-anchor="middle" font-weight="700">โหนด C</text>
+                <text x="687" y="187" text-anchor="middle" font-size="11" fill="#6b655c">sync ปีถัดไป</text>
+                <text x="687" y="204" text-anchor="middle">ได้ 2,001.5</text>
+                <text x="457" y="238" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#1f6e5a">root 0x7a…</text>
+                <text x="572" y="238" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#1f6e5a">root 0x7a…</text>
+                <text x="687" y="238" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#1f6e5a">root 0x7a…</text>
+              </g>
+              <text x="572" y="272" text-anchor="middle" font-size="12" font-weight="700" fill="#1f6e5a">ทุกโหนดได้ค่าเดียวกัน ไม่ว่าจะรันเมื่อใด</text>
+            </g>
+          </svg>
+          <figcaption>ซ้าย: ถ้า contract เรียก API เอง แต่ละโหนดได้คำตอบต่างกันตามเวลาที่รัน ขวา: oracle ส่งค่าเข้ามาเป็นธุรกรรม ค่าจึงอยู่ในบล็อก และทุกโหนดรันซ้ำแล้วได้ผลเดียวกัน</figcaption>
+        </figure>
+
+        <h3>ปัญหาที่แท้จริงคือความไว้ใจ</h3>
+        <p>การส่งข้อมูลเข้ามาเป็นธุรกรรมแก้ได้แค่เรื่อง deterministic ยังเหลือคำถามที่ยากกว่า คือ <strong>ค่าที่ส่งเข้ามาตรงกับความจริงหรือไม่</strong> Blockchain ตรวจได้ว่าธุรกรรมนี้มีลายเซ็นของ address ใด แต่ตรวจไม่ได้ว่าราคา ETH ตอนนี้เป็น 2,001.5 ดอลลาร์จริง contract จึงต้องเชื่อผู้ส่งข้อมูล ปัญหานี้เรียกว่า <strong>oracle problem</strong></p>
+
+        <p>Bitcoin ไม่ต้องเจอปัญหานี้ เพราะข้อมูลทั้งหมดที่ใช้ตัดสินอยู่บนเชนอยู่แล้ว ใครเป็นเจ้าของเหรียญใดตรวจได้จาก UTXO set และลายเซ็น (บทที่ 1) ไม่มีข้อเท็จจริงใดที่ต้องถามคนนอก แต่เมื่อ contract ตัดสินใจจากเหตุการณ์ภายนอก ความปลอดภัยของระบบจะไม่เกินความน่าเชื่อถือของข้อมูลที่ได้รับ ถ้าข้อมูลเข้ามาผิด contract ก็ทำงานผิดตามกติกาอย่างแม่นยำ นักพัฒนามักสรุปเรื่องนี้ด้วยวลี garbage in, garbage out</p>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          Oracle problem มีสองชั้น ชั้นแรกเป็นเรื่อง<strong>เทคนิค</strong>: contract ต้อง deterministic จึงเรียก API เองไม่ได้ ข้อมูลต้องเข้ามาเป็นธุรกรรม ชั้นที่สองเป็นเรื่อง<strong>ความไว้ใจ</strong>: เมื่อมีผู้ส่งข้อมูลเข้ามา contract ก็ต้องเชื่อผู้ส่ง ระบบที่ตั้งใจไม่พึ่งตัวกลาง (trustless) จึงกลับมามีตัวกลางที่จุดนี้ Oracle ไม่ใช่แหล่งข้อมูล แต่เป็นตัวเชื่อมระหว่างแหล่งข้อมูลกับเชน
+        </div>
+      </section>
+
+      <!-- ==================== 13.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">13.2</span>รูปแบบการทำงาน: Inbound / Outbound และ Push / Pull</h2>
+
+        <h3>ทำไมต้องแยกทิศทาง</h3>
+        <p>โจทย์ใน 13.1 คือการนำข้อมูลภายนอกเข้ามาในเชน แต่บางแอปต้องการทิศกลับกัน เช่น contract เช่าห้องพักรับค่าเช่าแล้ว และต้องสั่งให้กลอนประตูอัจฉริยะ (smart lock) ปลดล็อก contract ส่ง HTTP request ออกไปเองไม่ได้ด้วยเหตุผลเดียวกับที่รับเข้ามาเองไม่ได้ ทั้งสองทิศจึงต้องมี oracle</p>
+        <ul>
+          <li><strong>Inbound oracle:</strong> นำข้อมูลจากนอกเชนเข้าสู่เชน เช่น ราคา ผลกีฬา สภาพอากาศ</li>
+          <li><strong>Outbound oracle:</strong> นำเหตุการณ์บนเชนออกไปสั่งระบบนอกเชน oracle เฝ้าดู event ที่ contract ปล่อยออกมา (หัวข้อ 5.6) แล้วไปเรียกระบบภายนอก เช่น สั่งปลดล็อกประตู หรือสั่งโอนเงินผ่านธนาคาร</li>
+        </ul>
+
+        <h3>ทำไมต้องแยกว่าใครเป็นผู้เริ่ม</h3>
+        <p>อีกมิติหนึ่งคือฝ่ายใดเป็นผู้เริ่มส่งข้อมูล ทางเลือกนี้กำหนดว่าใครจ่าย gas ข้อมูลสดเพียงใด และ contract ได้คำตอบทันทีหรือต้องรอ</p>
+        <ul>
+          <li><strong>Push:</strong> ฝ่ายที่มีข้อมูลส่งออกไปเองเมื่อมีข้อมูลใหม่ ฝ่ายรับไม่ต้องร้องขอ</li>
+          <li><strong>Pull:</strong> ฝ่ายที่ต้องการข้อมูลเป็นผู้ร้องขอ แล้วอีกฝ่ายจึงตอบกลับ</li>
+        </ul>
+        <p>เมื่อรวมสองมิติจะได้สี่รูปแบบ</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>Push (ฝ่ายที่มีข้อมูลเริ่มส่ง)</th><th>Pull (ฝ่ายที่ต้องการข้อมูลร้องขอ)</th></tr>
+            <tr><td><strong>Inbound</strong><br>นอกเชน → บนเชน</td><td>oracle อัปเดตราคาลง contract เป็นระยะ contract อื่นอ่านค่าล่าสุดได้ทันที เช่น price feed</td><td>contract ปล่อย event คำขอ oracle เห็นแล้วไปดึงข้อมูลมาตอบในธุรกรรมใหม่ (request-response) เช่น ขอผลการแข่งขัน ขอเลขสุ่ม VRF</td></tr>
+            <tr><td><strong>Outbound</strong><br>บนเชน → นอกเชน</td><td>contract ปล่อย event oracle เห็นแล้วไปสั่งระบบภายนอก เช่น ปลดล็อกประตูเมื่อจ่ายค่าเช่าแล้ว</td><td>ระบบนอกเชนถาม state บนเชนผ่านโหนดหรือ oracle เมื่อต้องการ เช่น ระบบบัญชีของบริษัทตรวจยอดใน contract ทุกสิ้นวัน</td></tr>
+          </table>
+        </div>
+
+        <h3>Push inbound: ข้อมูลพร้อมใช้ แต่ต้องมีคนจ่ายค่าอัปเดต</h3>
+        <p>contract ด้าน DeFi ต้องใช้ราคาทันทีในธุรกรรมเดียวกัน เช่น ตอนผู้ใช้กู้เงินหรือตอนชำระบัญชี (liquidation) ถ้าต้องส่งคำขอแล้วรอคำตอบ ราคาอาจเปลี่ยนไปมากระหว่างรอ รูปแบบ push จึงเก็บราคาล่าสุดไว้ใน contract ของ oracle ล่วงหน้า contract อื่นเรียกฟังก์ชัน view อ่านค่าได้ทันที</p>
+        <p>ข้อเสียคือทุกครั้งที่อัปเดตต้องเสีย gas แม้ไม่มีใครอ่านค่านั้น ถ้าอัปเดตทุกบล็อก ค่า gas จะสูงเกินไป ถ้าอัปเดตตามเวลาอย่างเดียว ราคาอาจล้าหลังตลาดมากในช่วงที่ราคาผันผวน price feed จึงมักใช้เงื่อนไขสองข้อร่วมกัน</p>
+        <ul>
+          <li><strong>Deviation threshold:</strong> อัปเดตเมื่อราคาใหม่ต่างจากค่าบนเชนเกินร้อยละที่กำหนด เช่น 0.5% เงื่อนไขนี้ทำให้ราคาตามตลาดทันในช่วงผันผวน</li>
+          <li><strong>Heartbeat:</strong> อัปเดตเมื่อครบระยะเวลาที่กำหนด เช่น ทุกหนึ่งชั่วโมง แม้ราคาไม่เปลี่ยน เงื่อนไขนี้ให้ contract แยกได้ว่า ราคานิ่งจริง หรือ feed หยุดทำงาน ถ้าเวลาอัปเดตล่าสุดเก่ากว่ารอบ heartbeat แสดงว่า feed มีปัญหา</li>
+        </ul>
+
+        <h3>Pull inbound: ข้อมูลสด แต่ต้องแยกเป็นสองธุรกรรม</h3>
+        <p>ข้อมูลบางอย่างใช้นาน ๆ ครั้ง เช่น ผลการแข่งขันนัดหนึ่ง หรือเลขสุ่มสำหรับการเปิดกล่อง NFT หนึ่งกล่อง การอัปเดตข้อมูลเหล่านี้ไว้ล่วงหน้าทุกบล็อกสิ้นเปลืองโดยใช่เหตุ contract จึงส่งคำขอเมื่อต้องการเท่านั้น แต่ contract รอคำตอบกลางธุรกรรมไม่ได้ เพราะ oracle อยู่นอกเชนและต้องส่งคำตอบมาในธุรกรรมใหม่ ขั้นตอนจึงแบ่งเป็นสองธุรกรรม</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 320" role="img" aria-label="ลำดับการทำงานแบบ request-response ธุรกรรมที่ 1 ผู้ใช้เรียก requestPrice contract ปล่อย event Request id 42 จากนั้นนอกเชน oracle node ขอราคาจาก API และได้ 2,001.5 ธุรกรรมที่ 2 oracle เรียก fulfill 42 พร้อมราคา contract บันทึกราคาและทำงานต่อ">
+            <defs>
+              <marker id="arrReq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <!-- แถบพื้นหลัง -->
+              <rect x="10" y="62" width="660" height="72" fill="#eceefb"/>
+              <rect x="10" y="144" width="660" height="64" fill="#f0ebe1"/>
+              <rect x="10" y="218" width="660" height="80" fill="#eceefb"/>
+              <g font-size="12">
+                <text x="680" y="92" font-weight="700" fill="#4a52c0">ธุรกรรม 1</text>
+                <text x="680" y="110" font-size="11" fill="#6b655c">บล็อก N</text>
+                <text x="680" y="172" font-weight="700" fill="#6b655c">นอกเชน</text>
+                <text x="680" y="190" font-size="11" fill="#6b655c">รอสักครู่</text>
+                <text x="680" y="250" font-weight="700" fill="#4a52c0">ธุรกรรม 2</text>
+                <text x="680" y="268" font-size="11" fill="#6b655c">บล็อก N+k</text>
+              </g>
+
+              <!-- หัวคอลัมน์ -->
+              <rect x="30" y="16" width="100" height="34" rx="7" fill="#fff" stroke="currentColor"/>
+              <text x="80" y="38" text-anchor="middle">ผู้ใช้ (EOA)</text>
+              <rect x="200" y="16" width="120" height="34" rx="7" fill="#f8e9f1" stroke="#b0417a"/>
+              <text x="260" y="38" text-anchor="middle">Contract</text>
+              <rect x="390" y="16" width="120" height="34" rx="7" fill="#fff" stroke="currentColor"/>
+              <text x="450" y="38" text-anchor="middle">Oracle node</text>
+              <rect x="570" y="16" width="90" height="34" rx="7" fill="#f0ebe1"/>
+              <text x="615" y="38" text-anchor="middle">API</text>
+              <g stroke="#b9b1a3" stroke-width="1" stroke-dasharray="4 4">
+                <line x1="80" y1="50" x2="80" y2="298"/>
+                <line x1="260" y1="50" x2="260" y2="298"/>
+                <line x1="450" y1="50" x2="450" y2="298"/>
+                <line x1="615" y1="50" x2="615" y2="298"/>
+              </g>
+
+              <!-- ข้อความ -->
+              <g stroke="#6b655c" stroke-width="1.3" fill="none">
+                <line x1="82" y1="88" x2="256" y2="88" marker-end="url(#arrReq)"/>
+                <line x1="262" y1="120" x2="446" y2="120" stroke-dasharray="5 4" marker-end="url(#arrReq)"/>
+                <line x1="452" y1="166" x2="611" y2="166" marker-end="url(#arrReq)"/>
+                <line x1="613" y1="194" x2="454" y2="194" marker-end="url(#arrReq)"/>
+                <line x1="448" y1="240" x2="264" y2="240" marker-end="url(#arrReq)"/>
+              </g>
+              <g font-size="12">
+                <text x="170" y="81" text-anchor="middle">1. requestPrice()</text>
+                <text x="355" y="113" text-anchor="middle">2. event Request(id=42)</text>
+                <text x="532" y="159" text-anchor="middle">3. ขอราคา ETH/USD</text>
+                <text x="532" y="187" text-anchor="middle">4. ตอบ 2,001.5</text>
+                <text x="355" y="233" text-anchor="middle">5. fulfill(42, 2,001.5)</text>
+              </g>
+              <rect x="196" y="256" width="128" height="32" rx="7" fill="#fff" stroke="#b0417a"/>
+              <text x="260" y="277" text-anchor="middle" font-size="12">6. บันทึกราคา ทำงานต่อ</text>
+            </g>
+          </svg>
+          <figcaption>รูปแบบ request-response (pull inbound) คำขอและคำตอบอยู่คนละธุรกรรม ห่างกันอย่างน้อยหนึ่งบล็อก contract จึงต้องแบ่งโค้ดเป็นฟังก์ชันส่งคำขอ และฟังก์ชันรับคำตอบ (callback) ที่ยอมให้เฉพาะ address ของ oracle เรียก</figcaption>
+        </figure>
+
+        <p>การแบ่งเป็นสองธุรกรรมมีผลตามมาสามข้อ ข้อแรก ผู้ใช้ไม่ได้ผลลัพธ์ในธุรกรรมที่ตนส่ง ต้องรอธุรกรรมของ oracle ข้อสอง contract ต้องจำว่าคำขอหมายเลขใดเป็นของใคร เพื่อนำคำตอบไปใช้ให้ถูกคน ข้อสาม ฟังก์ชัน callback ต้องตรวจว่าผู้เรียกเป็น oracle จริง ถ้าไม่ตรวจ ใครก็เรียก <code>fulfill</code> แล้วส่งค่าปลอมเข้ามาได้</p>
+
+        <div class="callout">
+          <span class="h">คำว่า pull oracle อีกความหมายหนึ่ง</span>
+          oracle รุ่นใหม่บางระบบ เช่น Pyth ใช้คำว่า pull ในอีกความหมายหนึ่ง ผู้ให้บริการลงลายเซ็นราคาไว้นอกเชนตลอดเวลา เมื่อผู้ใช้ต้องการราคา ผู้ใช้ดึงรายงานที่ลงลายเซ็นแล้วแนบมาในธุรกรรมของตนเอง contract ตรวจลายเซ็นแล้วใช้ราคานั้นในธุรกรรมเดียวกัน ผู้ใช้จ่าย gas เฉพาะตอนที่ต้องการ และไม่ต้องรอธุรกรรมที่สอง เมื่อพบคำว่า pull จึงควรดูบริบทว่าหมายถึงแบบใด
+        </div>
+      </section>
+
+      <!-- ==================== 13.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">13.3</span>Oracle แบบรวมศูนย์กับแบบกระจายศูนย์ (Chainlink)</h2>
+
+        <h3>Oracle แบบรวมศูนย์: ง่าย แต่ย้อนกลับไปเชื่อคนคนเดียว</h3>
+        <p>วิธีที่ง่ายที่สุดคือให้บริษัทหนึ่งเปิดเซิร์ฟเวอร์ ดึงราคาจากตลาด แล้วใช้ private key ของตนส่งราคาเข้า contract contract ยอมรับเฉพาะค่าที่มาจาก address นี้ วิธีนี้เร็ว ถูก และเขียนง่าย แต่ลองดูว่าใครทำให้ระบบพังได้บ้าง</p>
+        <ul>
+          <li>ผู้ดูแล oracle ส่งราคาปลอมเอง เพื่อชำระบัญชีของผู้กู้แล้วเก็บหลักประกันไปในราคาถูก</li>
+          <li>ผู้โจมตีขโมย private key ของ oracle แล้วส่งราคาปลอม</li>
+          <li>เซิร์ฟเวอร์ล่ม หรือ API ต้นทางล่ม ราคาจึงหยุดอัปเดต</li>
+          <li>หน่วยงานรัฐหรือผู้มีอำนาจกดดันให้ผู้ดูแลหยุดส่งข้อมูลให้บางแอป</li>
+        </ul>
+        <p>contract ที่ถือเงินหลายร้อยล้านดอลลาร์จึงปลอดภัยได้เพียงเท่ากับ key ดอกเดียว ผู้ใช้ไม่ต้องเชื่อธนาคาร แต่ต้องเชื่อผู้ดูแล oracle แทน บริการรวมศูนย์บางรายพยายามลดความไว้ใจด้วยหลักฐานทางเทคนิค เช่น Oraclize (ภายหลังเปลี่ยนชื่อเป็น Provable) แนบหลักฐานว่าข้อมูลมาจากเว็บไซต์ต้นทางจริง แต่ก็ยังพึ่งผู้ให้บริการรายเดียวในการส่งข้อมูลให้ทันเวลา</p>
+
+        <h3>Oracle แบบกระจายศูนย์: ไม่ต้องเชื่อรายใดรายหนึ่ง</h3>
+        <p>แนวคิดเดียวกับ blockchain คือ ให้หลายฝ่ายที่เป็นอิสระต่อกันทำงานเดียวกัน แล้วรวมผลด้วยกติกาที่ผู้โกงส่วนน้อยเปลี่ยนผลไม่ได้ ระบบแบบนี้เรียกว่า <strong>decentralized oracle network (DON)</strong> และต้องกระจายศูนย์อย่างน้อยสองชั้น</p>
+        <ul>
+          <li><strong>ชั้นแหล่งข้อมูล:</strong> ดึงราคาจากหลายตลาดและหลายผู้รวบรวมข้อมูล (data aggregator) ถ้าทุกโหนดอ่านจาก API เดียวกัน API นั้นก็ยังเป็นจุดล้มเหลวเดียว</li>
+          <li><strong>ชั้นโหนด:</strong> ให้ผู้ให้บริการโหนด (node operator) หลายรายที่ไม่เกี่ยวข้องกันรายงานราคาแยกกัน</li>
+        </ul>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 300" role="img" aria-label="แหล่งข้อมูลสี่แห่งส่งราคาให้โหนด oracle ห้ารายที่เป็นอิสระต่อกัน โหนดสี่รายรายงาน 2,000 ถึง 2,002 โหนดที่ห้ารายงาน 9,999 ระบบรวมรายงานนอกเชน เรียงค่าแล้วเลือกมัธยฐาน 2,001 จากนั้นส่งรายงานที่ลงลายเซ็นร่วมกันเข้า price feed contract บนเชนในธุรกรรมเดียว">
+            <defs>
+              <marker id="arrDon" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <g font-size="12" font-weight="700" fill="#6b655c" text-anchor="middle">
+                <text x="81" y="26">แหล่งข้อมูล</text>
+                <text x="305" y="26">โหนด oracle (อิสระต่อกัน)</text>
+                <text x="525" y="26">รวมรายงานนอกเชน</text>
+                <text x="695" y="26">บนเชน</text>
+              </g>
+
+              <!-- เส้นเชื่อม แหล่งข้อมูล -> โหนด -->
+              <g stroke="#d8d0c2" stroke-width="1">
+                <line x1="146" y1="64" x2="230" y2="57"/><line x1="146" y1="64" x2="230" y2="107"/><line x1="146" y1="64" x2="230" y2="157"/><line x1="146" y1="64" x2="230" y2="207"/><line x1="146" y1="64" x2="230" y2="257"/>
+                <line x1="146" y1="124" x2="230" y2="57"/><line x1="146" y1="124" x2="230" y2="107"/><line x1="146" y1="124" x2="230" y2="157"/><line x1="146" y1="124" x2="230" y2="207"/><line x1="146" y1="124" x2="230" y2="257"/>
+                <line x1="146" y1="184" x2="230" y2="57"/><line x1="146" y1="184" x2="230" y2="107"/><line x1="146" y1="184" x2="230" y2="157"/><line x1="146" y1="184" x2="230" y2="207"/><line x1="146" y1="184" x2="230" y2="257"/>
+                <line x1="146" y1="244" x2="230" y2="57"/><line x1="146" y1="244" x2="230" y2="107"/><line x1="146" y1="244" x2="230" y2="157"/><line x1="146" y1="244" x2="230" y2="207"/><line x1="146" y1="244" x2="230" y2="257"/>
+              </g>
+
+              <g font-size="12">
+                <rect x="16" y="44" width="130" height="40" rx="7" fill="#f0ebe1"/>
+                <text x="81" y="69" text-anchor="middle">Exchange A</text>
+                <rect x="16" y="104" width="130" height="40" rx="7" fill="#f0ebe1"/>
+                <text x="81" y="129" text-anchor="middle">Exchange B</text>
+                <rect x="16" y="164" width="130" height="40" rx="7" fill="#f0ebe1"/>
+                <text x="81" y="189" text-anchor="middle">Aggregator C</text>
+                <rect x="16" y="224" width="130" height="40" rx="7" fill="#f0ebe1"/>
+                <text x="81" y="249" text-anchor="middle">Exchange D</text>
+              </g>
+
+              <g font-size="12">
+                <rect x="230" y="40" width="150" height="34" rx="7" fill="#fff" stroke="currentColor"/>
+                <text x="305" y="62" text-anchor="middle">โหนด 1 รายงาน 2,001</text>
+                <rect x="230" y="90" width="150" height="34" rx="7" fill="#fff" stroke="currentColor"/>
+                <text x="305" y="112" text-anchor="middle">โหนด 2 รายงาน 2,000</text>
+                <rect x="230" y="140" width="150" height="34" rx="7" fill="#fff" stroke="currentColor"/>
+                <text x="305" y="162" text-anchor="middle">โหนด 3 รายงาน 2,002</text>
+                <rect x="230" y="190" width="150" height="34" rx="7" fill="#fff" stroke="currentColor"/>
+                <text x="305" y="212" text-anchor="middle">โหนด 4 รายงาน 2,001</text>
+                <rect x="230" y="240" width="150" height="34" rx="7" fill="#fbe9e5" stroke="#c2412d"/>
+                <text x="305" y="262" text-anchor="middle" fill="#c2412d">โหนด 5 รายงาน 9,999</text>
+              </g>
+
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="382" y1="57" x2="438" y2="130" marker-end="url(#arrDon)"/>
+                <line x1="382" y1="107" x2="438" y2="142" marker-end="url(#arrDon)"/>
+                <line x1="382" y1="157" x2="438" y2="155" marker-end="url(#arrDon)"/>
+                <line x1="382" y1="207" x2="438" y2="168" marker-end="url(#arrDon)"/>
+                <line x1="382" y1="257" x2="438" y2="180" marker-end="url(#arrDon)"/>
+                <line x1="612" y1="155" x2="636" y2="155" marker-end="url(#arrDon)"/>
+              </g>
+
+              <rect x="440" y="80" width="170" height="150" rx="10" fill="#f8e9f1" stroke="#b0417a" stroke-width="1.3"/>
+              <g font-size="12" text-anchor="middle">
+                <text x="525" y="104">เรียงค่าจากน้อยไปมาก</text>
+                <text x="525" y="130" font-family="IBM Plex Mono, monospace">2,000 · 2,001 · 2,001</text>
+                <text x="525" y="148" font-family="IBM Plex Mono, monospace">2,002 · <tspan fill="#c2412d">9,999</tspan></text>
+                <text x="525" y="178" font-size="13" font-weight="700" fill="#1f6e5a">median = 2,001</text>
+                <text x="525" y="198" fill="#6b655c">ค่าเฉลี่ยจะได้ 3,600.6</text>
+                <text x="525" y="218" fill="#6b655c">ลงลายเซ็นร่วมกัน</text>
+              </g>
+
+              <rect x="638" y="104" width="112" height="104" rx="10" fill="#eceefb" stroke="#5a63d8" stroke-width="1.3"/>
+              <g text-anchor="middle">
+                <text x="694" y="128" font-weight="700">Price feed</text>
+                <text x="694" y="146" font-size="11" fill="#6b655c">ตรวจลายเซ็น</text>
+                <text x="694" y="174" font-size="17" font-weight="700" fill="#1f6e5a">2,001</text>
+                <text x="694" y="196" font-size="11" fill="#6b655c">ธุรกรรมเดียว</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>Decentralized oracle network โหนดแต่ละรายดึงราคาจากหลายแหล่ง แล้วรายงานแยกกัน ระบบเลือกค่ามัธยฐาน (median) โหนดที่โกงหนึ่งรายดึงค่าเฉลี่ยขึ้นไปถึง 3,600.6 ได้ แต่เปลี่ยนค่ามัธยฐานไม่ได้</figcaption>
+        </figure>
+
+        <h3>ทำไมใช้ค่ามัธยฐาน ไม่ใช้ค่าเฉลี่ย</h3>
+        <p>จากภาพ ถ้าใช้ค่าเฉลี่ย ผลจะเป็น (2,000 + 2,001 + 2,001 + 2,002 + 9,999) / 5 = 3,600.6 โหนดที่โกงเพียงรายเดียวดันราคาขึ้นได้เกือบสองเท่า ค่ามัธยฐานคือค่าที่อยู่ตรงกลางหลังเรียงลำดับ ถ้าโหนดที่โกงมีน้อยกว่าครึ่ง ค่ามัธยฐานจะอยู่ในช่วงของค่าที่โหนดสุจริตรายงานเสมอ ผู้โจมตีจึงต้องคุมโหนดให้ได้เกินครึ่ง ไม่ใช่แค่รายเดียว</p>
+
+        <h3>Chainlink</h3>
+        <p><strong>Chainlink</strong> เป็นเครือข่าย oracle แบบกระจายศูนย์ที่ใช้กันมากที่สุดบน Ethereum เผยแพร่ whitepaper ในปี 2017 และเปิดใช้บน mainnet ในปี 2019 องค์ประกอบสำคัญมีดังนี้</p>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>องค์ประกอบ</th><th>ทำไมต้องมี</th></tr>
+            <tr><td>ผู้ให้บริการโหนดหลายราย</td><td>ไม่ให้ผู้ใดผู้หนึ่งกำหนดราคาได้ แต่ละ feed มีโหนดหลายรายจากหลายองค์กร</td></tr>
+            <tr><td>โทเคน LINK</td><td>ใช้จ่ายค่าบริการให้ผู้ให้บริการโหนด ผู้ให้บริการจึงมีรายได้จากการทำงานต่อเนื่องและซื่อตรง ภายหลังมีระบบ staking ให้ผู้ให้บริการวาง LINK ค้ำประกันเพิ่มด้วย</td></tr>
+            <tr><td>ประวัติผลงาน (reputation)</td><td>ผลงานของแต่ละโหนดอยู่บนเชน ใครก็ตรวจได้ว่าโหนดใดตอบตรงเวลาหรือเคยรายงานผิด โหนดที่ทำผิดจะเสียงานในอนาคต</td></tr>
+            <tr><td>Off-Chain Reporting (OCR)</td><td>ถ้าโหนดทุกรายส่งธุรกรรมแยกกัน ค่า gas จะคูณตามจำนวนโหนด OCR ให้โหนดคุยกันนอกเชน รวมราคาเป็นรายงานเดียว แล้วลงลายเซ็นร่วมกัน ธุรกรรมเดียวจึงพอ contract บนเชนตรวจว่ามีลายเซ็นของโหนดครบตามจำนวนที่กำหนดก่อนรับค่า</td></tr>
+            <tr><td>Deviation threshold และ heartbeat</td><td>ควบคุมความถี่ของการอัปเดตตามที่อธิบายใน 13.2</td></tr>
+          </table>
+        </div>
+
+        <h3>Optimistic oracle: อีกแนวทางหนึ่ง</h3>
+        <p>ข้อมูลบางอย่างหาจาก API ไม่ได้ เช่น "การเลือกตั้งครั้งนี้ผู้สมัคร A ชนะหรือไม่" หรือ "โครงการนี้ส่งมอบงานตามสัญญาหรือไม่" ระบบอย่าง UMA จึงใช้แนวคิดแบบ optimistic ผู้เสนอคำตอบต้องวางเงินประกัน (bond) ไว้ ถ้าไม่มีใครโต้แย้งภายในเวลาที่กำหนด ระบบถือว่าคำตอบนั้นถูกต้อง ถ้ามีผู้โต้แย้ง ผู้ถือโทเคนของระบบจะลงมติตัดสิน ฝ่ายที่แพ้เสียเงินประกัน แนวคิดนี้คล้ายกับ Optimistic Rollup ในหัวข้อ 10.5 คือ ถือว่าถูกไว้ก่อน แล้วเปิดเวลาให้พิสูจน์ว่าผิด</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>Oracle แบบรวมศูนย์</th><th>Oracle แบบกระจายศูนย์ (DON)</th></tr>
+            <tr><td>ผู้ส่งข้อมูล</td><td>ผู้ให้บริการรายเดียว key เดียว</td><td>โหนดหลายรายที่เป็นอิสระต่อกัน</td></tr>
+            <tr><td>แหล่งข้อมูล</td><td>มักมีแหล่งเดียวหรือไม่กี่แหล่ง</td><td>หลายแหล่ง แล้วรวมค่า</td></tr>
+            <tr><td>ต้นทุนและความเร็ว</td><td>ถูกและเร็ว</td><td>แพงกว่า ต้องประสานหลายโหนด</td></tr>
+            <tr><td>ผู้โจมตีต้องทำอะไร</td><td>คุมหรือขโมย key เพียงดอกเดียว</td><td>คุมโหนดเกินเกณฑ์ หรือบิดแหล่งข้อมูลส่วนใหญ่</td></tr>
+            <tr><td>ความไว้ใจที่ยังเหลือ</td><td>ต้องเชื่อผู้ให้บริการทั้งหมด</td><td>เชื่อว่าโหนดส่วนใหญ่ไม่สมรู้ร่วมคิดกัน และเชื่อผู้ดูแลที่มีสิทธิ์เปลี่ยนรายชื่อโหนดหรือค่าตั้งของ feed</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 13.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">13.4</span>ความเสี่ยง: การปั่นราคา และจุดล้มเหลวเดียว (Single point of failure)</h2>
+
+        <p>ความเสียหายจาก oracle ส่วนใหญ่ไม่ได้มาจากบั๊กในโค้ดของ contract โค้ดทำงานตามกติกาทุกบรรทัด แต่ได้ราคาที่ผิดเข้ามา ราคาผิดได้สองทาง คือ มีผู้จงใจปั่น (manipulation) หรือระบบที่ส่งราคาล้มเหลว</p>
+
+        <h3>ทำไมราคาจาก DEX pool เดียวจึงอันตราย</h3>
+        <p>นักพัฒนาบางรายไม่อยากพึ่ง oracle ภายนอก จึงอ่านราคาจากตลาดแลกเปลี่ยนบนเชน (DEX) โดยตรง เพราะดูเหมือนข้อมูลอยู่บนเชนอยู่แล้วและไม่ต้องเชื่อใคร DEX แบบ AMM (automated market maker) เช่น Uniswap กำหนดราคาจากอัตราส่วนของเหรียญสองชนิดใน pool ถ้า pool มีเหรียญ X 1,000,000 เหรียญ กับ USDC 1,000,000 เหรียญ ราคาของ X คือ 1 USDC ใครซื้อ X ออกจาก pool จำนวนมาก X ใน pool จะเหลือน้อยลงและราคาจะสูงขึ้นทันที</p>
+        <p>ราคาแบบนี้เรียกว่า <strong>spot price</strong> คือราคา ณ ขณะนั้นของ pool เดียว ใครมีเงินมากพอก็เปลี่ยนได้ด้วยการซื้อขายครั้งเดียว ผู้โจมตีต้องใช้ทุนมาก จึงอาจคิดว่าเสี่ยงต่ำ แต่ <strong>flash loan</strong> ทำให้เงื่อนไขข้อนี้หายไป</p>
+
+        <h3>Flash loan: ยืมเงินก้อนใหญ่โดยไม่ต้องมีหลักประกัน</h3>
+        <p>Flash loan คือการกู้ที่ต้องคืนเงินภายในธุรกรรมเดียวกัน ถ้าถึงท้ายธุรกรรมแล้วยังคืนไม่ครบ ธุรกรรมทั้งหมดจะ revert เหมือนไม่เคยกู้ ผู้ให้กู้จึงไม่มีความเสี่ยงและไม่ต้องขอหลักประกัน เครื่องมือนี้มีประโยชน์ เช่น ใช้ทำ arbitrage หรือย้ายหนี้ระหว่างโปรโตคอล แต่ผลข้างเคียงคือ ใครก็ได้เข้าถึงเงินหลายสิบล้านดอลลาร์ได้ชั่วคราวโดยไม่ต้องมีทุน ขอเพียงคืนได้ก่อนธุรกรรมจบ</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 330" role="img" aria-label="การปั่นราคาด้วย flash loan ในธุรกรรมเดียว ขั้น 1 ยืม flash loan 1 ล้าน USDC ขั้น 2 กว้านซื้อเหรียญ X ใน pool เล็ก ราคา X พุ่งจาก 1 เป็น 4 ขั้น 3 ฝาก X เป็นหลักประกันใน lending ที่อ่านราคา 4 จาก pool และกู้ออกเกินมูลค่าจริง ขั้น 4 ขาย X คืน pool ราคากลับเป็น 1 ขั้น 5 คืน flash loan ผู้โจมตีเก็บส่วนเกิน lending เหลือหนี้เสีย กราฟด้านล่างแสดงว่า spot price พุ่งชั่วคราว แต่ TWAP ไม่เปลี่ยน">
+            <defs>
+              <marker id="arrFl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <text x="380" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#6b655c">ทั้งหมดอยู่ในธุรกรรมเดียว ถ้าขั้น 5 คืนเงินไม่ได้ ธุรกรรมทั้งหมด revert</text>
+              <rect x="10" y="30" width="740" height="122" rx="10" fill="none" stroke="#b9b1a3" stroke-dasharray="6 5"/>
+
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="152" y1="92" x2="164" y2="92" marker-end="url(#arrFl)"/>
+                <line x1="298" y1="92" x2="310" y2="92" marker-end="url(#arrFl)"/>
+                <line x1="444" y1="92" x2="456" y2="92" marker-end="url(#arrFl)"/>
+                <line x1="590" y1="92" x2="602" y2="92" marker-end="url(#arrFl)"/>
+              </g>
+
+              <g font-size="12" text-anchor="middle">
+                <rect x="20" y="44" width="132" height="96" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="86" y="68" font-weight="700">1. ยืม flash loan</text>
+                <text x="86" y="92">1 ล้าน USDC</text>
+                <text x="86" y="112" fill="#6b655c">ไม่ต้องมีทุน</text>
+
+                <rect x="166" y="44" width="132" height="96" rx="8" fill="#fdf0e3" stroke="#e2761b"/>
+                <text x="232" y="68" font-weight="700">2. กว้านซื้อ X</text>
+                <text x="232" y="92">ใน pool เล็ก</text>
+                <text x="232" y="112">ราคา X: 1 → 4</text>
+
+                <rect x="312" y="44" width="132" height="96" rx="8" fill="#fbe9e5" stroke="#c2412d" stroke-width="1.4"/>
+                <text x="378" y="68" font-weight="700">3. ฝาก X ค้ำประกัน</text>
+                <text x="378" y="92">lending อ่านราคา 4</text>
+                <text x="378" y="112" fill="#c2412d">กู้ออกเกินจริง</text>
+
+                <rect x="458" y="44" width="132" height="96" rx="8" fill="#fdf0e3" stroke="#e2761b"/>
+                <text x="524" y="68" font-weight="700">4. ขาย X คืน pool</text>
+                <text x="524" y="92">ราคา X: 4 → 1</text>
+                <text x="524" y="112" fill="#6b655c">ได้ USDC คืนมา</text>
+
+                <rect x="604" y="44" width="136" height="96" rx="8" fill="#fff" stroke="currentColor"/>
+                <text x="672" y="68" font-weight="700">5. คืน flash loan</text>
+                <text x="672" y="92">เก็บส่วนที่กู้เกิน</text>
+                <text x="672" y="112" fill="#c2412d">lending มีหนี้เสีย</text>
+              </g>
+
+              <!-- กราฟราคา -->
+              <text x="40" y="184" font-size="12" font-weight="700">ราคา X (USDC)</text>
+              <line x1="40" y1="300" x2="744" y2="300" stroke="#b9b1a3"/>
+              <line x1="40" y1="196" x2="40" y2="300" stroke="#b9b1a3"/>
+              <g font-size="11" fill="#6b655c" text-anchor="end">
+                <text x="34" y="214">4</text>
+                <text x="34" y="284">1</text>
+              </g>
+              <path d="M40,280 H200 L240,210 H500 L540,280 H744" fill="none" stroke="#c2412d" stroke-width="2"/>
+              <line x1="40" y1="286" x2="744" y2="286" stroke="#1f8a70" stroke-width="2" stroke-dasharray="7 5"/>
+              <circle cx="378" cy="210" r="5" fill="#c2412d"/>
+              <text x="390" y="228" font-size="12" fill="#c2412d">spot price ที่ lending อ่านในขั้น 3</text>
+              <text x="560" y="272" font-size="12" fill="#c2412d">spot price กลับที่เดิม</text>
+              <text x="744" y="318" font-size="12" fill="#1f6e5a" text-anchor="end">TWAP แทบไม่ขยับ เพราะราคาพุ่งอยู่ภายในบล็อกเดียว</text>
+            </g>
+          </svg>
+          <figcaption>การปั่นราคาด้วย flash loan ทุกขั้นเกิดในธุรกรรมเดียว ราคาใน pool พุ่งขึ้นเพียงช่วงสั้น ๆ แต่นานพอให้ lending ที่อ่าน spot price ยอมปล่อยกู้เกินมูลค่าจริง เส้นประสีเขียวคือ TWAP ซึ่งเฉลี่ยราคาข้ามหลายบล็อก จึงแทบไม่เปลี่ยน</figcaption>
+        </figure>
+
+        <p>ตัวอย่างที่เกิดขึ้นจริง ได้แก่ การโจมตี bZx ในเดือนกุมภาพันธ์ 2020 ซึ่งใช้ flash loan บิดราคาบน DEX ที่โปรโตคอลใช้อ้างอิง และกรณี Mango Markets ในเดือนตุลาคม 2022 ผู้โจมตีดันราคาโทเคน MNGO ในตลาดที่มีสภาพคล่องต่ำ แล้วกู้เงินออกไปกว่า 100 ล้านดอลลาร์โดยใช้มูลค่าหลักประกันที่สูงเกินจริง ทั้งสองกรณี contract ทำงานตามโค้ด แต่เชื่อราคาที่ผู้โจมตีกำหนดได้</p>
+
+        <h3>วิธีป้องกันการปั่นราคา</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>วิธี</th><th>ทำไมได้ผล</th><th>ข้อจำกัด</th></tr>
+            <tr><td>ใช้ DON ที่รวมราคาจากหลายตลาด</td><td>ผู้โจมตีต้องบิดราคาในตลาดส่วนใหญ่พร้อมกัน ซึ่งแพงกว่าการบิด pool เดียวมาก</td><td>ยังต้องเชื่อ DON และเหรียญที่ซื้อขายน้อยอาจมีแหล่งข้อมูลไม่พอ</td></tr>
+            <tr><td><strong>TWAP</strong> (time-weighted average price)</td><td>เฉลี่ยราคาตามเวลา เช่น 30 นาที flash loan ต้องคืนในธุรกรรมเดียว จึงค้างราคาข้ามบล็อกไม่ได้ ถ้าจะบิดค่าเฉลี่ยต้องค้างราคาไว้หลายบล็อก ระหว่างนั้นผู้ทำ arbitrage จะเข้ามาซื้อขายดึงราคากลับ ผู้โจมตีจึงเสียเงินมาก</td><td>ราคาล้าหลังตลาด ในช่วงตลาดผันผวนแรง ระบบอาจชำระบัญชีช้าเกินไป</td></tr>
+            <tr><td>ตรวจความเก่าของราคา (staleness check)</td><td>ปฏิเสธราคาที่อัปเดตล่าสุดนานเกินรอบ heartbeat</td><td>ต้องมีแผนสำรองเมื่อ feed หยุด เช่น หยุดรับธุรกรรมบางประเภทชั่วคราว</td></tr>
+            <tr><td>Circuit breaker</td><td>ถ้าราคาเปลี่ยนเกินร้อยละที่กำหนดในเวลาสั้น ๆ ให้หยุดชั่วคราวหรือเทียบกับ oracle ตัวที่สอง</td><td>ในวันที่ราคาร่วงจริง ระบบอาจหยุดในเวลาที่ผู้ใช้ต้องการมากที่สุด</td></tr>
+            <tr><td>หน่วงเวลาก่อนใช้ราคาใหม่</td><td>MakerDAO ใช้ Oracle Security Module หน่วงราคาใหม่หนึ่งชั่วโมงก่อนนำไปใช้ ถ้าพบราคาผิด ผู้ดูแลมีเวลาหยุดระบบก่อนเกิดความเสียหาย</td><td>ราคาที่ใช้จริงช้ากว่าตลาดหนึ่งชั่วโมงเสมอ</td></tr>
+          </table>
+        </div>
+
+        <h3>จุดล้มเหลวเดียว (Single point of failure)</h3>
+        <p>Single point of failure คือส่วนประกอบที่ถ้าล้มเพียงจุดเดียว ทั้งระบบจะล้มตาม blockchain ตั้งใจกำจัดจุดแบบนี้ด้วยโหนดหลายพันเครื่อง แต่ถ้า contract พึ่ง oracle ที่มีจุดอ่อนจุดเดียว ทั้งระบบก็ยังล้มได้จากจุดนั้น จุดที่ควรตรวจมีดังนี้</p>
+        <ul>
+          <li><strong>ผู้ส่งข้อมูลรายเดียว:</strong> oracle รวมศูนย์ หรือ DON ที่มีโหนดน้อยและเจ้าของเดียวกันหลายโหนด</li>
+          <li><strong>แหล่งข้อมูลเดียว:</strong> โหนดสิบรายที่อ่าน API เดียวกัน ก็ยังพังพร้อมกันเมื่อ API นั้นผิด</li>
+          <li><strong>สิทธิ์ผู้ดูแล:</strong> ถ้า key ของผู้ที่เปลี่ยนรายชื่อโหนดหรือค่าตั้งของ feed หลุด ผู้โจมตีก็เปลี่ยน feed ทั้งชุดได้ ระบบจึงมักใช้ multisig ที่ต้องมีลายเซ็นหลายรายร่วมกัน</li>
+          <li><strong>ความต่อเนื่อง (liveness):</strong> feed ที่หยุดอัปเดตไม่ได้ส่งค่าผิด แต่ค่าเดิมค้างอยู่ ถ้า contract ไม่ตรวจเวลาอัปเดต ก็จะใช้ราคาเก่าต่อไปโดยไม่รู้ตัว</li>
+        </ul>
+
+        <div class="callout warn">
+          <span class="h">ค่าที่ถูกต้องตามกติกา แต่ไม่ตรงกับตลาด</span>
+          ในเดือนพฤษภาคม 2022 ราคาเหรียญ LUNA ร่วงจากหลายสิบดอลลาร์จนเหลือไม่ถึงเศษเสี้ยวของเซนต์ภายในไม่กี่วัน price feed ของ LUNA ที่ใช้อยู่ตอนนั้นมีค่าต่ำสุดที่ยอมรายงาน (minimum answer) ราว 0.10 ดอลลาร์ เมื่อราคาตลาดต่ำกว่านั้น feed ยังรายงาน 0.10 ผู้ใช้บางรายจึงซื้อ LUNA ราคาถูกในตลาด แล้วนำไปฝากเป็นหลักประกันในโปรโตคอลที่ใช้ feed นี้ โปรโตคอลตีราคา LUNA สูงกว่าตลาดหลายเท่า ผู้ใช้เหล่านั้นจึงกู้เงินออกไปได้มากเกินมูลค่าจริง บทเรียนคือ contract ควรตรวจว่าราคาชนขอบเขตของ feed หรือไม่ และควรมีกลไกหยุดรับหลักประกันชนิดนั้นเมื่อตลาดผิดปกติ
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          ความปลอดภัยของ DApp เท่ากับจุดที่อ่อนที่สุด ถ้า blockchain กระจายศูนย์ แต่ oracle รวมศูนย์ ระบบทั้งหมดก็เป็นระบบรวมศูนย์ ผู้คุม oracle ได้อำนาจเหนือเงินทุกบาทใน contract นอกจากนี้ <strong>spot price จาก DEX pool เดียวไม่ใช่ oracle ที่ปลอดภัย</strong> เพราะ flash loan ทำให้ใครก็บิดราคาได้ภายในธุรกรรมเดียว ทางแก้ที่ควรตอบได้คือ DON ที่ใช้หลายแหล่งข้อมูล และ TWAP
+        </div>
+      </section>
+
+      <!-- ==================== 13.5 ==================== -->
+      <section id="s5">
+        <h2><span class="no">13.5</span>ตัวอย่างการใช้งาน: Price feed ใน DeFi, ประกันภัย และการสุ่มเลขด้วย VRF</h2>
+
+        <h3>Price feed ใน DeFi</h3>
+        <p>DeFi (decentralized finance) คือบริการทางการเงินที่ทำงานด้วย smart contract เช่น การกู้ยืม stablecoin และสัญญาซื้อขายล่วงหน้า (derivatives) แทบทุกบริการต้องรู้ราคาสินทรัพย์ เพราะต้องตีมูลค่าหลักประกันและตัดสินว่าใครต้องถูกชำระบัญชี</p>
+        <ul>
+          <li><strong>Lending:</strong> ใช้ราคาตีมูลค่าหลักประกัน และหาว่าบัญชีใดเข้าเกณฑ์ชำระบัญชี (liquidation)</li>
+          <li><strong>Stablecoin ที่มีหลักประกันเป็นคริปโต:</strong> เช่น DAI ต้องรู้มูลค่าหลักประกันเทียบกับดอลลาร์ เพื่อคุมให้มูลค่ารวมของหลักประกันสูงกว่าจำนวน DAI ที่ออก</li>
+          <li><strong>Derivatives:</strong> ใช้ราคาอ้างอิงคำนวณกำไรขาดทุนของแต่ละฝั่ง</li>
+        </ul>
+
+        <p>ตัวอย่างโค้ดด้านล่างอ่านราคา ETH/USD จาก price feed ของ Chainlink ผ่าน interface <code>AggregatorV3Interface</code> และตรวจสองเรื่องที่หัวข้อ 13.4 เตือนไว้ คือ ราคาต้องมากกว่าศูนย์ และต้องไม่เก่าเกินกำหนด</p>
+
+<pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+interface AggregatorV3Interface {
+    function decimals() external view returns (uint8);
+    function latestRoundData() external view returns (
+        uint80 roundId,
+        int256 answer,        // ราคา เป็นจำนวนเต็มที่คูณ 10^decimals ไว้แล้ว
+        uint256 startedAt,
+        uint256 updatedAt,    // เวลาที่อัปเดตล่าสุด (Unix time)
+        uint80 answeredInRound
+    );
+}
+
+contract PriceReader {
+    AggregatorV3Interface public immutable feed;
+    uint256 public constant MAX_AGE = 2 hours;   // ตั้งให้ยาวกว่า heartbeat ของ feed ที่ใช้
+
+    constructor(address feedAddress) {
+        feed = AggregatorV3Interface(feedAddress); // address ของ feed ดูได้จากเอกสารของ Chainlink
+    }
+
+    function ethUsd() public view returns (uint256) {
+        (, int256 answer, , uint256 updatedAt, ) = feed.latestRoundData();
+        require(answer &gt; 0, "bad price");
+        require(block.timestamp - updatedAt &lt;= MAX_AGE, "stale price");
+        return uint256(answer);  // ETH/USD มีทศนิยม 8 หลัก: 2,001.5 USD = 200150000000
+    }
+}</code></pre>
+
+        <p>EVM ไม่มีเลขทศนิยม (หัวข้อ 5.3) feed จึงส่งราคาเป็นจำนวนเต็มที่คูณ 10<sup>decimals</sup> ไว้แล้ว feed ราคาเทียบ USD ส่วนใหญ่ใช้ทศนิยม 8 หลัก ส่วน ETH มีทศนิยม 18 หลัก (wei) ผู้เขียน contract ต้องปรับหลักให้ตรงกันก่อนคูณหรือหาร ถ้าลืมปรับ มูลค่าที่คำนวณได้จะผิดไปเป็นหลักสิบยกกำลัง</p>
+
+        <h3>ราคาจาก oracle ตัดสินการชำระบัญชีอย่างไร</h3>
+        <p>lending ส่วนใหญ่ใช้ตัวเลขที่เรียกว่า <strong>health factor</strong> วัดความปลอดภัยของบัญชีผู้กู้</p>
+<pre>health factor = (จำนวน ETH × ราคาจาก oracle × liquidation threshold) / ยอดหนี้
+ถ้า health factor &lt; 1  →  ใครก็ได้ชำระหนี้แทนบางส่วน แล้วรับหลักประกันในราคาลด</pre>
+        <p>liquidation threshold คือสัดส่วนของมูลค่าหลักประกันที่นับเป็นความสามารถในการค้ำหนี้ เช่น 80% โปรโตคอลกันส่วนที่เหลือไว้เป็นกันชนสำหรับช่วงที่ราคาผันผวน ลองเปลี่ยนราคาที่ oracle รายงานด้านล่าง แล้วดูว่าราคาเพียงตัวเดียวเปลี่ยนสถานะของบัญชีได้อย่างไร ถ้า oracle รายงานต่ำเกินจริง บัญชีที่ปลอดภัยจะถูกชำระบัญชีโดยไม่สมควร ถ้ารายงานสูงเกินจริง ผู้กู้จะกู้ได้เกินมูลค่าหลักประกัน และโปรโตคอลจะมีหนี้เสีย</p>
+
+        <div class="hash-demo" id="hfcalc">
+          <div class="mtx">
+            <div><label for="hfColl">หลักประกัน (ETH)</label><input id="hfColl" type="number" min="0" step="0.1" value="10"></div>
+            <div><label for="hfDebt">ยอดหนี้ (USD)</label><input id="hfDebt" type="number" min="0" step="100" value="12000"></div>
+            <div><label for="hfThr">liquidation threshold (%)</label><input id="hfThr" type="number" min="1" max="100" step="1" value="80"></div>
+            <div><label for="hfPrice">ราคา ETH ที่ oracle รายงาน (USD)</label><input id="hfPrice" type="number" min="0" step="50" value="2000"></div>
+          </div>
+          <div class="stat" id="hfOut"></div>
+        </div>
+
+        <h3>ประกันภัยแบบ parametric</h3>
+        <p>ประกันแบบเดิมต้องให้ผู้เอาประกันยื่นเคลม และให้บริษัทประกันตรวจความเสียหาย ขั้นตอนนี้ช้า และผู้เอาประกันต้องเชื่อว่าบริษัทจะจ่ายจริง <strong>ประกันแบบ parametric</strong> เปลี่ยนเงื่อนไขการจ่ายเป็นค่าที่วัดได้ เช่น "ถ้าเที่ยวบินนี้ลงจอดช้ากว่ากำหนดเกิน 2 ชั่วโมง จ่าย 200 USDC" หรือ "ถ้าปริมาณฝนในอำเภอนี้ทั้งฤดูต่ำกว่า 300 มิลลิเมตร จ่าย 500 USDC ต่อไร่"</p>
+        <p>เมื่อเงื่อนไขเป็นตัวเลข smart contract ก็จัดการได้ทั้งหมด ผู้ซื้อจ่ายเบี้ยเข้า contract บริษัทประกันล็อกเงินชดเชยไว้ใน contract ทุกคนจึงตรวจได้ว่ามีเงินพอจ่าย เมื่อ oracle รายงานเวลาลงจอดหรือปริมาณฝน contract ก็จ่ายเงินทันทีโดยไม่ต้องยื่นเคลม และบริษัทปฏิเสธการจ่ายไม่ได้ ความน่าเชื่อถือของประกันจึงย้ายจากบริษัทประกันไปอยู่ที่ oracle ข้อจำกัดคือ <strong>basis risk</strong> ความเสียหายจริงอาจไม่ตรงกับค่าที่วัด เช่น สถานีวัดฝนบันทึกฝนปกติ แต่ไร่ของเกษตรกรที่อยู่ห่างออกไปแห้งแล้ง ผู้เอาประกันจึงไม่ได้เงินชดเชย</p>
+
+        <h3>การสุ่มเลขด้วย VRF</h3>
+        <p>เกมบนเชน ลอตเตอรี และการสุ่มคุณสมบัติของ NFT ตอน mint (บทที่ 12) ต้องการเลขสุ่มที่ไม่มีใครทำนายหรือเลือกได้ หัวข้อ 5.3 อธิบายว่า contract สุ่มเองอย่างปลอดภัยไม่ได้ เพราะทุกโหนดต้องได้ผลเดียวกัน ค่าตั้งต้นจึงต้องมาจากข้อมูลบนเชน ลองดูว่าค่าบนเชนแต่ละแบบมีจุดอ่อนอย่างไร</p>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>แหล่งค่าสุ่ม</th><th>ใครโกงได้ และโกงอย่างไร</th></tr>
+            <tr><td><code>block.timestamp</code></td><td>ผู้สร้างบล็อกเลือกเวลาได้ในช่วงหนึ่ง และทุกคนเห็นค่านี้ทันทีที่ธุรกรรมเข้าบล็อก</td></tr>
+            <tr><td><code>blockhash</code> หรือ <code>block.prevrandao</code></td><td>proposer เห็นค่าก่อนเผยแพร่บล็อก ถ้าผลไม่ถูกใจ proposer ไม่เสนอบล็อกนั้นก็ได้ โดยยอมเสียรางวัลของ slot นั้น (RANDAO ในหัวข้อ 8.3) ถ้ารางวัลจากเกมสูงกว่ารางวัลบล็อก การโกงแบบนี้ก็คุ้ม</td></tr>
+            <tr><td>ค่าบนเชนใด ๆ ที่อ่านในธุรกรรมเดียวกัน</td><td>ผู้เล่นเขียน contract ของตัวเองมาเรียกเกม แล้วตรวจผลในธุรกรรมเดียวกัน ถ้าแพ้ก็สั่ง revert ทั้งธุรกรรม เสียแค่ค่า gas แล้วลองใหม่จนกว่าจะชนะ</td></tr>
+            <tr><td>เจ้าของเกมสุ่มนอกเชนแล้วส่งเข้ามา</td><td>เจ้าของเกมเลือกเลขที่ตัวเองได้ประโยชน์ได้ และผู้เล่นตรวจไม่ได้</td></tr>
+          </table>
+        </div>
+
+        <p><strong>VRF (Verifiable Random Function)</strong> แก้ปัญหานี้ด้วยการเข้ารหัส oracle มีคู่กุญแจ private key (sk) และ public key (pk) ที่ลงทะเบียนไว้บนเชน เมื่อได้รับคำขอ oracle นำ seed ของคำขอนั้นมาคำนวณด้วย sk ได้ผลสองอย่าง คือ ค่าสุ่ม และหลักฐาน (proof) ว่าค่าสุ่มนี้คำนวณจาก seed และ sk จริง contract บนเชนใช้ pk ตรวจหลักฐานก่อนรับค่า VRF มีคุณสมบัติสามข้อที่แก้จุดอ่อนในตารางได้</p>
+        <ul>
+          <li><strong>ทำนายไม่ได้ (unpredictable):</strong> ผู้ที่ไม่มี sk คำนวณค่าสุ่มล่วงหน้าไม่ได้ ทั้งผู้เล่นและ proposer จึงไม่รู้ผลก่อน</li>
+          <li><strong>ตรวจสอบได้ (verifiable):</strong> ใครก็ใช้ pk ตรวจได้ว่าค่าสุ่มมาจาก seed และ sk จริง oracle จึงส่งเลขที่แต่งขึ้นเองไม่ได้</li>
+          <li><strong>มีผลเดียว (unique):</strong> seed หนึ่งค่ากับ sk หนึ่งดอกให้ค่าสุ่มที่ผ่านการตรวจได้เพียงค่าเดียว oracle จึงลองหลายค่าแล้วเลือกค่าที่ชอบไม่ได้</li>
+        </ul>
+        <p>seed ต้องรวมข้อมูลที่ oracle รู้ล่วงหน้าไม่ได้ เช่น ค่าแฮชของบล็อกที่คำขอเข้าไปอยู่ ถ้าไม่เป็นเช่นนั้น oracle อาจคำนวณผลไว้ก่อน แล้วร่วมมือกับผู้เล่นบางราย</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 240" role="img" aria-label="seed ของคำขอเข้าสู่ oracle ซึ่งคำนวณ VRF ด้วย private key นอกเชน ได้ค่าสุ่มและ proof แล้วส่งให้ VRF Coordinator บนเชน ตรวจด้วย public key ถ้าผ่านจึงส่งค่าสุ่มให้ contract ถ้าไม่ผ่านธุรกรรม revert">
+            <defs>
+              <marker id="arrVrf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <rect x="16" y="62" width="150" height="72" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="91" y="88" text-anchor="middle" font-weight="700">seed</text>
+              <text x="91" y="108" text-anchor="middle" font-size="11" fill="#6b655c">หมายเลขคำขอ +</text>
+              <text x="91" y="124" text-anchor="middle" font-size="11" fill="#6b655c">ค่าแฮชของบล็อกคำขอ</text>
+
+              <rect x="206" y="52" width="170" height="92" rx="10" fill="#f0ebe1"/>
+              <text x="291" y="76" text-anchor="middle" font-weight="700">Oracle (นอกเชน)</text>
+              <text x="291" y="100" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12">VRF(sk, seed)</text>
+              <text x="291" y="124" text-anchor="middle" font-size="11" fill="#6b655c">sk มีเฉพาะ oracle</text>
+
+              <rect x="418" y="50" width="124" height="36" rx="7" fill="#e8f5ef" stroke="#1f8a70"/>
+              <text x="480" y="73" text-anchor="middle" font-size="12">ค่าสุ่ม</text>
+              <rect x="418" y="108" width="124" height="36" rx="7" fill="#fff" stroke="currentColor"/>
+              <text x="480" y="131" text-anchor="middle" font-size="12">proof</text>
+
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="168" y1="98" x2="202" y2="98" marker-end="url(#arrVrf)"/>
+                <line x1="378" y1="88" x2="414" y2="70" marker-end="url(#arrVrf)"/>
+                <line x1="378" y1="108" x2="414" y2="124" marker-end="url(#arrVrf)"/>
+                <line x1="544" y1="68" x2="580" y2="86" marker-end="url(#arrVrf)"/>
+                <line x1="544" y1="126" x2="580" y2="110" marker-end="url(#arrVrf)"/>
+              </g>
+
+              <rect x="582" y="52" width="166" height="92" rx="10" fill="#eceefb" stroke="#5a63d8" stroke-width="1.3"/>
+              <text x="665" y="76" text-anchor="middle" font-weight="700">Coordinator บนเชน</text>
+              <text x="665" y="100" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11">verify(pk, seed,</text>
+              <text x="665" y="116" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11">ค่าสุ่ม, proof)</text>
+
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="620" y1="146" x2="560" y2="176" marker-end="url(#arrVrf)"/>
+                <line x1="710" y1="146" x2="710" y2="176" marker-end="url(#arrVrf)"/>
+              </g>
+              <g font-size="12">
+                <text x="470" y="196" fill="#1f6e5a" font-weight="700">ผ่าน: ส่งค่าสุ่มให้ contract</text>
+                <text x="470" y="214" fill="#6b655c">ผ่าน callback ของผู้ขอ</text>
+                <text x="710" y="196" text-anchor="middle" fill="#c2412d" font-weight="700">ไม่ผ่าน: revert</text>
+              </g>
+              <text x="16" y="196" font-size="12">ผู้เล่นและ proposer: ไม่มี sk</text>
+              <text x="16" y="214" font-size="12">จึงทำนายผลไม่ได้</text>
+            </g>
+          </svg>
+          <figcaption>VRF ทำงานแบบ request-response (13.2) oracle คำนวณค่าสุ่มพร้อม proof ด้วย private key ของตน contract บนเชนตรวจ proof ด้วย public key ก่อนรับค่า oracle จึงเลือกค่าเองไม่ได้ และผู้อื่นทำนายค่าล่วงหน้าไม่ได้</figcaption>
+        </figure>
+
+        <div class="callout warn">
+          <span class="h">สิ่งที่ VRF ป้องกันไม่ได้</span>
+          oracle ยังเลือก<strong>ไม่ตอบ</strong>ได้เมื่อเห็นผลแล้วไม่ถูกใจ VRF ไม่ได้ป้องกันการไม่ตอบ แต่การไม่ตอบเห็นได้บนเชนและทำให้ oracle เสียชื่อเสียงและรายได้ ฝั่ง contract ต้องเขียนให้รัดกุมด้วย อย่าให้ผู้ใช้หรือเจ้าของขอเลขสุ่มใหม่ได้เมื่อไม่พอใจผลรอบแรก และอย่าให้ผู้เล่นยกเลิกหรือเปลี่ยนเดิมพันหลังส่งคำขอแล้ว ถ้าทำได้ ผู้ที่เห็นผลก่อนจะเลือกได้ว่าจะยอมรับผลรอบไหน
+        </div>
+
+        <h3>การใช้งานอื่น</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>การใช้งาน</th><th>โจทย์ที่แก้</th><th>รูปแบบ</th></tr>
+            <tr><td>Proof of Reserve</td><td>โทเคนที่อ้างว่ามีทรัพย์สินจริงหนุนหลัง เช่น stablecoin หรือ wrapped BTC ต้องให้ผู้ใช้ตรวจได้ว่ามีทรัพย์สินหนุนครบ oracle รายงานยอดทรัพย์สินสำรองขึ้นเชน contract หยุดออกโทเคนใหม่ได้ถ้ายอดสำรองไม่พอ</td><td>Push inbound</td></tr>
+            <tr><td>Automation (keeper)</td><td>contract เริ่มทำงานเองไม่ได้ (หัวข้อ 5.2) งานที่ต้องทำตามเวลา เช่น ชำระบัญชีหรือปิดรอบลอตเตอรี จึงต้องมีบริการนอกเชนเฝ้าเงื่อนไขแล้วส่งธุรกรรมเข้ามาเรียก</td><td>นอกเชนเรียกเข้าเชน</td></tr>
+            <tr><td>Cross-chain messaging</td><td>contract บนเชนหนึ่งต้องรู้ว่าเกิดอะไรขึ้นบนอีกเชนหนึ่ง เช่น ผู้ใช้ล็อกเหรียญไว้บนเชนต้นทางแล้ว เชนปลายทางจึงออกเหรียญตัวแทนให้ได้</td><td>Inbound จากอีกเชน</td></tr>
+            <tr><td>ผลกีฬาและตลาดคาดการณ์</td><td>ตัดสินผลเดิมพันหรือตลาดคาดการณ์ (prediction market) ตามผลจริง</td><td>Pull inbound หรือ optimistic oracle</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li><strong>โจทย์:</strong> contract ตรวจได้เฉพาะสิ่งที่อยู่บนเชน แต่แอปจำนวนมากต้องรู้ราคา ผลการแข่งขัน สภาพอากาศ หรือเลขสุ่ม Oracle คือตัวเชื่อมที่นำข้อมูลเหล่านี้เข้ามา และใครคุม oracle ได้ก็คุมเงินใน contract ได้</li>
+          <li><strong>13.1:</strong> ทุกโหนดต้องรันธุรกรรมซ้ำแล้วได้ผลเดียวกัน (deterministic) EVM จึงไม่มีคำสั่งเรียกเครือข่ายภายนอก ข้อมูลต้องเข้ามาเป็นธุรกรรม เมื่อเป็นเช่นนั้น contract ก็ต้องเชื่อผู้ส่ง นี่คือ oracle problem</li>
+          <li><strong>13.2:</strong> Inbound นำข้อมูลเข้าเชน Outbound นำเหตุการณ์บนเชนออกไปสั่งระบบภายนอก Push คือฝ่ายที่มีข้อมูลส่งเอง เช่น price feed ที่อัปเดตตาม deviation threshold และ heartbeat Pull คือฝ่ายที่ต้องการข้อมูลร้องขอ เช่น request-response ที่ต้องแยกเป็นสองธุรกรรม</li>
+          <li><strong>13.3:</strong> Oracle รวมศูนย์ทำให้ทั้งระบบขึ้นกับ key ดอกเดียว DON ใช้หลายแหล่งข้อมูลและหลายโหนด แล้วรวมด้วยค่ามัธยฐาน ผู้โกงที่มีน้อยกว่าครึ่งจึงเปลี่ยนผลไม่ได้ Chainlink ใช้ OCR รวมรายงานนอกเชนแล้วส่งธุรกรรมเดียว</li>
+          <li><strong>13.4:</strong> Spot price จาก DEX pool เดียวบิดได้ด้วย flash loan ภายในธุรกรรมเดียว ป้องกันด้วย DON, TWAP, staleness check และ circuit breaker จุดล้มเหลวเดียวมีได้ทั้งที่ผู้ส่งข้อมูล แหล่งข้อมูล key ของผู้ดูแล และ feed ที่หยุดอัปเดต</li>
+          <li><strong>13.5:</strong> Price feed ใช้ตีมูลค่าหลักประกันและตัดสินการชำระบัญชี ประกันแบบ parametric จ่ายเงินอัตโนมัติตามค่าที่วัดได้ VRF ให้เลขสุ่มพร้อม proof ที่ตรวจบนเชนได้ oracle จึงเลือกผลเองไม่ได้ และผู้อื่นทำนายผลไม่ได้</li>
+        </ul>
+
+        <h3>คำศัพท์ที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำศัพท์</th><th>ความหมาย</th></tr>
+            <tr><td>Oracle</td><td>ส่วนประกอบที่ส่งข้อมูลระหว่างนอกเชนกับบนเชน ไม่ใช่แหล่งข้อมูลเอง</td></tr>
+            <tr><td>Oracle problem</td><td>contract ต้องเชื่อผู้ส่งข้อมูลภายนอก ความปลอดภัยจึงไม่เกินความน่าเชื่อถือของข้อมูล</td></tr>
+            <tr><td>Deterministic</td><td>ข้อมูลตั้งต้นเดียวกันให้ผลเดียวกันทุกครั้ง ทุกเครื่อง ทุกเวลา</td></tr>
+            <tr><td>Inbound / Outbound</td><td>ทิศของข้อมูล: เข้าสู่เชน / ออกจากเชน</td></tr>
+            <tr><td>Push / Pull</td><td>ฝ่ายที่มีข้อมูลเริ่มส่ง / ฝ่ายที่ต้องการข้อมูลร้องขอ</td></tr>
+            <tr><td>Deviation threshold / Heartbeat</td><td>อัปเดตเมื่อราคาเปลี่ยนเกินเกณฑ์ / อัปเดตเมื่อครบเวลา แม้ราคาไม่เปลี่ยน</td></tr>
+            <tr><td>DON</td><td>Decentralized oracle network เครือข่ายโหนด oracle หลายรายที่รวมผลด้วยกติกาที่ผู้โกงส่วนน้อยเปลี่ยนไม่ได้</td></tr>
+            <tr><td>OCR</td><td>Off-Chain Reporting ของ Chainlink โหนดรวมรายงานนอกเชนแล้วส่งธุรกรรมเดียวพร้อมลายเซ็นหลายราย</td></tr>
+            <tr><td>Spot price / TWAP</td><td>ราคา ณ ขณะนั้นของ pool / ราคาเฉลี่ยถ่วงตามเวลา ข้ามหลายบล็อก</td></tr>
+            <tr><td>Flash loan</td><td>กู้และคืนในธุรกรรมเดียว ถ้าไม่คืน ธุรกรรมทั้งหมด revert</td></tr>
+            <tr><td>Single point of failure</td><td>จุดเดียวที่ถ้าล้ม ทั้งระบบล้มตาม</td></tr>
+            <tr><td>Health factor</td><td>(หลักประกัน × ราคา × liquidation threshold) / หนี้ ต่ำกว่า 1 แล้วถูกชำระบัญชีได้</td></tr>
+            <tr><td>Parametric insurance / Basis risk</td><td>ประกันที่จ่ายตามค่าที่วัดได้ / ความเสี่ยงที่ค่าที่วัดไม่ตรงกับความเสียหายจริง</td></tr>
+            <tr><td>VRF</td><td>Verifiable Random Function ค่าสุ่มพร้อม proof ที่ทำนายไม่ได้ ตรวจได้ และมีผลเดียวต่อ seed</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. ถ้า EVM มีคำสั่งเรียก HTTP API ได้ จะเกิดปัญหาอะไรกับการตกลงเรื่องสถานะของเครือข่าย ให้ยกมาสองข้อ</p>
+          <details><summary>ดูเฉลย</summary><div>ข้อแรก โหนดแต่ละเครื่องรันธุรกรรมในเวลาต่างกันเล็กน้อย จึงได้คำตอบจาก API ต่างกันและได้ state root ต่างกัน ข้อสอง โหนดใหม่ที่ sync ย้อนหลังต้องรันธุรกรรมเก่าซ้ำ แต่ API ในวันนี้อาจให้ค่าอื่นหรือปิดไปแล้ว ผลคือการรันไม่ deterministic เครือข่ายตกลงกันไม่ได้ (ข้อเพิ่มเติม: เจ้าของ API ตอบแต่ละโหนดต่างกันเพื่อทำให้เครือข่ายแตกได้)</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. contract ให้เช่าที่จอดรถปล่อย event <code>Paid(spotId)</code> เมื่อผู้เช่าจ่ายเงิน แล้วบริการนอกเชนเห็น event นี้และสั่งเปิดไม้กั้น รูปแบบนี้คือข้อใด</p>
+          <ol><li>ก. Push inbound</li><li>ข. Pull inbound</li><li>ค. Push outbound</li><li>ง. Pull outbound</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> ข้อมูลไหลจากบนเชนออกไปนอกเชน จึงเป็น outbound และ contract เป็นฝ่ายที่มีข้อมูลและส่งออกไปเองด้วย event โดยระบบภายนอกไม่ได้ร้องขอ จึงเป็น push</div></details>
+        </div>
+
+        <div class="q">
+          <p>3. โหนด oracle ห้ารายรายงานราคา 1,998, 2,000, 2,001, 2,003 และ 50 ถ้าใช้ค่าเฉลี่ยกับค่ามัธยฐานจะได้เท่าใด และควรใช้แบบใด</p>
+          <details><summary>ดูเฉลย</summary><div>ค่าเฉลี่ย = (1,998 + 2,000 + 2,001 + 2,003 + 50) / 5 = 8,052 / 5 = <strong>1,610.4</strong> ค่ามัธยฐาน: เรียงได้ 50, 1,998, 2,000, 2,001, 2,003 ค่ากลางคือ <strong>2,000</strong> ควรใช้ค่ามัธยฐาน เพราะโหนดที่ผิดหรือโกงหนึ่งรายดึงค่าเฉลี่ยลงไปได้มาก แต่เปลี่ยนค่ามัธยฐานไม่ได้ ตราบใดที่โหนดที่ผิดมีน้อยกว่าครึ่ง</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. lending โปรโตคอลหนึ่งใช้ spot price จาก DEX pool เดียวตีมูลค่าหลักประกัน อธิบายวิธีโจมตีโดยย่อ และวิธีป้องกันสองวิธี</p>
+          <details><summary>ดูเฉลย</summary><div>ผู้โจมตียืม flash loan ก้อนใหญ่ ซื้อเหรียญ X ใน pool จนราคา X พุ่ง แล้วนำ X ไปฝากเป็นหลักประกัน โปรโตคอลอ่านราคาที่สูงเกินจริงจึงให้กู้ได้มาก จากนั้นผู้โจมตีขาย X คืน pool และคืน flash loan ทั้งหมดอยู่ในธุรกรรมเดียว ผู้โจมตีเก็บส่วนที่กู้เกินไป โปรโตคอลเหลือหนี้เสีย วิธีป้องกัน: (1) ใช้ DON ที่รวมราคาจากหลายตลาด (2) ใช้ TWAP ที่เฉลี่ยราคาข้ามหลายบล็อก นอกจากนี้ยังใช้ circuit breaker ได้</div></details>
+        </div>
+
+        <div class="q">
+          <p>5. ทำไม TWAP จึงต้านการปั่นราคาด้วย flash loan ได้ดีกว่า spot price</p>
+          <details><summary>ดูเฉลย</summary><div>flash loan ต้องคืนภายในธุรกรรมเดียว ราคาที่ปั่นได้จึงคงอยู่แค่ภายในบล็อกนั้น TWAP เฉลี่ยราคาตามเวลาข้ามหลายบล็อก ราคาที่พุ่งชั่วครู่จึงแทบไม่เปลี่ยนค่าเฉลี่ย ถ้าจะบิด TWAP ผู้โจมตีต้องค้างราคาไว้หลายบล็อกด้วยเงินทุนของตนเอง ระหว่างนั้นผู้ทำ arbitrage จะซื้อขายดึงราคากลับ การโจมตีจึงแพงจนไม่คุ้ม</div></details>
+        </div>
+
+        <div class="q">
+          <p>6. ลอตเตอรีหนึ่งเลือกผู้ชนะด้วย <code>uint256(block.prevrandao) % players.length</code> ในฟังก์ชันที่ผู้เล่นเรียกเพื่อซื้อและเปิดผลทันที วิธีนี้มีจุดอ่อนอะไรบ้าง</p>
+          <details><summary>ดูเฉลย</summary><div>(1) proposer เห็นค่า prevrandao ก่อนเผยแพร่บล็อก ถ้าผลไม่ถูกใจก็ไม่เสนอบล็อกนั้น ยอมเสียรางวัลของ slot เดียว ถ้ารางวัลลอตเตอรีสูงกว่าก็คุ้ม (2) ผู้เล่นเขียน contract มาเรียกลอตเตอรี แล้วตรวจผลในธุรกรรมเดียวกัน ถ้าไม่ชนะก็ revert ทั้งธุรกรรม เสียแค่ค่า gas แล้วลองใหม่ ควรเปลี่ยนไปใช้ VRF แบบ request-response ซึ่งเปิดผลในธุรกรรมถัดไป</div></details>
+        </div>
+
+        <div class="q">
+          <p>7. คุณสมบัติใดของ VRF ที่ทำให้ oracle ลองคำนวณหลายครั้งแล้วเลือกค่าสุ่มที่ตนชอบไม่ได้</p>
+          <ol><li>ก. public key เปิดเผยบนเชน</li><li>ข. seed หนึ่งค่ากับ private key หนึ่งดอกให้ผลที่ผ่านการตรวจได้ค่าเดียว (uniqueness)</li><li>ค. ค่าสุ่มส่งมาในธุรกรรมแยก</li><li>ง. oracle ต้องได้รับค่าธรรมเนียมเป็น LINK</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> ถ้า seed กับ sk ชุดเดียวกันให้ผลที่ผ่านการตรวจได้หลายค่า oracle จะเลือกค่าที่ตนได้ประโยชน์ได้ ความเป็นค่าเดียวจึงตัดทางเลือกนี้ ข้อ ก ทำให้ตรวจได้ แต่ไม่ได้ห้ามการเลือกเอง ส่วน oracle ยังเลือกไม่ตอบได้ ซึ่ง VRF ป้องกันไม่ได้</div></details>
+        </div>
+
+        <div class="q">
+          <p>8. price feed ETH/USD มี <code>decimals()</code> = 8 และ <code>latestRoundData()</code> คืนค่า <code>answer</code> = 185012345678 ราคา ETH คือเท่าใด</p>
+          <details><summary>ดูเฉลย</summary><div>185,012,345,678 / 10<sup>8</sup> = <strong>1,850.12345678 USD</strong> EVM ไม่มีเลขทศนิยม feed จึงส่งราคาเป็นจำนวนเต็มที่คูณ 10<sup>8</sup> ไว้แล้ว</div></details>
+        </div>
+
+        <div class="q">
+          <p>9. ผู้กู้ฝาก 5 ETH เป็นหลักประกัน และมีหนี้ 8,000 USD โปรโตคอลกำหนด liquidation threshold 80% ถ้า oracle รายงานราคา ETH 2,400 USD health factor เป็นเท่าใด และราคา ETH ลดลงถึงเท่าใดบัญชีจึงเริ่มถูกชำระบัญชีได้</p>
+          <details><summary>ดูเฉลย</summary><div>health factor = (5 × 2,400 × 0.8) / 8,000 = 9,600 / 8,000 = <strong>1.2</strong> บัญชีถูกชำระบัญชีได้เมื่อ health factor ต่ำกว่า 1 คือ 5 × ราคา × 0.8 &lt; 8,000 ราคา &lt; 8,000 / 4 = <strong>2,000 USD</strong></div></details>
+        </div>
+
+        <div class="q">
+          <p>10. price feed ตั้ง deviation threshold 0.5% และ heartbeat 1 ชั่วโมง ถ้าราคาไม่เปลี่ยนเลยตลอด 3 ชั่วโมง feed จะอัปเดตกี่ครั้ง และทำไมต้องอัปเดตทั้งที่ราคาเท่าเดิม</p>
+          <details><summary>ดูเฉลย</summary><div>อัปเดต <strong>3 ครั้ง</strong> ครั้งละหนึ่งชั่วโมงตาม heartbeat เพราะราคาไม่เปลี่ยนเกิน 0.5% เลย การอัปเดตทั้งที่ราคาเท่าเดิมทำให้ <code>updatedAt</code> ใหม่อยู่เสมอ contract จึงแยกได้ว่าราคานิ่งจริง หรือ feed หยุดทำงาน ถ้า <code>updatedAt</code> เก่ากว่ารอบ heartbeat มาก contract ควรปฏิเสธราคานั้น (staleness check)</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+  <script>
+    // คำนวณ health factor จากราคาที่ oracle รายงาน
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const ids = ["hfColl", "hfDebt", "hfThr", "hfPrice"];
+      const out = $("hfOut");
+      const fmt = (n) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+
+      function render() {
+        const [coll, debt, thr, price] = ids.map((id) => Math.max(0, Number($(id).value) || 0));
+        const value = coll * price;
+        const limit = value * (thr / 100);
+        if (debt === 0) {
+          out.innerHTML = `มูลค่าหลักประกัน <strong>${fmt(value)} USD</strong><br>ยังไม่มีหนี้ บัญชีนี้ไม่มีทางถูกชำระบัญชี`;
+          return;
+        }
+        const hf = limit / debt;
+        const liqPrice = coll > 0 && thr > 0 ? debt / (coll * thr / 100) : Infinity;
+        const status = hf < 1
+          ? `<strong style="color:#c2412d">health factor ต่ำกว่า 1 ใครก็ได้ชำระหนี้แทนแล้วรับหลักประกันในราคาลด</strong>`
+          : hf < 1.1
+            ? `<strong style="color:#b85a10">ใกล้เกณฑ์ ราคาลงอีกเล็กน้อยก็ถูกชำระบัญชีได้</strong>`
+            : `<strong style="color:#1f6e5a">ปลอดภัย</strong>`;
+        out.innerHTML =
+          `มูลค่าหลักประกันตามราคา oracle <strong>${fmt(value)} USD</strong>` +
+          `<br>ส่วนที่นับค้ำหนี้ได้ (× ${fmt(thr)}%) ${fmt(limit)} USD เทียบกับหนี้ ${fmt(debt)} USD` +
+          `<br>health factor <strong>${Number.isFinite(hf) ? hf.toFixed(3) : "-"}</strong> · ${status}` +
+          `<br>ราคา ETH ที่บัญชีนี้เริ่มถูกชำระบัญชีได้: ${Number.isFinite(liqPrice) ? fmt(liqPrice) + " USD" : "-"}`;
+      }
+
+      ids.forEach((id) => $(id).addEventListener("input", render));
+      render();
+    })();
+  </script>
+</body>
+</html>

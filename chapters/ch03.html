@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 3 Whitepaper ส่วนที่ 3</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p1" data-chapter="ch03">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 1 Bitcoin</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 3 · Whitepaper ข้อ 7–8</div>
+      <h1>Whitepaper ส่วนที่ 3: การลดพื้นที่จัดเก็บและการตรวจสอบแบบย่อ</h1>
+      <p class="lead">กลไกในบทที่ 2 ทำให้เครือข่ายตกลงลำดับธุรกรรมกันได้ แต่มีต้นทุนตามมา คือทุกโหนดต้องเก็บและตรวจทุกธุรกรรมตั้งแต่ Genesis block ข้อมูลส่วนนี้ยังโตขึ้นทุก 10 นาทีเมื่อมีบล็อกใหม่ ข้อ 7 อธิบายวิธีลบข้อมูลเก่าโดยที่หลักฐานยังใช้ได้ ข้อ 8 อธิบายวิธีตรวจว่าได้รับเงินจริงโดยไม่ต้องเก็บข้อมูลทั้งหมด ทั้งสองข้อใช้เครื่องมือเดียวกันคือ Merkle tree</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: บัญชีที่ทุกคนต้องเก็บทั้งเล่ม</a></li>
+        <li><a href="#s1">[ข้อ 7] Merkle Tree และ Merkle Root</a></li>
+        <li><a href="#s2">[ข้อ 7] การตัดข้อมูลธุรกรรมเก่า (Pruning) โดยไม่กระทบค่าแฮชของบล็อก</a></li>
+        <li><a href="#s3">[ข้อ 7] การคำนวณขนาด Block header: 80 ไบต์ต่อบล็อก ประมาณ 4.2 MB ต่อปี</a></li>
+        <li><a href="#s4">[ข้อ 8] Simplified Payment Verification (SPV) และ Merkle proof</a></li>
+        <li><a href="#s5">[ข้อ 8] ข้อจำกัดของ SPV: Full node เทียบกับ Light client</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: บัญชีที่ทุกคนต้องเก็บทั้งเล่ม</h2>
+
+        <p>ระบบในบทที่ 1 และ 2 ปลอดภัยได้เพราะทุกโหนดตรวจทุกอย่างด้วยตัวเอง ก่อนรับธุรกรรมใหม่ โหนดต้องรู้ว่าเหรียญที่นำมาจ่ายมีอยู่จริงและยังไม่มีใครใช้ไป (unspent) จึงต้องมีประวัติย้อนหลังทั้งหมดอยู่ในมือ บัญชี (ledger) นี้มีแต่เพิ่มขึ้น ไม่มีวันลดลง ปัจจุบันมีขนาดหลายร้อยกิกะไบต์ ภาระนี้ตกอยู่กับคนสองกลุ่ม</p>
+
+        <h3>ผู้ที่รันโหนด: พื้นที่ดิสก์โตไม่หยุด</h3>
+        <p>ถ้าการรันโหนดแพงขึ้นทุกปี สุดท้ายจะเหลือเพียงบริษัทใหญ่ไม่กี่รายที่รับภาระได้ ผู้ใช้ทั่วไปต้องเชื่อข้อมูลจากบริษัทเหล่านั้น เท่ากับกลับไปพึ่งตัวกลาง (trusted third party) ที่ Bitcoin ตั้งใจเลิกใช้ ระบบจึงต้องมีวิธี <strong>ลบข้อมูลที่ไม่จำเป็นทิ้ง</strong></p>
+
+        <h3>ผู้ใช้ทั่วไป: ต้องการรู้ว่าได้รับเงินจริง</h3>
+        <p>ร้านกาแฟที่รับชำระด้วย Bitcoin ผ่านโทรศัพท์มือถือดาวน์โหลดข้อมูลหลายร้อยกิกะไบต์ไม่ไหว ทางเลือกที่ง่ายที่สุดคือถามเซิร์ฟเวอร์ของบริษัทหนึ่งว่าเงินเข้าแล้วหรือยัง แต่ร้านต้องเชื่อคำตอบนั้นโดยตรวจเองไม่ได้ ระบบจึงต้องมีวิธี <strong>ตรวจด้วยตัวเองโดยใช้ข้อมูลเพียงเล็กน้อย</strong></p>
+
+        <h3>ข้อจำกัดที่ห้ามละเมิด</h3>
+        <p>ทั้งสองวิธีต้องไม่ทำให้หลักฐานเดิมใช้ไม่ได้ แม้ลบข้อมูลบางส่วนไปแล้ว ค่าแฮชของบล็อกต้องคำนวณได้ตรงเหมือนเดิม และถ้ามีใครแก้ธุรกรรมใดในบล็อก Proof-of-Work ของบล็อกนั้นต้องใช้ไม่ได้ทันที แนวคิดที่ตอบโจทย์นี้คือ <strong>แยกข้อมูลขนาดเล็กที่ทุกคนเก็บไว้ตลอด (block header) ออกจากข้อมูลก้อนใหญ่ที่ลบหรือไม่ดาวน์โหลดก็ได้ (ธุรกรรม)</strong> แล้วใส่ค่าแฮชของธุรกรรมไว้ใน header เพื่อผูกสองส่วนนี้เข้าด้วยกัน</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ผู้ที่มีปัญหา</th><th>สิ่งที่ต้องการ</th><th>กลไก</th><th>หัวข้อ</th></tr>
+            <tr><td>ทุกโหนด</td><td>ผูกธุรกรรมทั้งบล็อกไว้กับข้อมูลขนาด 32 ไบต์ใน header</td><td>Merkle tree และ Merkle root</td><td>3.1</td></tr>
+            <tr><td>ผู้ที่รันโหนด</td><td>ลบธุรกรรมเก่าที่ใช้ไปแล้วโดยค่าแฮชของบล็อกไม่เปลี่ยน</td><td>Pruning</td><td>3.2</td></tr>
+            <tr><td>ทุกคน</td><td>รู้ว่าส่วนที่ต้องเก็บไว้ตลอดมีขนาดเท่าใด</td><td>การคำนวณขนาด header</td><td>3.3</td></tr>
+            <tr><td>ผู้ใช้บนมือถือ</td><td>ตรวจว่าธุรกรรมของตนอยู่ในบล็อกโดยไม่ต้องเก็บทุกบล็อก</td><td>SPV และ Merkle proof</td><td>3.4</td></tr>
+            <tr><td>ผู้ใช้ที่เลือก SPV</td><td>รู้ว่ากำลังยอมเชื่อสิ่งใดแทนการตรวจเอง</td><td>ข้อจำกัดของ SPV</td><td>3.5</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 3.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">3.1</span>Merkle Tree และ Merkle Root</h2>
+
+        <h3>ทำไมไม่แฮชธุรกรรมทั้งหมดรวดเดียว</h3>
+        <p>วิธีแรกที่นึกถึงคือนำธุรกรรมทั้งบล็อกมาต่อกัน แฮชครั้งเดียว แล้วใส่ค่าแฮช 32 ไบต์นั้นไว้ใน header วิธีนี้ผูกธุรกรรมทุกรายการไว้ได้จริง แต่ใช้กับโจทย์ของบทนี้ไม่ได้ เพราะถ้าจะคำนวณค่าแฮชนั้นซ้ำ ต้องมีธุรกรรม <strong>ครบทุกรายการ</strong> ผู้ที่ต้องการพิสูจน์ว่ามีธุรกรรมของตนอยู่ในบล็อกต้องดาวน์โหลดทั้งบล็อก และเมื่อลบธุรกรรมใดออกไป ก็จะตรวจไม่ได้อีกว่าธุรกรรมที่เหลือตรงกับค่าแฮชใน header</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>วิธีผูกธุรกรรมกับ header</th><th>ขนาดใน header</th><th>พิสูจน์ว่ามีธุรกรรมหนึ่งอยู่ในบล็อก ต้องใช้</th><th>ลบธุรกรรมเก่าได้หรือไม่</th></tr>
+            <tr><td>ใส่ธุรกรรมทั้งหมดไว้ใน header</td><td>เท่ากับทั้งบล็อก</td><td>ทั้งบล็อก</td><td>ไม่ได้</td></tr>
+            <tr><td>นำธุรกรรมทั้งหมดมาต่อกันแล้วแฮชครั้งเดียว</td><td>32 ไบต์</td><td>ธุรกรรมทั้งบล็อก (ราว 1–2 MB)</td><td>ไม่ได้ เพราะคำนวณค่าแฮชซ้ำไม่ได้</td></tr>
+            <tr><td><strong>Merkle tree</strong></td><td>32 ไบต์</td><td>ค่าแฮชเพียง log<sub>2</sub>(n) ค่า ปัดขึ้นเป็นจำนวนเต็ม (ที่มาอยู่ท้ายหัวข้อนี้) เช่น 4,000 ธุรกรรม log<sub>2</sub> ≈ 11.97 จึงใช้ 12 ค่า รวม 384 ไบต์</td><td>ได้ โดยเก็บค่าแฮชบนสุดของกิ่งย่อยที่ตัดไว้แทน (หัวข้อ 3.2)</td></tr>
+          </table>
+        </div>
+
+        <h3>วิธีสร้าง Merkle tree</h3>
+        <p>Merkle tree ตั้งชื่อตาม Ralph Merkle ผู้เสนอโครงสร้างนี้ในปี 1979 การสร้างมีขั้นตอนดังนี้</p>
+        <ol>
+          <li>แฮชธุรกรรมแต่ละรายการ ได้ค่าแฮชชั้นล่างสุด ใน Bitcoin ค่านี้คือ txid ซึ่งคำนวณด้วย SHA-256 สองรอบ</li>
+          <li>จับคู่ค่าแฮชทีละสองค่าจากซ้ายไปขวา นำมาต่อกันแล้วแฮช ได้ค่าแฮชชั้นถัดขึ้นไป ชั้นใหม่จึงมีจำนวนค่าแฮชเหลือครึ่งหนึ่ง</li>
+          <li>ทำซ้ำจนเหลือค่าเดียว ค่านี้เรียกว่า <strong>Merkle root</strong></li>
+          <li>ใส่ Merkle root ไว้ใน block header</li>
+        </ol>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 300" role="img" aria-label="แฮชธุรกรรม Tx0 ถึง Tx3 ได้ Hash0 ถึง Hash3 จับคู่แล้วแฮชได้ Hash01 และ Hash23 แล้วแฮชอีกครั้งได้ Root Hash ที่อยู่ใน block header">
+            <defs>
+              <marker id="arrUp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <rect x="170" y="10" width="420" height="66" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="380" y="30" text-anchor="middle" font-size="12" fill="#6b655c">Block header (ส่วนที่นำไปแฮชเป็น block hash)</text>
+              <rect x="190" y="40" width="110" height="26" rx="5" fill="#f0ebe1"/>
+              <text x="245" y="58" text-anchor="middle" font-size="12">Prev Hash</text>
+              <rect x="320" y="40" width="120" height="26" rx="5" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.5"/>
+              <text x="380" y="58" text-anchor="middle" font-size="12" font-weight="700" fill="#b85a10">Root Hash</text>
+              <rect x="460" y="40" width="110" height="26" rx="5" fill="#f0ebe1"/>
+              <text x="515" y="58" text-anchor="middle" font-size="12">Nonce</text>
+
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="230" y1="112" x2="370" y2="68" marker-end="url(#arrUp)"/>
+                <line x1="530" y1="112" x2="390" y2="68" marker-end="url(#arrUp)"/>
+                <line x1="155" y1="180" x2="222" y2="144" marker-end="url(#arrUp)"/>
+                <line x1="305" y1="180" x2="238" y2="144" marker-end="url(#arrUp)"/>
+                <line x1="455" y1="180" x2="522" y2="144" marker-end="url(#arrUp)"/>
+                <line x1="605" y1="180" x2="538" y2="144" marker-end="url(#arrUp)"/>
+                <line x1="155" y1="246" x2="155" y2="212" marker-end="url(#arrUp)"/>
+                <line x1="305" y1="246" x2="305" y2="212" marker-end="url(#arrUp)"/>
+                <line x1="455" y1="246" x2="455" y2="212" marker-end="url(#arrUp)"/>
+                <line x1="605" y1="246" x2="605" y2="212" marker-end="url(#arrUp)"/>
+              </g>
+
+              <rect x="175" y="112" width="110" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="230" y="132" text-anchor="middle">Hash01</text>
+              <rect x="475" y="112" width="110" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="530" y="132" text-anchor="middle">Hash23</text>
+
+              <rect x="105" y="180" width="100" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="155" y="200" text-anchor="middle">Hash0</text>
+              <rect x="255" y="180" width="100" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="305" y="200" text-anchor="middle">Hash1</text>
+              <rect x="405" y="180" width="100" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="455" y="200" text-anchor="middle">Hash2</text>
+              <rect x="555" y="180" width="100" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="605" y="200" text-anchor="middle">Hash3</text>
+
+              <rect x="105" y="248" width="100" height="30" rx="6" fill="#f0ebe1"/>
+              <text x="155" y="268" text-anchor="middle">Tx0</text>
+              <rect x="255" y="248" width="100" height="30" rx="6" fill="#f0ebe1"/>
+              <text x="305" y="268" text-anchor="middle">Tx1</text>
+              <rect x="405" y="248" width="100" height="30" rx="6" fill="#f0ebe1"/>
+              <text x="455" y="268" text-anchor="middle">Tx2</text>
+              <rect x="555" y="248" width="100" height="30" rx="6" fill="#f0ebe1"/>
+              <text x="605" y="268" text-anchor="middle">Tx3</text>
+
+              <g font-size="11" fill="#6b655c">
+                <text x="672" y="131">แฮชคู่</text>
+                <text x="672" y="199">txid</text>
+                <text x="672" y="267">ธุรกรรม</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>Merkle tree ของบล็อกที่มี 4 ธุรกรรม ลูกศรแสดงทิศทางการแฮชจากล่างขึ้นบน ค่า Hash01 คือแฮชของ Hash0 ต่อกับ Hash1 และ Root Hash คือแฮชของ Hash01 ต่อกับ Hash23 ป้าย Root Hash ตามรูปใน Whitepaper หมายถึง Merkle root ค่าเดียวกัน header เก็บเพียง Merkle root ค่านี้ค่าเดียว ไม่ได้เก็บค่าแฮชชั้นอื่น</figcaption>
+        </figure>
+
+        <div class="callout">
+          <span class="h">เมื่อจำนวนค่าแฮชเป็นเลขคี่</span>
+          ทุกค่าต้องมีคู่จึงจะแฮชขึ้นไปชั้นถัดไปได้ Bitcoin จึงทำสำเนาค่าแฮชตัวสุดท้ายของชั้นนั้นมาเป็นคู่ของตัวเอง เช่น บล็อกที่มี 5 ธุรกรรม ชั้นล่างมี 5 ค่า ค่าที่ 5 จับคู่กับสำเนาของตัวเอง ชั้นถัดไปจึงมี 3 ค่า ชั้นนี้เป็นเลขคี่อีก ค่าที่ 3 จึงจับคู่กับสำเนาของตัวเอง ได้ 2 ค่า แล้วจึงได้ Merkle root
+        </div>
+
+        <h3>ทำไม Merkle root ต้องอยู่ใน header</h3>
+        <p>Proof-of-Work ในบทที่ 2 คำนวณจาก block header ขนาด 80 ไบต์เท่านั้น ไม่ได้แฮชธุรกรรมโดยตรง Whitepaper ไม่ได้บอกเหตุผลไว้ เหตุผลที่มักอธิบายกันมีสองข้อ ข้อแรก ผู้ขุดต้องเปลี่ยน nonce แล้วแฮชซ้ำจำนวนมหาศาล การแฮชเพียง 80 ไบต์ใช้เวลาน้อยกว่าการแฮชทั้งบล็อกมาก ข้อสอง ผู้ที่มีเพียง header ก็ตรวจ PoW ได้ ข้อนี้เป็นพื้นฐานของ SPV ในหัวข้อ 3.4</p>
+        <p>แต่ถ้าไม่มีสิ่งใดผูก header กับธุรกรรม ผู้โจมตีจะเปลี่ยนธุรกรรมในบล็อกได้โดยที่ PoW ยังใช้ได้ Merkle root คือค่าที่ผูก header ไว้กับธุรกรรม เมื่อแก้ธุรกรรมใดแม้เพียงไบต์เดียว txid ของธุรกรรมนั้นจะเปลี่ยน ค่าแฮชทุกชั้นที่อยู่เหนือขึ้นไปจะเปลี่ยนตามจนถึง Merkle root เมื่อ Merkle root เปลี่ยน ค่าแฮชของ header ก็เปลี่ยน PoW ที่หามาจึงใช้ไม่ได้ทันที ผู้โจมตีที่แก้ธุรกรรมใดในบล็อกจึงต้องทำ PoW ของบล็อกนั้นใหม่ทั้งหมด</p>
+
+        <div class="callout">
+          <span class="h">หมายเหตุเรื่อง SegWit</span>
+          ย่อหน้าข้างบนอธิบายตามรูปแบบธุรกรรมใน Whitepaper หลัง SegWit (Segregated Witness, BIP141) ธุรกรรมแยกข้อมูลลายเซ็นไปไว้ในส่วน witness และ txid ไม่นำส่วนนี้มาคิด ถ้าแก้เฉพาะ witness ค่า txid จึงไม่เปลี่ยน แต่ Bitcoin ผูกส่วนนี้ไว้อีกทางหนึ่ง โดยสร้างต้นไม้อีกชุดจาก wtxid (ค่าแฮชที่รวม witness) แล้วใส่ root ของต้นไม้นั้นไว้ในธุรกรรมแรกของบล็อก (coinbase transaction) ค่านี้เรียกว่า witness commitment เมื่อ witness เปลี่ยน coinbase ก็เปลี่ยน และ Merkle root ใน header ก็เปลี่ยนตาม ข้อสรุปเรื่อง PoW จึงยังเหมือนเดิม
+        </div>
+
+        <h3>ทดลอง: แก้ธุรกรรมแล้วดูค่าแฮชที่เปลี่ยน</h3>
+        <p>แก้ข้อความของธุรกรรมใดก็ได้ ค่าแฮชที่เปลี่ยนจะกะพริบ จากนั้นเลือกธุรกรรมที่ต้องการพิสูจน์ เพื่อดูว่าผู้ตรวจที่ไม่มีธุรกรรมทั้งบล็อก (light client ในหัวข้อ 3.4) ต้องได้รับค่าแฮชใดบ้าง</p>
+
+        <div class="hash-demo" id="merkle">
+          <div class="mtx">
+            <div><label for="t0">Tx0</label><input id="t0" value="Alice จ่าย Bob 1 BTC" autocomplete="off"></div>
+            <div><label for="t1">Tx1</label><input id="t1" value="Bob จ่าย Carol 0.5 BTC" autocomplete="off"></div>
+            <div><label for="t2">Tx2</label><input id="t2" value="Carol จ่าย Dave 0.2 BTC" autocomplete="off"></div>
+            <div><label for="t3">Tx3</label><input id="t3" value="Dave จ่ายร้านกาแฟ 0.001 BTC" autocomplete="off"></div>
+          </div>
+
+          <div class="mtree">
+            <div class="node root span4" id="nroot"><small>Merkle root</small><code></code></div>
+            <div class="node span2" id="nh01"><small>Hash01</small><code></code></div>
+            <div class="node span2" id="nh23"><small>Hash23</small><code></code></div>
+            <div class="node" id="nh0"><small>Hash0</small><code></code></div>
+            <div class="node" id="nh1"><small>Hash1</small><code></code></div>
+            <div class="node" id="nh2"><small>Hash2</small><code></code></div>
+            <div class="node" id="nh3"><small>Hash3</small><code></code></div>
+          </div>
+
+          <div class="row">
+            <label for="mpick" style="margin:0">พิสูจน์ว่าธุรกรรมนี้อยู่ในบล็อก</label>
+            <select id="mpick">
+              <option value="0">Tx0</option>
+              <option value="1">Tx1</option>
+              <option value="2">Tx2</option>
+              <option value="3" selected>Tx3</option>
+            </select>
+          </div>
+          <div class="mproof" id="mproof"></div>
+          <p style="font-size:13px;color:var(--muted);margin:10px 0 0">เพื่อให้อ่านง่าย ตัวอย่างนี้แฮชข้อความด้วย SHA-256 รอบเดียว และนำค่าแฮชในรูปเลขฐานสิบหกมาต่อกันเป็นข้อความก่อนแฮช ส่วน Bitcoin จริงใช้ SHA-256 สองรอบกับข้อมูลแบบไบต์ แต่โครงสร้างของต้นไม้เหมือนกัน</p>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          Merkle root เป็นค่าแฮชค่าเดียวที่ผูกธุรกรรมทั้งบล็อกไว้กับ header แก้ธุรกรรมใดก็ตาม root จะเปลี่ยน ส่วนการพิสูจน์ว่ามีธุรกรรมหนึ่งอยู่ในบล็อก ใช้ค่าแฮชเพียง log<sub>2</sub>(n) ค่า เพราะต้นไม้แต่ละชั้นมีจำนวนค่าแฮชลดลงครึ่งหนึ่ง จึงต้องจับคู่ log<sub>2</sub>(n) ครั้งจนเหลือ root และการจับคู่แต่ละครั้งใช้ค่าแฮชคู่ข้างเพียงค่าเดียว เช่น 8 ธุรกรรมใช้ 3 ค่า และ 1,024 ธุรกรรมใช้ 10 ค่า ถ้า n ไม่ใช่กำลังของ 2 ให้ปัดขึ้น เช่น 4,000 ธุรกรรม log<sub>2</sub> ≈ 11.97 จึงใช้ 12 ค่า
+        </div>
+      </section>
+
+      <!-- ==================== 3.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">3.2</span>การตัดข้อมูลธุรกรรมเก่า (Pruning) โดยไม่กระทบค่าแฮชของบล็อก</h2>
+
+        <h3>ทำไมจึงลบธุรกรรมเก่าได้</h3>
+        <p>เมื่อโหนดตรวจธุรกรรมใหม่ คำถามที่ต้องตอบมีเพียงข้อเดียว คือเหรียญที่นำมาจ่าย <strong>ยังไม่มีใครใช้ไป</strong> หรือไม่ เหรียญจากธุรกรรมเก่าส่วนใหญ่มีผู้นำไปใช้ต่อแล้ว ธุรกรรมเหล่านั้นจึงไม่จำเป็นต่อคำถามนี้อีก Whitepaper ข้อ 7 จึงเสนอว่า เมื่อธุรกรรมล่าสุดของเหรียญหนึ่งมีบล็อกต่อท้ายมากพอ ก็ลบธุรกรรมที่ใช้ไปแล้วก่อนหน้านั้นทิ้งได้ เพื่อประหยัดพื้นที่ดิสก์ ที่ต้องรอให้มีบล็อกต่อท้ายมากพอก่อน เพราะบล็อกที่เพิ่งเกิดอาจหลุดจากสายที่ยาวที่สุด (longest chain) เมื่อเกิดการแยกสาย (fork) ตามที่อธิบายไว้ในบทที่ 2 ถ้าลบเร็วเกินไปแล้วสายเปลี่ยน โหนดอาจต้องใช้ธุรกรรมที่ลบไปแล้วมาตรวจบล็อกในสายใหม่ แต่ไม่มีข้อมูลนั้นเหลืออยู่</p>
+
+        <h3>ทำไมลบแล้วค่าแฮชของบล็อกไม่เปลี่ยน</h3>
+        <p>ค่าแฮชของบล็อกคำนวณจาก header เท่านั้น และ header ผูกกับธุรกรรมผ่าน Merkle root ค่าเดียว ลบธุรกรรมไปจึงไม่กระทบค่าแฮชของบล็อก แต่โหนดยังต้องตรวจได้ว่าธุรกรรมที่เหลืออยู่ตรงกับ root ถ้าตรวจไม่ได้ โหนดจะไม่รู้ว่าธุรกรรมที่เก็บไว้ในดิสก์ หรือธุรกรรมที่ส่งให้โหนดอื่น ยังเป็นฉบับเดิมหรือมีใครแก้ไขไปแล้ว</p>
+        <p>วิธีของ Whitepaper คือ <strong>ตัดกิ่งย่อย (subtree) ที่ไม่ต้องการ แล้วเก็บเฉพาะค่าแฮชบนสุดของกิ่งนั้นไว้แทน</strong> เช่น เก็บ Hash01 ค่าเดียวแทน Tx0, Tx1, Hash0 และ Hash1 คำว่ากิ่งในหัวข้อนี้หมายถึงส่วนของต้นไม้ที่ตัดออก ต่างจาก Merkle branch ในหัวข้อ 3.4 ซึ่งเป็นชุดค่าแฮชที่ใช้พิสูจน์</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 330" role="img" aria-label="หลังตัด Tx0 Tx1 และ Tx2 บล็อกยังเก็บ Hash01 Hash2 และ Tx3 ไว้ ข้อมูลเท่านี้พอสำหรับคำนวณ Root Hash ให้ตรงกับใน header">
+            <defs>
+              <marker id="arrUp2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <rect x="170" y="10" width="420" height="66" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="380" y="30" text-anchor="middle" font-size="12" fill="#6b655c">Block header (ไม่เปลี่ยน)</text>
+              <rect x="190" y="40" width="110" height="26" rx="5" fill="#f0ebe1"/>
+              <text x="245" y="58" text-anchor="middle" font-size="12">Prev Hash</text>
+              <rect x="320" y="40" width="120" height="26" rx="5" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.5"/>
+              <text x="380" y="58" text-anchor="middle" font-size="12" font-weight="700" fill="#b85a10">Root Hash</text>
+              <rect x="460" y="40" width="110" height="26" rx="5" fill="#f0ebe1"/>
+              <text x="515" y="58" text-anchor="middle" font-size="12">Nonce</text>
+
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="230" y1="112" x2="370" y2="68" marker-end="url(#arrUp2)"/>
+                <line x1="530" y1="112" x2="390" y2="68" marker-end="url(#arrUp2)"/>
+                <line x1="455" y1="180" x2="522" y2="144" marker-end="url(#arrUp2)"/>
+                <line x1="605" y1="180" x2="538" y2="144" marker-end="url(#arrUp2)"/>
+                <line x1="605" y1="246" x2="605" y2="212" marker-end="url(#arrUp2)"/>
+              </g>
+              <g stroke="#b9b1a3" stroke-width="1" stroke-dasharray="4 4" fill="none">
+                <line x1="155" y1="180" x2="222" y2="144"/>
+                <line x1="305" y1="180" x2="238" y2="144"/>
+                <line x1="155" y1="246" x2="155" y2="212"/>
+                <line x1="305" y1="246" x2="305" y2="212"/>
+                <line x1="455" y1="246" x2="455" y2="212"/>
+              </g>
+
+              <rect x="175" y="112" width="110" height="30" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="230" y="132" text-anchor="middle" fill="#1f6e5a" font-weight="700">Hash01</text>
+              <rect x="475" y="112" width="110" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="530" y="132" text-anchor="middle">Hash23</text>
+
+              <g fill="none" stroke="#b9b1a3" stroke-dasharray="4 4">
+                <rect x="105" y="180" width="100" height="30" rx="6"/>
+                <rect x="255" y="180" width="100" height="30" rx="6"/>
+                <rect x="105" y="248" width="100" height="30" rx="6"/>
+                <rect x="255" y="248" width="100" height="30" rx="6"/>
+                <rect x="405" y="248" width="100" height="30" rx="6"/>
+              </g>
+              <g fill="#a39a8b" text-anchor="middle">
+                <text x="155" y="200">Hash0</text>
+                <text x="305" y="200">Hash1</text>
+                <text x="155" y="268">Tx0</text>
+                <text x="305" y="268">Tx1</text>
+                <text x="455" y="268">Tx2</text>
+              </g>
+
+              <rect x="405" y="180" width="100" height="30" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="455" y="200" text-anchor="middle" fill="#1f6e5a" font-weight="700">Hash2</text>
+              <rect x="555" y="180" width="100" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="605" y="200" text-anchor="middle">Hash3</text>
+              <rect x="555" y="248" width="100" height="30" rx="6" fill="#f0ebe1" stroke="currentColor"/>
+              <text x="605" y="268" text-anchor="middle" font-weight="700">Tx3</text>
+
+              <g font-size="12">
+                <rect x="105" y="300" width="16" height="12" rx="3" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+                <text x="128" y="311">ค่าแฮชที่เก็บไว้แทนกิ่งที่ตัด</text>
+                <rect x="330" y="300" width="16" height="12" rx="3" fill="none" stroke="#b9b1a3" stroke-dasharray="3 3"/>
+                <text x="353" y="311">ลบทิ้งได้</text>
+                <rect x="450" y="300" width="16" height="12" rx="3" fill="#fff" stroke="currentColor"/>
+                <text x="473" y="311">คำนวณใหม่ได้จากข้อมูลที่เหลือ</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>สมมุติว่ามีผู้นำเหรียญจาก Tx0, Tx1 และ Tx2 ไปใช้หมดแล้ว แต่เหรียญจาก Tx3 ยังไม่มีใครใช้ บล็อกเก็บไว้เพียง Hash01, Hash2 และ Tx3 ก็ยังคำนวณ Root Hash ได้ตรงกับใน header</figcaption>
+        </figure>
+
+        <p>หลังตัดกิ่งแล้ว โหนดตรวจได้ดังนี้ เริ่มจากแฮช Tx3 ได้ Hash3 จากนั้นนำ Hash2 ที่เก็บไว้มาต่อกับ Hash3 แล้วแฮชได้ Hash23 สุดท้ายนำ Hash01 ที่เก็บไว้มาต่อกับ Hash23 แล้วแฮชได้ Root Hash ถ้าค่าที่ได้ตรงกับใน header แสดงว่าไม่มีใครแก้ไข Tx3 แม้จะลบธุรกรรมอีกสามรายการไปแล้วก็ตาม</p>
+
+        <div class="callout warn">
+          <span class="h">Bitcoin Core จริงไม่ได้ตัดกิ่งแบบนี้</span>
+          โหมด pruning ของ Bitcoin Core ทำงานต่างจาก Whitepaper โหนดดาวน์โหลดทุกบล็อกตั้งแต่ต้นและตรวจครบทุกกฎ จากนั้นเก็บ header ทุกบล็อก รายการเหรียญที่ยังไม่ได้ใช้ (UTXO set ดูรายละเอียดในบทที่ 4) และบล็อกล่าสุดจำนวนหนึ่ง แล้วลบไฟล์บล็อกเก่าทิ้งทั้งไฟล์ วิธีนี้ทำได้เพราะ UTXO set มีข้อมูลครบสำหรับตรวจธุรกรรมใหม่ โหนดจึงไม่ต้องเก็บค่าแฮชของกิ่งที่ตัดแบบใน Whitepaper ผู้ใช้เปิดโหมดนี้ด้วย <code>prune=550</code> ในไฟล์ <code>bitcoin.conf</code> โดย 550 MiB เป็นค่าต่ำสุดที่ตั้งได้ โหนดแบบนี้ยังตรวจทุกอย่างเองเหมือน full node แต่ส่งบล็อกเก่าให้โหนดอื่นไม่ได้ ถ้าข้อสอบถามตาม Whitepaper ให้ตอบเรื่องการตัดกิ่งของ Merkle tree
+        </div>
+      </section>
+
+      <!-- ==================== 3.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">3.3</span>การคำนวณขนาด Block header: 80 ไบต์ต่อบล็อก ประมาณ 4.2 MB ต่อปี</h2>
+
+        <h3>ทำไมต้องคำนวณเรื่องนี้</h3>
+        <p>หลังจากลบธุรกรรมได้แล้ว สิ่งที่ทุกคนยังต้องเก็บไว้ตลอดคือ block header ของทุกบล็อก เพราะ header คือสายโซ่ของ PoW ที่โหนดใช้ตัดสินว่าสายใดเป็นสายที่ยาวที่สุด (longest chain) ถ้าส่วนนี้ยังโตเร็วเกินไป ปัญหาในหัวข้อเริ่มต้นก็ยังแก้ไม่ได้ Satoshi จึงคำนวณให้เห็นว่าส่วนที่ต้องเก็บไว้ตลอดมีขนาดเล็กเพียงใด ตัวเลขนี้ยังเป็นพื้นฐานของ SPV ในหัวข้อ 3.4 ด้วย</p>
+
+        <h3>ส่วนประกอบของ header 80 ไบต์</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ฟิลด์</th><th>ขนาด</th><th>หน้าที่</th></tr>
+            <tr><td>Version</td><td>4 ไบต์</td><td>รุ่นของกฎที่บล็อกใช้</td></tr>
+            <tr><td>Previous block hash</td><td>32 ไบต์</td><td>ผูกกับบล็อกก่อนหน้า</td></tr>
+            <tr><td>Merkle root</td><td>32 ไบต์</td><td>ผูกกับธุรกรรมทั้งหมดในบล็อก</td></tr>
+            <tr><td>Timestamp</td><td>4 ไบต์</td><td>เวลาโดยประมาณที่สร้างบล็อก</td></tr>
+            <tr><td>Bits</td><td>4 ไบต์</td><td>ค่า target ในรูปแบบย่อ</td></tr>
+            <tr><td>Nonce</td><td>4 ไบต์</td><td>ค่าที่ผู้ขุด (miner) เปลี่ยนเพื่อหา PoW</td></tr>
+            <tr><td><strong>รวม</strong></td><td><strong>80 ไบต์</strong></td><td></td></tr>
+          </table>
+        </div>
+
+        <h3>การคำนวณ</h3>
+        <p>บล็อกเกิดเฉลี่ยทุก 10 นาที จึงเกิดชั่วโมงละ 6 บล็อก</p>
+<pre>80 ไบต์ × 6 บล็อกต่อชั่วโมง × 24 ชั่วโมง × 365 วัน
+= 4,204,800 ไบต์
+≈ 4.2 MB ต่อปี</pre>
+        <p>Whitepaper เปรียบเทียบตัวเลขนี้กับคอมพิวเตอร์ในปี 2008 ซึ่งมักขายพร้อมหน่วยความจำ (RAM) 2 GB ถ้าเป็นไปตามกฎของมัวร์ (Moore's Law) หน่วยความจำจะเพิ่มขึ้นปีละ 1.2 GB หรือราว 1,200 MB ขณะที่ header เพิ่มขึ้นเพียงปีละ 4.2 MB หน่วยความจำที่เพิ่มขึ้นในแต่ละปีจึงมากกว่า header ที่เพิ่มขึ้นเกือบ 300 เท่า ดังนั้นแม้ต้องเก็บ header ทั้งหมดไว้ในหน่วยความจำ ขนาดก็ไม่เป็นปัญหา</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ข้อมูล</th><th>ขนาดโดยประมาณ (ปี 2026)</th></tr>
+            <tr><td>Header ทุกบล็อก (ราว 970,000 บล็อก × 80 ไบต์)</td><td>ราว 78 MB และเพิ่มขึ้นปีละประมาณ 4.2 MB</td></tr>
+            <tr><td>Blockchain ทั้งหมดรวมธุรกรรม</td><td>หลายร้อย GB</td></tr>
+          </table>
+        </div>
+        <p>เพราะสองค่านี้ต่างกันหลายพันเท่า อุปกรณ์ขนาดเล็กจึงเก็บ header ของสายโซ่ PoW ได้ครบ แม้เก็บธุรกรรมทั้งหมดไม่ได้</p>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          จำสูตร 80 × 6 × 24 × 365 ≈ 4.2 MB ต่อปี และรู้ที่มาของแต่ละตัวเลข ข้อสอบอาจเปลี่ยนเงื่อนไข เช่น ถ้าบล็อกเกิดทุก 1 นาที จะได้ 80 × 60 × 24 × 365 ≈ 42 MB ต่อปี
+        </div>
+      </section>
+
+      <!-- ==================== 3.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">3.4</span>Simplified Payment Verification (SPV) และ Merkle proof</h2>
+
+        <h3>ทำไมต้องมีวิธีตรวจแบบย่อ</h3>
+        <p>กลับไปที่ร้านกาแฟในหัวข้อเริ่มต้น ร้านมีทางเลือกสองทาง ทางแรกคือรัน full node ซึ่งต้องเก็บข้อมูลหลายร้อยกิกะไบต์ ทางที่สองคือเชื่อคำตอบของเซิร์ฟเวอร์รายเดียว SPV เป็นทางเลือกที่สาม ร้านไม่ต้องเก็บทุกบล็อก และไม่ต้องเชื่อคำตอบของเซิร์ฟเวอร์ เพราะตรวจคำตอบเองได้ด้วยค่าแฮช แต่ร้านยังต้องพึ่งให้ full node ส่งข้อมูลมาครบ (ดูตารางท้ายหัวข้อนี้) สิ่งที่ร้านต้องเชื่อแทนคือ <strong>พลังประมวลผล (CPU power) ส่วนใหญ่ของเครือข่ายซื่อสัตย์</strong> สมมุติฐานนี้เป็นข้อเดียวกับที่ทั้งระบบใช้อยู่แล้ว</p>
+
+        <h3>สิ่งที่ light client เก็บ</h3>
+        <p>ซอฟต์แวร์ที่ตรวจแบบ SPV เรียกว่า light client ซอฟต์แวร์นี้เก็บเพียง <strong>block header ของสายโซ่ PoW ที่ยาวที่สุด</strong> light client ขอ header จากหลายโหนดในเครือข่าย แล้วเลือกสายที่มีงานสะสมมากที่สุด (most cumulative work) ตามกฎในบทที่ 2 ไม่ได้นับเพียงจำนวนบล็อก light client ตรวจ header แต่ละบล็อกเองได้ด้วยต้นทุนต่ำ การตรวจมีสามข้อ</p>
+        <ul>
+          <li>Prev Hash ของ header ต้องชี้ไปยัง header ก่อนหน้าได้ถูกต้อง</li>
+          <li>ค่า Bits (target) ของ header ต้องตรงกับกฎการปรับความยาก (บทที่ 2 หัวข้อ 2.2) ถ้าไม่ตรวจข้อนี้ ผู้ปลอมจะตั้ง target ให้ง่ายมาก แล้วสร้าง header ที่ผ่านข้อถัดไปได้ด้วยงานเพียงเล็กน้อย</li>
+          <li>ค่าแฮชของ header ต้องผ่าน target นั้น</li>
+        </ul>
+        <p>เมื่อตรวจครบสามข้อ ผู้ที่ต้องการปลอม header จึงต้องทำ PoW จริงตามความยากของเครือข่าย</p>
+
+        <h3>ขั้นตอนการตรวจ</h3>
+        <ol>
+          <li>ขอตัวธุรกรรมพร้อม <strong>Merkle branch</strong> (หรือ Merkle proof) จาก full node และให้ full node ระบุว่าธุรกรรมอยู่ในบล็อกใด Merkle branch คือชุดค่าแฮชคู่ข้าง (sibling hash) ชั้นละหนึ่งค่า ตามเส้นทางจากธุรกรรมขึ้นไปถึง root</li>
+          <li>แฮชธุรกรรม แล้วนำผลที่ได้ไปต่อกับค่าแฮชใน branch และแฮชซ้ำทีละชั้นจนได้ root</li>
+          <li>เทียบ root ที่คำนวณได้กับ Merkle root ใน header ที่เก็บไว้ ถ้าตรงกัน แสดงว่าธุรกรรมอยู่ในบล็อกนั้นจริง full node ที่ต้องการโกงต้องหาค่าแฮชชุดอื่นที่คำนวณแล้วได้ root เดิม แต่ SHA-256 มีคุณสมบัติ collision resistance (บทที่ 0) งานนี้จึงทำไม่ได้ในทางปฏิบัติ</li>
+          <li>นับจำนวน confirmation โดยบล็อกที่มีธุรกรรมนับเป็น 1 และแต่ละบล็อกที่ต่อท้ายเพิ่มอีก 1 ยิ่งมีมาก ก็ยิ่งมั่นใจได้ว่าเครือข่ายยอมรับธุรกรรมนี้แล้ว</li>
+        </ol>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 340" role="img" aria-label="light client เก็บเฉพาะ header ของสายที่ยาวที่สุด เมื่อต้องการตรวจ Tx3 จะได้รับ Hash2 และ Hash01 จาก full node แล้วคำนวณ Hash3 Hash23 และ root เอง เพื่อเทียบกับ Merkle root ใน Header N">
+            <defs>
+              <marker id="arrSpv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="170" y1="44" x2="208" y2="44" marker-end="url(#arrSpv)"/>
+                <line x1="360" y1="44" x2="398" y2="44" marker-end="url(#arrSpv)"/>
+                <line x1="550" y1="44" x2="588" y2="44" marker-end="url(#arrSpv)"/>
+              </g>
+              <rect x="20" y="16" width="150" height="56" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="95" y="38" text-anchor="middle" font-weight="700">Header N−1</text>
+              <text x="95" y="58" text-anchor="middle" font-size="11" fill="#6b655c">Prev Hash · Root · Nonce</text>
+
+              <rect x="210" y="16" width="150" height="56" rx="8" fill="#fff" stroke="#e2761b" stroke-width="1.6"/>
+              <text x="285" y="34" text-anchor="middle" font-weight="700">Header N</text>
+              <rect x="230" y="42" width="110" height="22" rx="5" fill="#fdf0e3" stroke="#e2761b"/>
+              <text x="285" y="57" text-anchor="middle" font-size="12" fill="#b85a10">Merkle Root</text>
+
+              <rect x="400" y="16" width="150" height="56" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="475" y="38" text-anchor="middle" font-weight="700">Header N+1</text>
+              <text x="475" y="58" text-anchor="middle" font-size="11" fill="#6b655c">Prev Hash · Root · Nonce</text>
+              <rect x="590" y="16" width="150" height="56" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="665" y="38" text-anchor="middle" font-weight="700">Header N+2</text>
+              <text x="665" y="58" text-anchor="middle" font-size="11" fill="#6b655c">Prev Hash · Root · Nonce</text>
+              <text x="475" y="94" text-anchor="middle" font-size="12" fill="#6b655c">Header N ถึง N+2 = 3 confirmation</text>
+
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="180" y1="130" x2="276" y2="68" marker-end="url(#arrSpv)"/>
+                <line x1="390" y1="130" x2="294" y2="68" marker-end="url(#arrSpv)"/>
+                <line x1="330" y1="200" x2="382" y2="162" marker-end="url(#arrSpv)"/>
+                <line x1="450" y1="200" x2="398" y2="162" marker-end="url(#arrSpv)"/>
+                <line x1="450" y1="262" x2="450" y2="232" marker-end="url(#arrSpv)"/>
+              </g>
+
+              <rect x="130" y="130" width="100" height="30" rx="6" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.5"/>
+              <text x="180" y="150" text-anchor="middle" fill="#b85a10" font-weight="700">Hash01</text>
+              <rect x="340" y="130" width="100" height="30" rx="6" fill="#fff" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="390" y="150" text-anchor="middle" fill="#1f6e5a">Hash23</text>
+              <rect x="280" y="200" width="100" height="30" rx="6" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.5"/>
+              <text x="330" y="220" text-anchor="middle" fill="#b85a10" font-weight="700">Hash2</text>
+              <rect x="400" y="200" width="100" height="30" rx="6" fill="#fff" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="450" y="220" text-anchor="middle" fill="#1f6e5a">Hash3</text>
+              <rect x="400" y="262" width="100" height="30" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="450" y="282" text-anchor="middle" fill="#1f6e5a" font-weight="700">Tx3</text>
+
+              <g font-size="12">
+                <text x="530" y="180">1. แฮช Tx3 ได้ Hash3</text>
+                <text x="530" y="204">2. แฮช Hash2 ต่อ Hash3 ได้ Hash23</text>
+                <text x="530" y="228">3. แฮช Hash01 ต่อ Hash23 ได้ root</text>
+                <text x="530" y="252">4. เทียบกับ Merkle Root</text>
+                <text x="546" y="270">ใน Header N</text>
+              </g>
+
+              <g font-size="12">
+                <rect x="20" y="314" width="16" height="12" rx="3" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.5"/>
+                <text x="43" y="325">ได้รับจาก full node (Merkle branch)</text>
+                <rect x="290" y="314" width="16" height="12" rx="3" fill="#fff" stroke="#1f8a70" stroke-width="1.5"/>
+                <text x="313" y="325">light client คำนวณเอง</text>
+                <rect x="480" y="314" width="16" height="12" rx="3" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+                <text x="503" y="325">ธุรกรรมที่ต้องการตรวจ</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>light client เก็บเฉพาะ header แถวบน เมื่อต้องการตรวจ Tx3 จะขอ Hash2 และ Hash01 จาก full node แล้วคำนวณขึ้นไปจนได้ root ถ้าตรงกับ Merkle root ใน Header N แสดงว่า Tx3 อยู่ในบล็อก N บล็อก N นับเป็น confirmation แรก บล็อก N+1 และ N+2 ที่ต่อท้ายทำให้มี 3 confirmation</figcaption>
+        </figure>
+
+        <h3>ทำไมผลการตรวจนี้เชื่อถือได้</h3>
+        <p>light client ไม่ได้ตรวจตัวธุรกรรมเอง จึงไม่รู้ว่าลายเซ็น (digital signature) ถูกต้องหรือไม่ และไม่รู้ว่าผู้จ่ายใช้จ่ายซ้ำ (double-spending) หรือไม่ แต่เมื่อพบว่าธุรกรรมอยู่ในบล็อกหนึ่งของสายที่ยาวที่สุด light client ก็รู้ได้ว่า <strong>มีโหนดในเครือข่ายยอมรับธุรกรรมนี้แล้ว</strong> ทุกบล็อกที่ต่อท้ายยังบอกด้วยว่าผู้ขุดรายอื่นยอมรับบล็อกที่มีธุรกรรมนี้ และทำ PoW สร้างบล็อกต่อจากบล็อกนั้นแล้ว ผู้ที่ต้องการหลอก light client จึงต้องสร้างบล็อกที่ผ่าน PoW จริง และต้องสร้างต่อไปเรื่อย ๆ ให้เร็วกว่าเครือข่ายส่วนที่ซื่อสัตย์ เพราะการหลอกแบบนี้มีต้นทุนสูง ผู้ใช้ SPV จึงเชื่อผลการตรวจได้</p>
+        <p>ข้อมูลที่ต้องส่งก็มีขนาดเล็ก บล็อกที่มีราว 4,000 ธุรกรรมใช้ Merkle branch เพียง 12 ค่าแฮช (log<sub>2</sub> 4,000 ≈ 11.97 ปัดขึ้นเป็น 12) หรือ 384 ไบต์ ขณะที่ทั้งบล็อกมีขนาดราว 1–2 MB</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>SPV ยืนยันได้</th><th>SPV ยืนยันไม่ได้</th></tr>
+            <tr><td>ธุรกรรมอยู่ในบล็อกที่ผ่าน PoW และอยู่ในสายที่ยาวที่สุด</td><td>ลายเซ็นของธุรกรรมถูกต้อง และผู้จ่ายไม่ได้ใช้จ่ายซ้ำ</td></tr>
+            <tr><td>จำนวน confirmation</td><td>บล็อกทำตามกฎอื่นครบ เช่น ผู้ขุดไม่ได้จ่ายรางวัลบล็อก (block reward) ให้ตัวเองเกินกำหนด</td></tr>
+            <tr><td>ไม่มีใครแก้ไขธุรกรรม เพราะคำนวณ root ได้ตรง</td><td>full node ไม่ได้ซ่อนธุรกรรมที่จ่ายให้ผู้ใช้ light client ถ้า full node ไม่ส่งธุรกรรมนั้นมา light client ก็ไม่รู้ว่ามีธุรกรรมนั้นอยู่</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 3.5 ==================== -->
+      <section id="s5">
+        <h2><span class="no">3.5</span>ข้อจำกัดของ SPV: Full node เทียบกับ Light client</h2>
+
+        <h3>SPV ปลอดภัยตราบที่พลังประมวลผลส่วนใหญ่ซื่อสัตย์</h3>
+        <p>Whitepaper ระบุว่าการตรวจแบบ SPV เชื่อถือได้ตราบที่โหนดซื่อสัตย์ควบคุมเครือข่าย แต่ถ้าผู้โจมตีมีพลังประมวลผลมากกว่า ผู้ใช้ SPV จะถูกหลอกได้ง่ายขึ้น สมมุติว่าผู้โจมตีที่คุมพลังประมวลผลส่วนใหญ่สร้างบล็อกที่มีธุรกรรมจ่ายเหรียญที่ไม่มีอยู่จริงให้ร้านค้า บล็อกนั้นผ่าน PoW และคำนวณ Merkle proof ได้ถูกต้อง</p>
+        <ul>
+          <li><strong>Full node</strong> ตรวจธุรกรรมทุกรายการเอง จึงปฏิเสธบล็อกนั้นทันที ไม่ว่าบล็อกจะมี PoW มากเพียงใด</li>
+          <li><strong>Light client</strong> ตรวจได้เพียงว่าบล็อกมี PoW และมีธุรกรรมอยู่จริง จึงถูกหลอกได้ตลอดเวลาที่ผู้โจมตียังเอาชนะเครือข่ายได้</li>
+        </ul>
+
+        <h3>ทางป้องกันที่ Whitepaper เสนอ</h3>
+        <p>Whitepaper เสนอให้ light client รับ <strong>การแจ้งเตือน (alert)</strong> จาก full node เมื่อ full node พบบล็อกที่ไม่ถูกต้อง เมื่อ full node แจ้งเตือนมา ซอฟต์แวร์ของผู้ใช้จะดาวน์โหลดบล็อกนั้นและธุรกรรมที่ full node ระบุ แล้วตรวจเองว่าผิดจริงหรือไม่</p>
+        <p>Bitcoin จริงยังไม่ได้นำแนวคิดนี้มาใช้ เหตุผลที่มักอธิบายกันมีสองข้อ ข้อแรก ผู้ไม่หวังดีส่งการแจ้งเตือนปลอมจำนวนมากได้ light client จึงต้องดาวน์โหลดบล็อกตามทุกครั้ง ข้อสอง ความผิดบางแบบพิสูจน์ด้วยข้อมูลเพียงเล็กน้อยไม่ได้ เช่น การใช้เหรียญที่ไม่มีอยู่จริง</p>
+        <p>Whitepaper ยังแนะนำว่า <strong>ธุรกิจที่รับชำระเงินบ่อยควรรันโหนดของตัวเอง</strong> เพราะจะปลอดภัยโดยไม่ต้องพึ่งผู้อื่น และตรวจได้เร็วกว่า</p>
+
+        <h3>เปรียบเทียบโหนดสามแบบ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>Full node</th><th>Pruned node</th><th>Light client (SPV)</th></tr>
+            <tr><td>ข้อมูลที่เก็บ</td><td>ทุกบล็อก หลายร้อย GB</td><td>header ทุกบล็อก UTXO set และบล็อกล่าสุดตามที่กำหนด (ต่ำสุด 550 MiB)</td><td>header ทุกบล็อก (ราว 78 MB) และธุรกรรมของตนเอง</td></tr>
+            <tr><td>ตรวจลายเซ็นและการใช้จ่ายซ้ำ</td><td>ตรวจเองทั้งหมด</td><td>ตรวจเองทั้งหมด</td><td>ไม่ตรวจ อาศัย PoW แทน</td></tr>
+            <tr><td>ต้องเชื่อใคร</td><td>ไม่ต้องเชื่อใคร</td><td>ไม่ต้องเชื่อใคร</td><td>เชื่อว่าพลังประมวลผลส่วนใหญ่ซื่อสัตย์ และ full node ที่เชื่อมต่อไม่ซ่อนข้อมูล</td></tr>
+            <tr><td>ส่งบล็อกเก่าให้โหนดอื่น</td><td>ได้</td><td>ไม่ได้</td><td>ไม่ได้</td></tr>
+            <tr><td>ความเป็นส่วนตัว (privacy)</td><td>สูง</td><td>สูง</td><td>ต่ำกว่า เพราะต้องขอข้อมูลธุรกรรมของตนจากโหนดอื่น</td></tr>
+            <tr><td>เหมาะกับ</td><td>ธุรกิจ ตลาดแลกเปลี่ยน (exchange) และผู้ที่ต้องการตรวจเอง</td><td>ผู้ที่ต้องการตรวจเองแต่มีดิสก์จำกัด</td><td>กระเป๋าเงิน (wallet) บนมือถือ</td></tr>
+          </table>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักสับสน</span>
+          Pruned node ไม่ใช่ light client เพราะ pruned node ดาวน์โหลดและตรวจทุกบล็อกเองครบเหมือน full node เพียงแต่ลบไฟล์บล็อกเก่าทิ้งหลังตรวจเสร็จ ส่วน light client ไม่เคยตรวจธุรกรรมของผู้อื่นเลย
+        </div>
+
+        <div class="callout">
+          <span class="h">ในทางปฏิบัติ</span>
+          light client ต้องขอธุรกรรมที่เกี่ยวกับตนจาก full node วิธีแรกคือ BIP37 (bloom filter) ในวิธีนี้ light client สร้างตัวกรอง (filter) จาก address ของตนแล้วส่งไปให้ full node จากนั้น full node คัดธุรกรรมที่ตรงกับตัวกรองส่งกลับมา วิธีนี้มีปัญหาสองข้อ ข้อแรก full node นำตัวกรองไปวิเคราะห์ได้ว่า address ใดเป็นของผู้ใช้ ข้อสอง full node ต้องคัดข้อมูลให้ light client ทีละราย จึงรับภาระเพิ่ม Bitcoin Core จึงปิดบริการนี้เป็นค่าเริ่มต้น (default) ตั้งแต่รุ่น 0.19<br><br>
+          วิธีที่ใหม่กว่าคือ BIP157/158 (compact block filters) วิธีนี้สลับฝ่ายที่สร้างตัวกรอง full node สร้างตัวกรองของแต่ละบล็อกแบบเดียวกันสำหรับทุกคน light client นำตัวกรองนั้นมาตรวจเองว่าบล็อกใดอาจมีธุรกรรมของตน แล้วจึงดาวน์โหลดเฉพาะบล็อกนั้น full node เห็นเพียงว่า light client ขอบล็อกใด จึงรู้ได้ยากกว่าเดิมมากว่า address ใดเป็นของผู้ใช้ และไม่ต้องคัดข้อมูลให้ผู้ใช้ทีละราย
+        </div>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li><strong>โจทย์:</strong> ทุกโหนดต้องเก็บข้อมูลที่โตขึ้นตลอด และผู้ใช้บนมือถือต้องตรวจได้ว่าได้รับเงินจริงโดยไม่ต้องเก็บข้อมูลทั้งหมด ทางแก้ของทั้งสองข้อต้องไม่ทำให้หลักฐานเดิมใช้ไม่ได้</li>
+          <li><strong>ข้อ 7:</strong> Merkle tree แฮชธุรกรรมทีละคู่ขึ้นไปจนเหลือ Merkle root ค่าเดียว แล้วใส่ไว้ใน header ถ้าแก้ธุรกรรมใด root จะเปลี่ยน และ PoW ของบล็อกจะใช้ไม่ได้</li>
+          <li><strong>ข้อ 7:</strong> เมื่อมีบล็อกต่อท้ายมากพอ ธุรกรรมที่ใช้ไปแล้วลบทิ้งได้ โดยเก็บค่าแฮชบนสุดของกิ่งย่อย (subtree) ที่ตัดไว้แทน ค่าแฮชของบล็อกไม่เปลี่ยน เพราะคำนวณจาก header เท่านั้น</li>
+          <li><strong>ข้อ 7:</strong> header ซึ่งไม่รวมธุรกรรมมีขนาด 80 ไบต์ ทั้งปีจึงเพิ่มขึ้น 80 × 6 × 24 × 365 ≈ 4.2 MB</li>
+          <li><strong>ข้อ 8:</strong> light client เก็บเฉพาะ header ของสายที่ยาวที่สุด แล้วขอ Merkle branch จาก full node มาคำนวณ root เทียบกับ header Merkle branch มีค่าแฮช log<sub>2</sub>(n) ค่า (ปัดขึ้น) จำนวน confirmation นับบล็อกที่มีธุรกรรมเป็น 1 แล้วเพิ่มอีก 1 ต่อบล็อกที่ต่อท้าย</li>
+          <li><strong>ข้อ 8:</strong> SPV ไม่ได้ตรวจธุรกรรมเอง จึงปลอดภัยตราบที่พลังประมวลผลส่วนใหญ่ซื่อสัตย์ ทางป้องกันที่ Whitepaper เสนอคือการแจ้งเตือน (alert) จาก full node และให้ธุรกิจที่รับเงินบ่อยรันโหนดเอง</li>
+        </ul>
+
+        <h3>คำศัพท์และตัวเลขที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำ / รายการ</th><th>ความหมาย / ค่า</th></tr>
+            <tr><td>Merkle root</td><td>ค่าแฮชบนสุดของ Merkle tree อยู่ใน header ขนาด 32 ไบต์</td></tr>
+            <tr><td>Merkle branch / Merkle proof</td><td>ชุดค่าแฮชคู่ข้างที่ใช้คำนวณจากธุรกรรมขึ้นไปถึง root</td></tr>
+            <tr><td>Pruning</td><td>การลบธุรกรรมเก่าที่ใช้ไปแล้วโดยไม่กระทบค่าแฮชของบล็อก</td></tr>
+            <tr><td>SPV / Light client</td><td>SPV คือวิธีตรวจว่าได้รับชำระเงินจริงโดยเก็บเฉพาะ header ส่วน light client คือซอฟต์แวร์หรือกระเป๋าเงิน (wallet) ที่ใช้วิธีนี้</td></tr>
+            <tr><td>Confirmation</td><td>บล็อกที่มีธุรกรรมนับเป็น 1 confirmation และแต่ละบล็อกที่ต่อท้ายเพิ่มอีก 1</td></tr>
+            <tr><td>ขนาด block header</td><td>80 ไบต์</td></tr>
+            <tr><td>header ต่อปี</td><td>ประมาณ 4.2 MB (4,204,800 ไบต์)</td></tr>
+            <tr><td>ขนาด Merkle proof</td><td>log<sub>2</sub>(n) ค่าแฮช ปัดขึ้นเป็นจำนวนเต็ม ค่าละ 32 ไบต์</td></tr>
+            <tr><td>Pruning ขั้นต่ำใน Bitcoin Core</td><td><code>prune=550</code> (550 MiB)</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. ถ้าแก้ธุรกรรมเพียงรายการเดียวในบล็อกเก่า เหตุใด PoW ของบล็อกนั้นจึงใช้ไม่ได้ ทั้งที่ PoW คำนวณจาก header เท่านั้น</p>
+          <details><summary>ดูเฉลย</summary><div>เพราะ header มี Merkle root ซึ่งคำนวณจากธุรกรรมทุกรายการ เมื่อแก้ธุรกรรม txid จะเปลี่ยน ค่าแฮชทุกชั้นที่อยู่เหนือขึ้นไปจะเปลี่ยนตาม จนถึง Merkle root ค่าแฮชของ header จึงเปลี่ยน และไม่ผ่าน target อีกต่อไป</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. บล็อกที่มี 8 ธุรกรรม ต้องใช้ค่าแฮชกี่ค่าใน Merkle branch เพื่อพิสูจน์ว่ามีธุรกรรมหนึ่งอยู่ในบล็อก</p>
+          <ol><li>ก. 2 ค่า</li><li>ข. 3 ค่า</li><li>ค. 7 ค่า</li><li>ง. 8 ค่า</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข. 3 ค่า</strong> เพราะ log<sub>2</sub>(8) = 3 ค่าแฮชลดจาก 8 เป็น 4, 2 และ 1 จึงต้องจับคู่ 3 ครั้ง แต่ละครั้งใช้ค่าแฮชคู่ข้างหนึ่งค่า</div></details>
+        </div>
+
+        <div class="q">
+          <p>3. บล็อกหนึ่งมี 5 ธุรกรรม Bitcoin สร้าง Merkle tree อย่างไรเมื่อจำนวนค่าแฮชเป็นเลขคี่</p>
+          <details><summary>ดูเฉลย</summary><div>ทำสำเนาค่าแฮชตัวสุดท้ายของชั้นนั้นมาจับคู่กับตัวเอง ชั้นล่างมี 5 ค่า ค่าที่ 5 จับคู่กับสำเนาของตัวเอง ได้ชั้นถัดไป 3 ค่า ค่าที่ 3 จับคู่กับสำเนาของตัวเองอีกครั้ง ได้ 2 ค่า แล้วได้ Merkle root</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. แสดงการคำนวณว่า header ของ Bitcoin เพิ่มขึ้นประมาณ 4.2 MB ต่อปีได้อย่างไร และถ้าบล็อกเกิดทุก 5 นาที header จะเพิ่มขึ้นปีละเท่าใด</p>
+          <details><summary>ดูเฉลย</summary><div>80 ไบต์ × 6 บล็อกต่อชั่วโมง × 24 × 365 = 4,204,800 ไบต์ ≈ 4.2 MB ถ้าบล็อกเกิดทุก 5 นาที จะมีชั่วโมงละ 12 บล็อก ได้ 80 × 12 × 24 × 365 = 8,409,600 ไบต์ ≈ <strong>8.4 MB ต่อปี</strong></div></details>
+        </div>
+
+        <div class="q">
+          <p>5. ข้อใดอธิบาย pruning ตาม Whitepaper ข้อ 7 ได้ถูกต้อง</p>
+          <ol><li>ก. ลบ header ของบล็อกเก่าเพื่อประหยัดพื้นที่</li><li>ข. ลบธุรกรรมที่ใช้ไปแล้ว โดยเก็บค่าแฮชของกิ่งที่ตัดไว้ ค่าแฮชของบล็อกจึงไม่เปลี่ยน</li><li>ค. ลบธุรกรรมแล้วคำนวณ Merkle root ใหม่ใส่ใน header</li><li>ง. ลบธุรกรรมที่เหรียญยังไม่มีใครใช้ เพราะยังไม่มีใครต้องการตรวจ</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> ข้อ ก ผิด เพราะ header คือส่วนที่ต้องเก็บไว้ตลอด ข้อ ค ผิด เพราะถ้า root เปลี่ยน ค่าแฮชของบล็อกจะเปลี่ยน และ PoW เดิมจะใช้ไม่ได้ ข้อ ง ผิด เพราะโหนดยังต้องใช้ธุรกรรมเหล่านี้ตรวจธุรกรรมใหม่ที่นำเหรียญนั้นมาจ่าย</div></details>
+        </div>
+
+        <div class="q">
+          <p>6. ผู้โจมตีที่คุมพลังประมวลผลเกินครึ่งสร้างบล็อกที่จ่ายเหรียญปลอมให้ร้านค้า ร้านค้าใดถูกหลอกได้</p>
+          <ol><li>ก. ร้านที่รัน full node</li><li>ข. ร้านที่รัน pruned node</li><li>ค. ร้านที่ใช้ light client แบบ SPV</li><li>ง. ถูกหลอกทั้งสามแบบ</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> Full node และ pruned node ตรวจธุรกรรมทุกรายการเอง จึงปฏิเสธบล็อกที่ผิดกฎ ไม่ว่าบล็อกนั้นจะมี PoW มากเพียงใด ส่วน light client ตรวจได้เพียงว่าบล็อกมี PoW และธุรกรรมอยู่ในบล็อก จึงถูกหลอกได้ตลอดเวลาที่ผู้โจมตียังเอาชนะเครือข่ายได้</div></details>
+        </div>
+
+        <div class="q">
+          <p>7. light client ต้องเก็บข้อมูลใดไว้กับตัว และต้องขอข้อมูลใดจาก full node เมื่อต้องการตรวจธุรกรรมหนึ่ง</p>
+          <details><summary>ดูเฉลย</summary><div>เก็บ <strong>block header ของสายโซ่ PoW ที่ยาวที่สุด</strong> และขอ <strong>ตัวธุรกรรมพร้อม Merkle branch</strong> ที่เชื่อมธุรกรรมนั้นกับ Merkle root ของบล็อก พร้อมหมายเลขบล็อกที่ธุรกรรมอยู่ จากนั้นคำนวณ root เทียบกับ header และนับจำนวน confirmation</div></details>
+        </div>
+
+        <div class="q">
+          <p>8. ธุรกรรมหนึ่งอยู่ในบล็อกที่ 800,000 และบล็อกล่าสุดของสายที่ยาวที่สุดคือบล็อกที่ 800,005 ธุรกรรมนี้มีกี่ confirmation</p>
+          <ol><li>ก. 4</li><li>ข. 5</li><li>ค. 6</li><li>ง. 7</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค. 6</strong> บล็อก 800,000 ที่มีธุรกรรมนับเป็น confirmation แรก และมีบล็อกต่อท้ายอีก 5 บล็อก (800,001 ถึง 800,005) รวมเป็น 6 confirmation สูตรคือ บล็อกล่าสุด − บล็อกที่มีธุรกรรม + 1</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+  <script src="../assets/sha256.js"></script>
+  <script>
+    // Merkle tree 4 ธุรกรรม: แสดงค่าแฮชทุกชั้น และ Merkle branch ของธุรกรรมที่เลือก
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const inputs = [0, 1, 2, 3].map((i) => $("t" + i));
+      const pick = $("mpick"), proofBox = $("mproof");
+      const short = (h) => h.slice(0, 16) + "…";
+      const last = {};
+
+      function show(id, value) {
+        const el = $(id);
+        el.querySelector("code").textContent = short(value);
+        el.title = value;
+        if (last[id] && last[id] !== value) {
+          el.classList.remove("chg");
+          void el.offsetWidth; // เริ่มแอนิเมชันใหม่
+          el.classList.add("chg");
+        }
+        last[id] = value;
+      }
+
+      function render() {
+        const h = inputs.map((el) => sha256(el.value));
+        const h01 = sha256(h[0] + h[1]), h23 = sha256(h[2] + h[3]);
+        const root = sha256(h01 + h23);
+        h.forEach((v, i) => show("nh" + i, v));
+        show("nh01", h01);
+        show("nh23", h23);
+        show("nroot", root);
+
+        // Merkle branch: ค่าแฮชคู่ข้างของธุรกรรม และคู่ข้างของโหนดแม่
+        const k = Number(pick.value);
+        const sib = k ^ 1;
+        const parent = k < 2 ? "01" : "23", uncle = k < 2 ? "23" : "01";
+        document.querySelectorAll(".mtree .node").forEach((n) => n.classList.remove("path", "sib"));
+        ["nh" + k, "nh" + parent, "nroot"].forEach((id) => $(id).classList.add("path"));
+        ["nh" + sib, "nh" + uncle].forEach((id) => $(id).classList.add("sib"));
+
+        const pair = (a, b) => (k % 2 === 0 ? `Hash${a} ต่อ Hash${b}` : `Hash${b} ต่อ Hash${a}`);
+        proofBox.innerHTML =
+          `light client ได้รับจาก full node: <strong>Tx${k}</strong> พร้อม Merkle branch <strong>Hash${sib}</strong> และ <strong>Hash${uncle}</strong> (ค่าแฮช 2 ค่า สีส้ม)` +
+          `<ol>` +
+          `<li>แฮช Tx${k} ได้ Hash${k}</li>` +
+          `<li>แฮช ${pair(k, sib)} ได้ Hash${parent}</li>` +
+          `<li>แฮช Hash01 ต่อ Hash23 ได้ <code>${short(root)}</code></li>` +
+          `<li>ค่าที่ได้ตรงกับ Merkle root ใน header จึงยืนยันได้ว่า Tx${k} อยู่ในบล็อกนี้</li>` +
+          `</ol>`;
+      }
+
+      inputs.forEach((el) => el.addEventListener("input", render));
+      pick.addEventListener("change", render);
+      render();
+    })();
+  </script>
+</body>
+</html>

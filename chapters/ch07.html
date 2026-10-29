@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 7 Infinite Loop และแนวทางแก้ไข</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p2" data-chapter="ch07">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 2 Ethereum และ Smart Contract</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 7 · ความปลอดภัยของ contract</div>
+      <h1>Infinite Loop และแนวทางแก้ไข</h1>
+      <p class="lead">บทที่ 5 บอกไว้สั้น ๆ ว่า EVM เขียนลูปได้ และ Ethereum ใช้ gas หยุดลูปไม่รู้จบ (infinite loop) บทนี้ขยายเรื่องนั้นเป็นสองชั้น ชั้นแรกเป็นปัญหาของเครือข่าย คือทำอย่างไรไม่ให้โปรแกรมของใครคนหนึ่งทำให้ทุกโหนดค้าง Bitcoin และ Ethereum ตอบโจทย์นี้ต่างกัน ชั้นที่สองเป็นปัญหาของผู้เขียน contract คือลูปที่ยาวขึ้นเรื่อย ๆ จนฟังก์ชันใช้ gas เกินเพดานและเรียกไม่สำเร็จอีกเลย บทนี้ปิดท้ายด้วยรูปแบบการเขียน contract ที่ป้องกันปัญหานี้</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: โปรแกรมของคนแปลกหน้าที่ทุกโหนดต้องรัน</a></li>
+        <li><a href="#s1">เหตุที่ blockchain ต้องป้องกันลูปไม่รู้จบ (Halting problem)</a></li>
+        <li><a href="#s2">Bitcoin Script: ตัดลูปออกตั้งแต่การออกแบบ</a></li>
+        <li><a href="#s3">Ethereum: ใช้ gas จำกัดการทำงาน และผลของ Out of gas (revert โดยไม่คืนค่า gas)</a></li>
+        <li><a href="#s4">ลูปบน array ที่ขยายไม่จำกัด ทำให้ฟังก์ชันใช้งานไม่ได้ถาวร (DoS)</a></li>
+        <li><a href="#s5">แนวทางแก้: จำกัดขนาด ประมวลผลเป็นชุด ใช้รูปแบบ Pull over Push และใช้ mapping</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: โปรแกรมของคนแปลกหน้าที่ทุกโหนดต้องรัน</h2>
+
+        <p>หัวข้อ 5.3 อธิบายว่า full node ทุกเครื่องต้องรันโปรแกรมของทุกธุรกรรม (transaction) เอง แล้วเทียบผลกับที่ผู้สร้างบล็อก (block proposer) ประกาศ เครือข่ายจึงเชื่อผลลัพธ์ได้โดยไม่ต้องเชื่อใจใคร แต่ข้อดีนี้ก็มีความเสี่ยง เพราะโปรแกรมเหล่านั้นมาจากคนแปลกหน้า และบางคนตั้งใจเขียนมาเพื่อโจมตี</p>
+
+        <p>สมมุติว่าผู้โจมตีส่งธุรกรรมที่มีโค้ด <code>while (true) {}</code> ถ้าเครือข่ายไม่มีกลไกป้องกัน ทุกโหนดทั่วโลกจะรันลูปนี้พร้อมกันและไม่มีวันรันจบ บล็อกที่มีธุรกรรมนี้ตรวจไม่เสร็จ และ chain ก็หยุดเดิน ผู้โจมตีจ่ายเพียงค่าธรรมเนียม (fee) ของธุรกรรมเดียว แต่ทำให้ทั้งเครือข่ายหยุดได้ สถานการณ์นี้คือโจทย์แรกของบท</p>
+
+        <p>โจทย์ที่สองเกิดขึ้นแม้เครือข่ายป้องกันโจทย์แรกได้แล้ว Ethereum กำหนดเพดานว่าธุรกรรมหนึ่งใช้ gas ได้ไม่เกินเท่าใด ถ้าผู้เขียน contract วนลูปบนรายการที่ใครก็เพิ่มข้อมูลได้ วันหนึ่งงานของลูปจะเกินเพดานนั้น ฟังก์ชันจะเรียกไม่สำเร็จอีกเลย และเงินที่อยู่ใน contract อาจติดอยู่ตลอดไป เครือข่ายยังทำงานปกติ แต่ contract ตัวนั้นใช้งานไม่ได้</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำถาม</th><th>คำตอบ</th><th>หัวข้อ</th></tr>
+            <tr><td>ทำไมโหนดไม่ตรวจโค้ดก่อนรัน หรือจับเวลาแล้วตัดทิ้ง</td><td>Halting problem และเหตุที่เวลาไม่ใช่กติกาที่ทุกโหนดวัดได้ตรงกัน</td><td>7.1</td></tr>
+            <tr><td>Bitcoin ป้องกันลูปไม่รู้จบอย่างไร และต้องแลกกับอะไร</td><td>Script ไม่มีคำสั่งกระโดดย้อนกลับ (backward jump)</td><td>7.2</td></tr>
+            <tr><td>Ethereum ยอมให้มีลูป แล้วหยุดลูปอย่างไร ใครเสียเงิน</td><td>gas และผลของ Out of gas</td><td>7.3</td></tr>
+            <tr><td>ลูปที่เขียนถูกต้องกลายเป็นช่องโหว่ได้อย่างไร</td><td>Unbounded loop และ DoS ระดับ contract</td><td>7.4</td></tr>
+            <tr><td>ควรเขียน contract อย่างไรเพื่อเลี่ยงปัญหานี้</td><td>จำกัดขนาด, batching, Pull over Push, mapping</td><td>7.5</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 7.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">7.1</span>เหตุที่ blockchain ต้องป้องกันลูปไม่รู้จบ (Halting problem)</h2>
+
+        <h3>ลูปไม่รู้จบบน blockchain อันตรายกว่าบนเซิร์ฟเวอร์</h3>
+        <p>บนเซิร์ฟเวอร์ทั่วไป ถ้าโปรแกรมติดลูป ความเสียหายจำกัดอยู่ที่เครื่องนั้น ผู้ดูแลสั่งปิดโปรเซสแล้วเริ่มใหม่ได้ บน blockchain สถานการณ์ต่างออกไปสามข้อ</p>
+        <ul>
+          <li><strong>ทุกโหนดรันโค้ดเดียวกัน:</strong> ลูปเดียวทำให้ทุกโหนดค้างพร้อมกัน ไม่มีเครื่องสำรองที่ยังทำงานอยู่</li>
+          <li><strong>ไม่มีผู้ดูแลกลาง:</strong> ไม่มีใครมีอำนาจสั่งข้ามธุรกรรมนั้น โหนดต้องตัดสินด้วยกติกาที่เขียนไว้ล่วงหน้าเท่านั้น</li>
+          <li><strong>ผู้ส่งโค้ดเป็นใครก็ได้:</strong> ระบบต้องรับมือกับโค้ดที่ออกแบบมาเพื่อโจมตีโดยเฉพาะ ไม่ใช่แค่โค้ดที่เขียนพลาด</li>
+        </ul>
+        <p>ปัญหาไม่ได้อยู่ที่ลูปที่ไม่มีวันจบเท่านั้น ลูปที่จบได้แต่วนหนึ่งล้านล้านรอบก็ทำให้โหนดค้างได้เหมือนกันในทางปฏิบัติ สิ่งที่เครือข่ายต้องการจริงคือ <strong>เพดานของงานที่ธุรกรรมหนึ่งใช้ได้</strong> และทุกโหนดต้องตัดสินตามเพดานนั้นได้ตรงกัน</p>
+
+        <h3>ตรวจโค้ดล่วงหน้าไม่ได้: Halting problem</h3>
+        <p>ทางออกแรกที่นึกถึงคือให้โหนดอ่านโค้ดก่อนรัน ถ้าพบว่าโค้ดจะวนไม่รู้จบก็ปฏิเสธธุรกรรมนั้น แต่ในปี 1936 Alan Turing พิสูจน์ว่า <strong>ไม่มีอัลกอริทึมใดตัดสินได้ทุกกรณีว่าโปรแกรมหนึ่งกับข้อมูลชุดหนึ่งจะหยุดทำงานหรือไม่</strong> โจทย์นี้เรียกว่า Halting problem</p>
+        <p>เครื่องมือตรวจโค้ด (static analysis) หาลูปไม่รู้จบแบบที่เห็นชัดได้ เช่น <code>while (true) {}</code> แต่ตรวจครบทุกแบบไม่ได้ และผู้โจมตีต้องการโค้ดเพียงชิ้นเดียวที่หลุดการตรวจไป</p>
+        <p>Halting problem เป็นปัญหาของภาษาที่วนลูปได้ไม่จำกัดหรือเรียกตัวเองซ้ำได้ (recursion) ภาษากลุ่มนี้เรียกว่า <strong>Turing-complete</strong> หมายความว่าคำนวณได้ทุกอย่างที่คอมพิวเตอร์คำนวณได้ ถ้ามีเวลาและหน่วยความจำพอ ภาษาที่ไม่มีลูปเลยไม่มีปัญหานี้ เพราะรู้ได้ทันทีว่าโปรแกรมจะจบเมื่อรันคำสั่งครบทุกตัว</p>
+
+        <div class="callout">
+          <span class="h">แนวคิดของการพิสูจน์</span>
+          สมมุติว่ามีโปรแกรม <code>H(P, x)</code> ที่ตอบได้เสมอว่าโปรแกรม <code>P</code> เมื่อได้ข้อมูล <code>x</code> จะหยุดหรือไม่ จากนั้นเขียนโปรแกรม <code>D(P)</code> ที่ถาม <code>H(P, P)</code> แล้วทำตรงข้าม ถ้า H ตอบว่าหยุด D จะวนลูปตลอดไป ถ้า H ตอบว่าไม่หยุด D จะหยุดทันที ทีนี้ลองรัน <code>D(D)</code> คือส่งโค้ดของ D ให้ D เอง (โค้ดของโปรแกรมก็เป็นข้อมูลชนิดหนึ่ง จึงส่งเป็นข้อมูลเข้าได้) D จะถาม <code>H(D, D)</code> ว่าตัวเองจะหยุดหรือไม่ ถ้า H ตอบว่าหยุด D ก็วนลูปตลอดไป ถ้า H ตอบว่าไม่หยุด D ก็หยุดทันที คำตอบของ H จึงผิดเสมอในกรณีนี้ ดังนั้นไม่มีโปรแกรม H ใดที่ตอบถูกทุกกรณี
+        </div>
+
+        <h3>จับเวลาแล้วตัดทิ้งก็ไม่ได้ เพราะแต่ละโหนดเร็วไม่เท่ากัน</h3>
+        <p>ทางออกที่สองคือกำหนดเวลา (timeout) เช่น โปรแกรมใดรันเกิน 10 วินาทีให้ถือว่าธุรกรรมนั้นใช้ไม่ได้ วิธีนี้แก้ปัญหาโหนดค้างได้ แต่ทำให้เกิดปัญหาใหม่ที่ร้ายแรงกว่า โหนดในเครือข่ายใช้ฮาร์ดแวร์ต่างกัน และแต่ละเครื่องมีงานอื่นแย่งทรัพยากรไม่เท่ากัน โปรแกรมเดียวกันอาจรันจบใน 9 วินาทีบนเครื่องหนึ่ง แต่ใช้ 12 วินาทีบนอีกเครื่องหนึ่ง สองโหนดนี้จะสรุปผลของบล็อกเดียวกันต่างกัน และเครือข่ายจะแยกเป็นสองสาย (chain split) ผู้โจมตียังจงใจทำให้เครือข่ายแยกสายได้ด้วย โดยเขียนโปรแกรมที่ใช้เวลาใกล้เส้น 10 วินาทีพอดี</p>
+        <p>กติกาของฉันทามติ (consensus) ต้องให้ผลเดียวกันเสมอบนทุกโหนด (deterministic) เวลาที่วัดจากนาฬิกาให้ผลไม่ตรงกันในแต่ละเครื่อง ส่วน <strong>จำนวนขั้นของการคำนวณ</strong> (computational steps) ตรงกันเสมอ เพราะโปรแกรมเดียวกันกับข้อมูลเดียวกันใช้จำนวนขั้นเท่ากันบนทุกเครื่อง ไม่ว่าเครื่องจะเร็วหรือช้า</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 330" role="img" aria-label="ด้านบน กติกาหยุดเมื่อเกิน 10 วินาที โหนด A ที่เร็วรันจบใน 9 วินาทีจึงยอมรับธุรกรรม โหนด B ที่ช้าต้องใช้ 12 วินาทีจึงตัดทิ้งที่ 10 วินาทีและปฏิเสธธุรกรรม สองโหนดตัดสินต่างกัน ด้านล่าง กติกานับจำนวนขั้น ทั้งสองโหนดนับได้ 9,000 ขั้นซึ่งต่ำกว่าเพดาน 10,000 ขั้น จึงยอมรับธุรกรรมตรงกัน">
+            <g font-size="13" fill="currentColor">
+              <text x="20" y="22" font-weight="700" fill="#c2412d">วิธีที่ใช้ไม่ได้: หยุดโปรแกรมเมื่อรันเกิน 10 วินาที</text>
+              <text x="550" y="40" text-anchor="middle" font-size="11" fill="#c2412d">timeout 10 วินาที</text>
+
+              <text x="20" y="65">โหนด A (เครื่องเร็ว)</text>
+              <rect x="150" y="48" width="360" height="26" rx="4" fill="#e8f5ef" stroke="#1f8a70"/>
+              <text x="160" y="66" font-size="12">รันจบที่ 9 วินาที</text>
+              <text x="645" y="66" font-weight="700" fill="#1f6e5a">ยอมรับ</text>
+
+              <text x="20" y="105">โหนด B (เครื่องช้า)</text>
+              <rect x="150" y="88" width="400" height="26" rx="4" fill="#f8e1db" stroke="#c2412d"/>
+              <rect x="550" y="88" width="80" height="26" fill="none" stroke="#c2412d" stroke-dasharray="4 3"/>
+              <text x="160" y="106" font-size="12">ต้องใช้ 12 วินาที แต่หมดเวลาที่ 10 วินาที</text>
+              <text x="645" y="106" font-weight="700" fill="#c2412d">ปฏิเสธ</text>
+
+              <line x1="550" y1="44" x2="550" y2="126" stroke="#c2412d" stroke-width="1.5" stroke-dasharray="5 4"/>
+              <line x1="150" y1="130" x2="630" y2="130" stroke="#6b655c"/>
+              <g font-size="11" fill="#6b655c" text-anchor="middle">
+                <text x="150" y="146">0</text><text x="270" y="146">3</text><text x="390" y="146">6</text><text x="510" y="146">9</text><text x="630" y="146">12 วินาที</text>
+              </g>
+              <text x="20" y="172" font-size="12" fill="#c2412d">บล็อกเดียวกัน แต่สองโหนดตัดสินต่างกัน เครือข่ายจึงแยกเป็นสองสาย</text>
+
+              <line x1="20" y1="188" x2="740" y2="188" stroke="#e4ddd0" stroke-width="1.5"/>
+
+              <text x="20" y="212" font-weight="700" fill="#1f6e5a">วิธีที่ Ethereum ใช้: นับจำนวนขั้นของการคำนวณ (gas)</text>
+              <text x="550" y="222" text-anchor="middle" font-size="11" fill="#1f6e5a">เพดาน 10,000 ขั้น</text>
+
+              <text x="20" y="249">โหนด A (เครื่องเร็ว)</text>
+              <rect x="150" y="232" width="360" height="26" rx="4" fill="#e8f5ef" stroke="#1f8a70"/>
+              <text x="160" y="250" font-size="12">นับได้ 9,000 ขั้น</text>
+              <text x="645" y="250" font-weight="700" fill="#1f6e5a">ยอมรับ</text>
+
+              <text x="20" y="289">โหนด B (เครื่องช้า)</text>
+              <rect x="150" y="272" width="360" height="26" rx="4" fill="#e8f5ef" stroke="#1f8a70"/>
+              <text x="160" y="290" font-size="12">นับได้ 9,000 ขั้น</text>
+              <text x="645" y="290" font-weight="700" fill="#1f6e5a">ยอมรับ</text>
+
+              <line x1="550" y1="228" x2="550" y2="304" stroke="#1f8a70" stroke-width="1.5" stroke-dasharray="5 4"/>
+              <text x="20" y="324" font-size="12">เครื่องเร็วหรือช้าก็นับได้ 9,000 ขั้นเท่ากัน ทุกโหนดจึงตัดสินตรงกัน</text>
+            </g>
+          </svg>
+          <figcaption>เวลาที่วัดจากนาฬิกาขึ้นกับความเร็วของเครื่อง ส่วนจำนวนขั้นของการคำนวณขึ้นกับโปรแกรมและข้อมูลเท่านั้น เครือข่ายจึงใช้จำนวนขั้นเป็นเพดานได้ แต่ใช้เวลาไม่ได้ ภาพนี้นับเป็นขั้นเพื่อให้เห็นหลักการ ส่วน gas จริงนับแต่ละขั้นตามราคาของ opcode นั้น เช่น <code>ADD</code> 3 gas และ <code>SLOAD</code> แบบ cold 2,100 gas (หัวข้อ 7.3)</figcaption>
+        </figure>
+
+        <h3>ทางเลือกที่ใช้ได้จริงมีสองทาง</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>แนวทาง</th><th>ใช้ใน</th><th>หลักการ</th><th>สิ่งที่ต้องแลก</th></tr>
+            <tr><td>ตัดลูปออกจากภาษา</td><td>Bitcoin Script (7.2)</td><td>ไม่มีคำสั่งใดพากลับไปรันซ้ำ งานของสคริปต์จึงไม่เกินความยาวของสคริปต์</td><td>เขียนโปรแกรมทั่วไปไม่ได้ ทำได้เพียงกำหนดเงื่อนไขการใช้เหรียญ</td></tr>
+            <tr><td>ยอมให้มีลูป แต่นับและคิดราคาทุกขั้น</td><td>Ethereum EVM (7.3)</td><td>ทุก opcode มีราคาเป็น gas ผู้ส่งกำหนดเพดาน gas ไว้ล่วงหน้า gas หมดเมื่อใดโปรแกรมหยุดเมื่อนั้น</td><td>ผู้ใช้ต้องประเมิน gas และจ่ายค่างานที่ทำไปแล้วแม้ธุรกรรมล้มเหลว ผู้เขียน contract ต้องระวังเพดาน gas (7.4)</td></tr>
+          </table>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          Bitcoin Script <strong>ไม่เป็น</strong> Turing-complete โดยตั้งใจ ส่วน EVM เป็น Turing-complete ในแง่ของภาษา แต่ทุกการรันมี gas เป็นเพดาน บางตำราจึงเรียก Ethereum ว่า <strong>quasi-Turing-complete</strong> (เกือบ Turing-complete) gas ไม่ได้แก้ Halting problem โหนดยังไม่รู้ล่วงหน้าว่าโปรแกรมจะหยุดหรือไม่ แต่ gas รับประกันว่า <strong>ทุกการรันต้องหยุดก่อนใช้ gas เกิน gas limit ที่ผู้ส่งตั้งไว้</strong> โหนดจึงไม่ต้องรู้คำตอบนั้น
+        </div>
+      </section>
+
+      <!-- ==================== 7.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">7.2</span>Bitcoin Script: ตัดลูปออกตั้งแต่การออกแบบ</h2>
+
+        <h3>Script ทำหน้าที่อะไร</h3>
+        <p>Bitcoin ต้องการภาษาเพียงเพื่อตอบคำถามเดียว คือ "ผู้ที่อ้างสิทธิ์ใช้ UTXO ก้อนนี้มีสิทธิ์จริงหรือไม่" (ทบทวน UTXO ในหัวข้อ 4.5) output แต่ละรายการมี <strong>locking script</strong> (scriptPubKey) ระบุเงื่อนไขการใช้เงิน เมื่อมีคนต้องการใช้เงินก้อนนั้น input ของธุรกรรมต้องแนบ <strong>unlocking script</strong> (scriptSig หรือ witness ในธุรกรรมแบบ SegWit) โหนดรันสองส่วนนี้ต่อกันบน stack ถ้ารันจบและค่าบนสุดของ stack เป็นจริง ธุรกรรมจึงใช้เงินก้อนนั้นได้</p>
+        <p>ตัวอย่างที่พบบ่อยที่สุดคือ P2PKH (address ที่ขึ้นต้นด้วย 1 ในหัวข้อ 4.6)</p>
+<pre><code>unlocking script:  &lt;sig&gt; &lt;pubKey&gt;
+locking script:    OP_DUP OP_HASH160 &lt;pubKeyHash&gt; OP_EQUALVERIFY OP_CHECKSIG</code></pre>
+        <p>โหนดคัดลอก public key แล้วแฮช เทียบค่าแฮชกับ pubKeyHash ที่ล็อกไว้ จากนั้นตรวจลายเซ็น (signature) ด้วย public key นั้น ทุกขั้นทำครั้งเดียวจากซ้ายไปขวา</p>
+
+        <h3>ไม่มีคำสั่งกระโดดย้อนกลับ</h3>
+        <p>งานของ Script คือตรวจเงื่อนไข ไม่ใช่คำนวณสิ่งที่ซับซ้อน การตัดลูปออกจึงแทบไม่เสียอะไร แต่ได้สิ่งที่หัวข้อ 7.1 ต้องการทันที คือทุกโหนดรู้ว่างานมีเพดาน และไม่มีสคริปต์ใดทำให้โหนดค้างได้ ผู้ออกแบบจึงเลือกให้ภาษานี้ไม่มีลูปเลย โดยกำหนดข้อจำกัดดังนี้</p>
+        <ul>
+          <li>opcode ทำงานเรียงจากซ้ายไปขวา ตัวชี้คำสั่ง (instruction pointer) เดินหน้าอย่างเดียว</li>
+          <li>คำสั่งเงื่อนไข <code>OP_IF</code>, <code>OP_NOTIF</code>, <code>OP_ELSE</code>, <code>OP_ENDIF</code> ข้ามโค้ดบางส่วนไปข้างหน้าได้ แต่ไม่มีคำสั่งใดพากลับไปรันโค้ดที่ผ่านมาแล้ว</li>
+          <li>สคริปต์เรียกตัวเองซ้ำ (recursion) ไม่ได้ และเรียกสคริปต์ของ output อื่นไม่ได้</li>
+        </ul>
+        <p>ผลที่ได้คือ opcode แต่ละตัวรันได้ไม่เกินหนึ่งครั้ง งานที่โหนดต้องทำจึงไม่เกินความยาวของสคริปต์ โหนดรู้ขอบเขตของงานทันทีที่เห็นขนาดของธุรกรรม โดยไม่ต้องรันก่อน และไม่ต้องตอบ Halting problem เลย</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 290" role="img" aria-label="ด้านบน สคริปต์ P2PKH เจ็ดส่วน ได้แก่ sig, pubKey, OP_DUP, OP_HASH160, pubKeyHash, OP_EQUALVERIFY และ OP_CHECKSIG ลูกศรชี้ไปทางขวาอย่างเดียว ด้านล่าง bytecode ของ EVM มี JUMPDEST คำสั่งในลูป และ JUMPI ซึ่งมีลูกศรโค้งกระโดดกลับไปที่ JUMPDEST เมื่อเงื่อนไขเป็นจริง และไปยังส่วนออกจากลูปเมื่อเงื่อนไขเป็นเท็จ">
+            <defs>
+              <marker id="arrC7s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+              <marker id="arrC7j" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4a52c0"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <text x="15" y="22" font-weight="700" fill="#b85a10">Bitcoin Script (P2PKH): ตัวชี้คำสั่งเดินหน้าอย่างเดียว</text>
+              <g font-family="IBM Plex Mono, ui-monospace, monospace" font-size="11" text-anchor="middle">
+                <rect x="15" y="40" width="70" height="34" rx="6" fill="#f0ebe1"/><text x="50" y="61">&lt;sig&gt;</text>
+                <rect x="97" y="40" width="84" height="34" rx="6" fill="#f0ebe1"/><text x="139" y="61">&lt;pubKey&gt;</text>
+                <rect x="193" y="40" width="76" height="34" rx="6" fill="#fdf0e3" stroke="#e2761b"/><text x="231" y="61">OP_DUP</text>
+                <rect x="281" y="40" width="100" height="34" rx="6" fill="#fdf0e3" stroke="#e2761b"/><text x="331" y="61">OP_HASH160</text>
+                <rect x="393" y="40" width="96" height="34" rx="6" fill="#f0ebe1"/><text x="441" y="61">&lt;pubKeyHash&gt;</text>
+                <rect x="501" y="40" width="128" height="34" rx="6" fill="#fdf0e3" stroke="#e2761b"/><text x="565" y="61">OP_EQUALVERIFY</text>
+                <rect x="641" y="40" width="104" height="34" rx="6" fill="#fdf0e3" stroke="#e2761b"/><text x="693" y="61">OP_CHECKSIG</text>
+              </g>
+              <g stroke="#6b655c" stroke-width="1.2">
+                <line x1="86" y1="57" x2="95" y2="57" marker-end="url(#arrC7s)"/>
+                <line x1="182" y1="57" x2="191" y2="57" marker-end="url(#arrC7s)"/>
+                <line x1="270" y1="57" x2="279" y2="57" marker-end="url(#arrC7s)"/>
+                <line x1="382" y1="57" x2="391" y2="57" marker-end="url(#arrC7s)"/>
+                <line x1="490" y1="57" x2="499" y2="57" marker-end="url(#arrC7s)"/>
+                <line x1="630" y1="57" x2="639" y2="57" marker-end="url(#arrC7s)"/>
+              </g>
+              <text x="15" y="98" font-size="12">ทุก opcode รันไม่เกินหนึ่งครั้ง งานที่โหนดต้องทำจึงไม่เกินความยาวของสคริปต์</text>
+
+              <line x1="15" y1="118" x2="745" y2="118" stroke="#e4ddd0" stroke-width="1.5"/>
+
+              <text x="15" y="142" font-weight="700" fill="#4a52c0">EVM bytecode: JUMPI กระโดดย้อนกลับได้ จึงวนลูปได้</text>
+              <path d="M475,198 C475,158 80,158 80,196" fill="none" stroke="#4a52c0" stroke-width="1.6" marker-end="url(#arrC7j)"/>
+              <text x="278" y="190" text-anchor="middle" font-size="12" fill="#4a52c0">เงื่อนไขจริง: กระโดดกลับไปรันซ้ำ</text>
+
+              <rect x="20" y="200" width="120" height="40" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="80" y="225" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="12">JUMPDEST</text>
+              <rect x="170" y="200" width="220" height="40" rx="6" fill="#f0ebe1"/>
+              <text x="280" y="225" text-anchor="middle" font-size="12">คำสั่งในลูป เช่น ADD, SLOAD</text>
+              <rect x="420" y="200" width="110" height="40" rx="6" fill="#fff" stroke="#4a52c0" stroke-width="1.4"/>
+              <text x="475" y="225" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="12">JUMPI</text>
+              <rect x="600" y="200" width="140" height="40" rx="6" fill="none" stroke="#6b655c" stroke-dasharray="5 4"/>
+              <text x="670" y="225" text-anchor="middle" font-size="12">ออกจากลูป</text>
+              <g stroke="#6b655c" stroke-width="1.2">
+                <line x1="141" y1="220" x2="168" y2="220" marker-end="url(#arrC7s)"/>
+                <line x1="391" y1="220" x2="418" y2="220" marker-end="url(#arrC7s)"/>
+                <line x1="531" y1="220" x2="598" y2="220" marker-end="url(#arrC7s)"/>
+              </g>
+              <text x="565" y="256" text-anchor="middle" font-size="11" fill="#6b655c">เงื่อนไขเท็จ</text>
+              <text x="15" y="282" font-size="12">ทุกรอบหัก gas ตามราคาของ opcode ที่รัน เมื่อ gas เหลือไม่พอ EVM หยุดทันทีด้วย Out of gas</text>
+            </g>
+          </svg>
+          <figcaption>ความต่างของสองภาษาอยู่ที่คำสั่งกระโดดย้อนกลับ Bitcoin Script ไม่มีคำสั่งนี้ งานจึงมีขอบเขตตามความยาวของสคริปต์ EVM มี <code>JUMP</code> และ <code>JUMPI</code> ที่กระโดดไปยังตำแหน่งใดก็ได้ที่มี <code>JUMPDEST</code> จึงวนลูปได้ และต้องใช้ gas เป็นเพดานแทน</figcaption>
+        </figure>
+
+        <h3>เพดานเสริม: กันขนาดสคริปต์ หน่วยความจำ และงานของ CPU ไม่ให้บานปลาย</h3>
+        <p>เมื่อไม่มีลูป opcode แต่ละตัวทำงานได้ไม่เกินหนึ่งครั้ง แต่ opcode บางตัวยังสร้างข้อมูลขนาดใหญ่หรือใช้ CPU มากได้ Bitcoin Core จึงมีเพดานเพิ่มเติม ตัวเลขด้านล่างใช้กับสคริปต์แบบ legacy และ SegWit v0</p>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>เพดาน</th><th>ค่า</th><th>กันปัญหาอะไร</th></tr>
+            <tr><td>ขนาดสคริปต์</td><td>10,000 ไบต์</td><td>สคริปต์ยาวเกินไปจนตรวจนาน</td></tr>
+            <tr><td>จำนวน opcode ที่ไม่ใช่คำสั่งใส่ข้อมูลลง stack (non-push opcode)</td><td>201 ตัวต่อสคริปต์</td><td>สคริปต์มีคำสั่งให้รันมากเกินไป</td></tr>
+            <tr><td>ขนาดของข้อมูลหนึ่งช่องบน stack (stack element)</td><td>520 ไบต์</td><td>สร้างข้อมูลขนาดใหญ่ในหน่วยความจำ</td></tr>
+            <tr><td>จำนวนช่องบน stack รวม alt stack</td><td>1,000 ช่อง</td><td>ใช้หน่วยความจำมากเกินไประหว่างรัน</td></tr>
+          </table>
+        </div>
+        <p>ในปี 2010 Satoshi ยังปิด (disable) opcode หลายตัว เช่น <code>OP_CAT</code> (ต่อข้อมูล) และ <code>OP_MUL</code> (คูณ) เพราะพบว่าผู้โจมตีใช้ opcode บางตัวทำให้โหนดล่มหรือใช้หน่วยความจำมากเกินไปได้ เช่น ถ้าเขียนคู่ <code>OP_DUP OP_CAT</code> ต่อกันหลายสิบคู่ในสคริปต์ ข้อมูลบน stack จะยาวขึ้นเท่าตัวทุกคู่ opcode แต่ละตัวยังรันเพียงครั้งเดียวตามกติกา แต่แค่ 40 คู่ก็ทำให้ข้อมูล 1 ไบต์ยาวเป็นราว 1 TB ได้ และ 40 คู่ใช้เพียง 80 opcode ยังไม่ถึงเพดาน 201 ตัวด้วยซ้ำ ความยาวของสคริปต์จึงจำกัดได้แค่จำนวนคำสั่ง แต่จำกัดหน่วยความจำไม่ได้ Bitcoin จึงต้องมีเพดานขนาดของข้อมูลแต่ละช่องและจำนวนช่องบน stack เสริมไว้</p>
+        <p>ต่อมา Taproot (2021) นำ Tapscript (BIP342) มาใช้ Tapscript ยกเลิกเพดาน 10,000 ไบต์และ 201 opcode เพราะเมื่อไม่มีลูป งานก็มีขอบเขตตามขนาดของ witness อยู่แล้ว และบล็อกก็มีเพดานขนาดคุมไว้อีกชั้น งานที่ยังต้องคุมเป็นพิเศษคือการตรวจลายเซ็น เพราะใช้ CPU มากกว่า opcode อื่นมาก Tapscript จึงกำหนดงบตรวจลายเซ็น (sigops budget) ตามขนาดของ witness แทน หลักเดิมยังอยู่ครบ คือไม่มีลูป และงานมีขอบเขตตามขนาดของข้อมูลที่ผู้ส่งจ่ายค่าธรรมเนียมไว้</p>
+
+        <h3>ค่าธรรมเนียมต่อไบต์จึงเพียงพอสำหรับ Bitcoin</h3>
+        <p>บทที่ 2 แสดงว่าค่าธรรมเนียมของ Bitcoin คิดตามขนาดของธุรกรรม (sat/vB) ไม่ได้คิดตามงานที่โหนดต้องทำ วิธีนี้ใช้ได้เพราะ Script ไม่มีลูป งานตรวจจึงเพิ่มตามขนาดของธุรกรรม ธุรกรรมที่ตรวจนานก็ต้องมีขนาดใหญ่และจ่ายค่าธรรมเนียมมากตามไปด้วย</p>
+        <p>ความสัมพันธ์นี้ไม่ได้เป็นเส้นตรงทุกกรณี ในธุรกรรมแบบ legacy ทุก input ต้องแฮชข้อมูลเกือบทั้งธุรกรรมเพื่อตรวจลายเซ็น งานแฮชจึงโตแบบกำลังสอง (quadratic sighash) ตามขนาดของธุรกรรม SegWit แก้ข้อนี้ด้วย BIP143 และ Bitcoin ยังจำกัดจำนวนการตรวจลายเซ็น (sigops) ต่อบล็อกเสริมไว้ ค่าธรรมเนียมต่อไบต์จึงครอบคลุมงานส่วนใหญ่ และมีเพดานเสริมคุมส่วนที่เหลือ</p>
+        <p>Ethereum ใช้วิธีนี้ไม่ได้ เพราะโค้ดลูปเพียงไม่กี่ไบต์ก็รันได้หลายล้านรอบ ขนาดของธุรกรรมจึงไม่บอกปริมาณงาน และต้องนับงานโดยตรงด้วย gas</p>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          สิ่งที่ Bitcoin ต้องแลกคือ Script เขียนโปรแกรมทั่วไปไม่ได้ ถ้าต้องการทำซ้ำต้องเขียนโค้ดชุดเดิมซ้ำต่อกัน (unrolled loop) ซึ่งทำได้ไม่เกินเพดานขนาด และสคริปต์เก็บข้อมูลข้ามธุรกรรมไม่ได้ ผู้ที่ต้องการสร้างแอปอื่นนอกจากการโอนเงินจึงต้องสร้าง chain ของตัวเอง ข้อจำกัดนี้เป็นที่มาของ Ethereum (หัวข้อเริ่มจากโจทย์ของบทที่ 5)
+        </div>
+      </section>
+
+      <!-- ==================== 7.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">7.3</span>Ethereum: ใช้ gas จำกัดการทำงาน และผลของ Out of gas (revert โดยไม่คืนค่า gas)</h2>
+
+        <h3>ทำไม Ethereum จึงเก็บลูปไว้</h3>
+        <p>Ethereum ต้องการให้ contract ทำงานได้หลากหลาย เช่น คำนวณดอกเบี้ยทบต้น ตรวจรายการเงื่อนไขหลายข้อ หรือรวมยอดจากรายการสั้น ๆ งานเหล่านี้ต้องใช้ลูป ถ้าตัดลูปทิ้งแบบ Bitcoin ก็เขียนงานเหล่านี้ไม่ได้ Ethereum จึงยอมให้ภาษาวนลูปได้ แล้วจำกัดงานด้วยการนับแทน</p>
+
+        <h3>gas: นับงานแบบเดียวกันทุกโหนด</h3>
+        <p>ข้อกำหนดของ EVM (specification) ระบุราคาของทุก opcode เป็นหน่วย gas และทุกโหนดใช้ตารางราคาเดียวกัน เช่น <code>ADD</code> ใช้ 3 gas และการอ่าน storage slot ที่ธุรกรรมนี้ยังไม่เคยอ่าน (<code>SLOAD</code> แบบ cold) ใช้ 2,100 gas (ทบทวนหัวข้อ 6.2) ราคาเหล่านี้เปลี่ยนได้เฉพาะเมื่อเครือข่ายอัปเกรดพร้อมกันทุกโหนด ผู้ส่งธุรกรรมกำหนด <strong>gas limit</strong> ไว้ล่วงหน้า EVM หัก gas ทุกครั้งที่รัน opcode ถ้า gas ที่เหลือไม่พอสำหรับ opcode ถัดไป EVM หยุดทันที</p>
+        <p>กลไกนี้ตอบโจทย์ของหัวข้อ 7.1 ครบทั้งสองข้อ ข้อแรก ทุกการรันต้องหยุดก่อนใช้ gas เกิน gas limit ที่ผู้ส่งตั้งไว้ โหนดจึงไม่ค้าง ข้อสอง ทุกโหนดนับ gas ได้เท่ากันเสมอ เพราะราคาของ opcode ไม่ขึ้นกับความเร็วของเครื่อง ทุกโหนดจึงตัดสินตรงกันว่าธุรกรรมหยุดที่จุดใด</p>
+        <p>ตัวอย่างเช่น ฟังก์ชันด้านล่างวนลูปตลอดไป</p>
+<pre><code>function spin() external {
+    uint256 i = 0;
+    while (true) {
+        i++;
+    }
+}</code></pre>
+        <p>ก่อนส่งธุรกรรม Remix และ MetaMask จะจำลองการรันเพื่อประเมิน gas (<code>eth_estimateGas</code>) การประเมินนี้ล้มเหลวเพราะไม่ว่าจะให้ gas เท่าใดก็ไม่พอ หน้าจอจึงแสดงคำเตือนว่า gas estimation failed ถ้าผู้ใช้ยืนยันส่งต่อ ธุรกรรมจะเข้าบล็อกและจบด้วย Out of gas</p>
+
+        <h3>เกิดอะไรขึ้นเมื่อ Out of gas</h3>
+        <ol>
+          <li><strong>state ย้อนกลับทั้งหมด:</strong> ค่าใน storage ที่แก้ไป ETH ที่โอนภายในธุรกรรม และ event ที่ emit ไปแล้ว กลับเป็นเหมือนไม่เคยเกิดขึ้น</li>
+          <li><strong>ธุรกรรมยังอยู่ในบล็อก:</strong> receipt ของธุรกรรมมี status เป็น 0 (ล้มเหลว) ทุกคนตรวจย้อนหลังได้ว่าธุรกรรมนี้ล้มเหลว</li>
+          <li><strong>nonce ของผู้ส่งเพิ่มขึ้น 1:</strong> ธุรกรรมนี้ใช้ nonce ไปแล้ว ส่งซ้ำด้วย nonce เดิมไม่ได้</li>
+          <li><strong>ผู้ส่งจ่ายค่า gas เต็ม gas limit:</strong> ส่วนที่เป็น base fee โปรโตคอลจะเผาทิ้ง (burn) ส่วน priority fee ตกเป็นของ validator ตามปกติ</li>
+        </ol>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 250" role="img" aria-label="ธุรกรรมสามแบบที่ตั้ง gas limit 100,000 เท่ากัน แบบสำเร็จใช้ 60,000 และได้คืน 40,000 state เปลี่ยนตามโค้ด แบบ require ไม่ผ่านใช้ 30,000 และได้คืน 70,000 state ย้อนกลับ แบบ Out of gas ใช้ครบ 100,000 ไม่ได้คืน และ state ย้อนกลับ">
+            <g font-size="13" fill="currentColor">
+              <text x="450" y="20" text-anchor="middle" font-size="12">gas limit ของธุรกรรม = 100,000</text>
+              <line x1="200" y1="30" x2="700" y2="30" stroke="currentColor" stroke-width="1.2"/>
+              <line x1="200" y1="25" x2="200" y2="35" stroke="currentColor" stroke-width="1.2"/>
+              <line x1="700" y1="25" x2="700" y2="35" stroke="currentColor" stroke-width="1.2"/>
+
+              <text x="20" y="66" font-weight="700" fill="#1f6e5a">สำเร็จ</text>
+              <rect x="200" y="48" width="300" height="28" rx="4" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.4"/>
+              <text x="350" y="67" text-anchor="middle" font-size="12">ใช้ 60,000</text>
+              <rect x="500" y="48" width="200" height="28" fill="none" stroke="#b9b1a3" stroke-dasharray="5 4"/>
+              <text x="600" y="67" text-anchor="middle" font-size="12" fill="#6b655c">คืน 40,000</text>
+              <text x="200" y="94" font-size="12">state เปลี่ยนตามโค้ด</text>
+
+              <text x="20" y="130" font-weight="700" fill="#b85a10">require ไม่ผ่าน</text>
+              <text x="20" y="148" font-size="11" fill="#6b655c">(revert)</text>
+              <rect x="200" y="112" width="150" height="28" rx="4" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.4"/>
+              <text x="275" y="131" text-anchor="middle" font-size="12">ใช้ 30,000</text>
+              <rect x="350" y="112" width="350" height="28" fill="none" stroke="#b9b1a3" stroke-dasharray="5 4"/>
+              <text x="525" y="131" text-anchor="middle" font-size="12" fill="#6b655c">คืน 70,000</text>
+              <text x="200" y="158" font-size="12">state ย้อนกลับ ผู้เรียกได้ข้อความ error</text>
+
+              <text x="20" y="194" font-weight="700" fill="#c2412d">Out of gas</text>
+              <rect x="200" y="176" width="500" height="28" rx="4" fill="#f8e1db" stroke="#c2412d" stroke-width="1.4"/>
+              <text x="450" y="195" text-anchor="middle" font-size="12">ใช้ครบ 100,000 ไม่ได้คืนเลย</text>
+              <text x="200" y="222" font-size="12">state ย้อนกลับ ผู้ส่งเสียค่า gas ทั้งหมดโดยไม่ได้อะไร</text>
+            </g>
+          </svg>
+          <figcaption>ทั้งสามแบบมี gas limit เท่ากัน ธุรกรรมที่สำเร็จและธุรกรรมที่ revert ด้วย <code>require</code> จ่ายเฉพาะ gas ที่ใช้จริง ส่วน Out of gas ใช้ gas จนหมดเพดานแล้วจึงหยุด ผู้ส่งจึงจ่ายเต็ม gas limit</figcaption>
+        </figure>
+
+        <h3>ทำไมไม่คืนค่า gas เมื่อ Out of gas</h3>
+        <p>state ย้อนกลับได้ แต่งานที่โหนดทำไปแล้วย้อนกลับไม่ได้ ทุกโหนดรัน opcode เหล่านั้นไปจริง และ validator ใช้พื้นที่ในบล็อกให้ธุรกรรมนี้แล้ว ถ้าเครือข่ายคืน gas ให้ผู้ส่ง ผู้โจมตีจะส่ง <code>spin()</code> มาซ้ำได้ไม่จำกัดโดยไม่เสียอะไรเลย และเครือข่ายก็กลับไปเจอปัญหาของหัวข้อ 7.1 อีกครั้ง เครือข่ายจึงต้องเก็บค่า gas เพื่อให้การโจมตีทุกครั้งมีต้นทุน</p>
+        <p>คำถามที่ตามมาคือ ทำไม <code>require</code> ที่ไม่ผ่านจึงได้คืน gas ส่วนที่เหลือ คำตอบคือ <code>require</code> ใช้ opcode <code>REVERT</code> (มีตั้งแต่การอัปเกรด Byzantium ปี 2017) โปรแกรมเลือกหยุดเองที่จุดนั้น EVM จึงรู้แน่ว่างานจบแล้วและไม่ต้องใช้ gas ที่เหลือ</p>
+        <p>ส่วน Out of gas เกิดเมื่อ gas ที่เหลือไม่พอจ่ายค่า opcode ถัดไป ณ จุดนั้นธุรกรรมใช้ gas ไปเกือบหมดแล้ว EVM จัดกรณีนี้เป็นการหยุดเพราะทำงานต่อไม่ได้ (exceptional halt) และเก็บ gas ที่เหลือไปทั้งหมด กติกาเดียวกันใช้กับ exceptional halt แบบอื่น เช่น opcode <code>INVALID</code> หรือการกระโดดไปตำแหน่งที่ไม่มี <code>JUMPDEST</code> กรณีเหล่านี้อาจเกิดขณะที่ gas ยังเหลืออยู่มาก แต่ EVM ถือว่าโปรแกรมทำงานผิดพลาด ไม่ได้เลือกหยุดเอง จึงไม่คืน gas ที่เหลือ</p>
+        <p>ก่อน Byzantium ยังไม่มี <code>REVERT</code> วิธีเดียวที่ contract ยกเลิกธุรกรรมได้คือ exceptional halt ผู้ส่งจึงเสีย gas เต็ม gas limit ทุกครั้งที่ contract ยกเลิกธุรกรรม <code>REVERT</code> เพิ่มเข้ามาเพื่อแก้ข้อนี้</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>วิธีที่ธุรกรรมจบ</th><th>state</th><th>gas ที่ผู้ส่งจ่าย</th></tr>
+            <tr><td>ทำงานจบตามปกติ</td><td>เปลี่ยนตามโค้ด</td><td>เท่าที่ใช้จริง</td></tr>
+            <tr><td><code>require</code> ไม่ผ่าน หรือ <code>revert</code></td><td>ย้อนกลับ</td><td>เท่าที่ใช้จนถึงจุด revert ส่วนที่เหลือได้คืน</td></tr>
+            <tr><td><code>assert</code> ไม่ผ่าน หรือ error ทางคณิตศาสตร์ เช่น overflow (Solidity 0.8 ขึ้นไป ส่ง <code>Panic</code> ผ่าน <code>REVERT</code>)</td><td>ย้อนกลับ</td><td>เท่าที่ใช้จนถึงจุด revert ส่วนที่เหลือได้คืน (ก่อนรุ่น 0.8 <code>assert</code> ใช้ opcode <code>INVALID</code> จึงเสียเต็ม gas limit)</td></tr>
+            <tr><td>Out of gas</td><td>ย้อนกลับ</td><td>เต็ม gas limit</td></tr>
+            <tr><td>opcode ที่ใช้ไม่ได้ (<code>INVALID</code>) หรือกระโดดไปตำแหน่งที่ไม่มี <code>JUMPDEST</code></td><td>ย้อนกลับ</td><td>เต็ม gas limit</td></tr>
+          </table>
+        </div>
+
+        <h3>ตัวอย่างการคำนวณ</h3>
+        <p>ผู้ส่งตั้ง gas limit 100,000 ขณะนั้น base fee เท่ากับ 10 Gwei และ priority fee เท่ากับ 2 Gwei ราคาต่อ gas จึงเป็น 12 Gwei</p>
+<pre>สำเร็จ ใช้ 60,000 gas        ค่าธรรมเนียม = 60,000 × 12  =   720,000 Gwei = 0.00072 ETH
+require ไม่ผ่านที่ 30,000 gas  ค่าธรรมเนียม = 30,000 × 12  =   360,000 Gwei = 0.00036 ETH
+Out of gas                   ค่าธรรมเนียม = 100,000 × 12 = 1,200,000 Gwei = 0.0012 ETH
+                             (เผา 100,000 × 10 = 0.001 ETH และ validator ได้ 100,000 × 2 = 0.0002 ETH)</pre>
+        <p>ตัวเลขนี้ส่งผลต่อการใช้งานจริง ถ้าตั้ง gas limit ต่ำเกินไปสำหรับฟังก์ชันที่ทำงานถูกต้อง ธุรกรรมจะ Out of gas ผู้ส่งเสียค่าธรรมเนียมเต็มจำนวนและต้องส่งใหม่ด้วย gas limit ที่สูงขึ้น wallet จึงประเมิน gas ให้ก่อนและบวกเผื่อไว้เล็กน้อย</p>
+
+        <h3>gas เมื่อ contract เรียก contract อื่นต่อ</h3>
+        <p>gas limit ของธุรกรรมครอบคลุมงานทุกชั้นของการเรียก ถ้า contract A เรียก contract B แล้ว B วนลูป gas ที่ B ใช้ก็มาจากงบก้อนเดียวกัน การอัปเกรด Tangerine Whistle ปี 2016 (EIP-150) กำหนดว่าการเรียกชั้นถัดไปได้ gas ไม่เกิน 63/64 ของ gas ที่เหลืออยู่ ถ้า A ขอส่ง gas มากกว่านั้น EVM จะตัดลงเหลือ 63/64 แทนที่จะให้การเรียกล้มเหลว</p>
+        <p>เดิมกติกานี้ออกแบบมากันการโจมตีด้วยการเรียกซ้อนลึก (call-depth attack) EVM ยอมให้เรียกซ้อนได้ไม่เกิน 1,024 ชั้น ผู้โจมตีจึงเรียกซ้อนตัวเองจนเกือบถึงชั้นที่ 1,024 ก่อน แล้วจึงเรียก contract เป้าหมาย เมื่อ contract เป้าหมายเรียก contract อื่นต่อ การเรียกนั้นจะเกินเพดานความลึกและล้มเหลวทันที ถ้า contract เป้าหมายไม่ได้ตรวจผล เช่น ส่งเงินแล้วไม่ตรวจว่าสำเร็จหรือไม่ ก็จะทำงานต่อราวกับว่าส่งเงินไปแล้ว</p>
+        <p>กติกา 63/64 ทำให้ gas ลดลงเป็นสัดส่วนทุกชั้น พอถึงชั้นที่ 1,024 จะเหลือ gas ไม่ถึงหนึ่งในล้านของตอนเริ่ม ผู้โจมตีจึงเรียกซ้อนลงไปถึงชั้นนั้นไม่ได้ ผลพลอยได้คือถ้า B ใช้ gas หมด B จะ revert เฉพาะงานของตัวเอง และ A ยังมี gas อย่างน้อย 1/64 ไว้ทำงานต่อ</p>
+        <p>ผลที่ A เห็นขึ้นกับวิธีเรียก ถ้า A เรียกแบบ low-level (<code>call</code>) A จะได้ค่า <code>false</code> กลับมาและตัดสินใจเองว่าจะทำอะไรต่อ ถ้า A เรียกฟังก์ชันของ B ตามปกติใน Solidity คอมไพเลอร์จะให้ A revert ตามไปด้วยโดยอัตโนมัติ</p>
+
+        <div class="callout warn">
+          <span class="h">ลูปไม่รู้จบที่เกิดจากชนิดข้อมูล</span>
+          <code>for (uint8 i = 0; i &lt; 300; i++) { … }</code> ดูเหมือนวน 300 รอบ แต่ <code>uint8</code> เก็บค่าได้ถึง 255 เท่านั้น ใน Solidity ก่อนรุ่น 0.8 ค่า 255 บวก 1 จะวนกลับเป็น 0 เงื่อนไข <code>i &lt; 300</code> จึงจริงตลอด ลูปวนจน Out of gas และผู้เรียกเสียค่า gas เต็มเพดาน ใน Solidity 0.8 ขึ้นไป คอมไพเลอร์ตรวจ overflow ให้ ลูปรันรอบที่ i = 255 ได้ตามปกติ (รวม 256 รอบ) แต่ธุรกรรมจะ revert ด้วย <code>Panic(0x11)</code> ตอนที่ <code>i++</code> พยายามเพิ่ม i จาก 255 เป็น 256 ทั้งสองรุ่นจึงทำงานไม่ครบ 300 รอบ ควรใช้ <code>uint256</code> เป็นตัวนับของลูป
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          ผู้ส่งตั้ง gas limit สูงเท่าใดก็ได้หรือไม่ คำตอบคือไม่ได้ gas limit ของธุรกรรมต้องไม่เกิน <strong>block gas limit</strong> และตั้งแต่การอัปเกรด Fusaka (ปลายปี 2025) ยังมีเพดาน gas ต่อธุรกรรมแยกต่างหากอีกชั้นหนึ่ง ประมาณ 16.8 ล้าน gas (2<sup>24</sup>) เพดานเหล่านี้กันไม่ให้ธุรกรรมเดียวใช้ gas ทั้งบล็อก แต่ก็หมายความว่า <strong>งานใดที่ต้องใช้ gas เกินเพดานจะทำในธุรกรรมเดียวไม่ได้เลย</strong> ไม่ว่าจะยอมจ่ายแพงเท่าใด ข้อนี้คือที่มาของปัญหาในหัวข้อ 7.4
+        </div>
+      </section>
+
+      <!-- ==================== 7.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">7.4</span>ลูปบน array ที่ขยายไม่จำกัด ทำให้ฟังก์ชันใช้งานไม่ได้ถาวร (DoS)</h2>
+
+        <h3>gas ทำให้เครือข่ายไม่ค้าง แต่ไม่ได้ช่วย contract</h3>
+        <p>หัวข้อ 7.3 แสดงว่า gas ทำให้เครือข่ายไม่ค้าง แต่เพดาน gas ก็สร้างปัญหาใหม่ให้ผู้เขียน contract ถ้าฟังก์ชันหนึ่งวนลูปบนรายการที่ยาวขึ้นได้เรื่อย ๆ (unbounded loop) gas ที่ฟังก์ชันนั้นต้องใช้ก็เพิ่มตาม เมื่อ gas ที่ต้องใช้เกินเพดาน ฟังก์ชันจะ Out of gas ทุกครั้งที่มีคนเรียก และไม่มีวันเรียกสำเร็จอีก หัวข้อ 5.3 บอกว่า contract แก้โค้ดหลัง deploy ไม่ได้ ถ้าเงินต้องออกผ่านฟังก์ชันนั้นทางเดียว เงินก็ติดอยู่ใน contract ตลอดไป</p>
+        <p>สภาพนี้เรียกว่า <strong>Denial of Service (DoS)</strong> ระดับ contract ผู้ใช้ทุกคนใช้บริการไม่ได้ แม้ไม่มีใครเจาะระบบหรือขโมยเงินเลย</p>
+
+        <h3>ตัวอย่าง: contract แบ่งเงินให้สมาชิก</h3>
+<pre><code>contract Payroll {
+    address[] public members;
+    uint256 public constant SHARE = 0.01 ether;
+
+    receive() external payable {}            // รับ ETH เข้ากองกลาง
+
+    function join() external {
+        members.push(msg.sender);            // ใครก็สมัครได้ ไม่จำกัดจำนวน
+    }
+
+    function payAll() external {
+        for (uint256 i = 0; i &lt; members.length; i++) {
+            payable(members[i]).transfer(SHARE);   // ส่งเงินให้ทุกคนในธุรกรรมเดียว
+        }
+    }
+}</code></pre>
+        <p>โค้ดนี้คอมไพล์ผ่านและทดสอบใน Remix ด้วยสมาชิกสามคนได้ผลถูกต้อง ปัญหาจะปรากฏเมื่อสมาชิกมีจำนวนมากขึ้น</p>
+
+        <h3>นับ gas ทีละรอบ</h3>
+        <p>ลูปแต่ละรอบใน <code>payAll()</code> ต้องอ่าน address จาก storage (<code>SLOAD</code> แบบ cold 2,100 gas) เข้าถึงบัญชีปลายทางครั้งแรก (2,600 gas) และส่ง ETH (<code>CALL</code> ที่โอนมูลค่า 9,000 gas) เมื่อรวมงานอื่นแล้ว รอบหนึ่งใช้ราวหนึ่งหมื่นถึงหลายหมื่น gas ขึ้นกับสิ่งที่ทำในรอบนั้น เพื่อให้คำนวณง่าย สมมุติว่ารอบละ 30,000 gas และเพดานเท่ากับ 30 ล้าน gas ซึ่งเป็น block gas limit ของ Ethereum ช่วงปี 2021–2024 ก่อนที่จะมีเพดานต่อธุรกรรม</p>
+        <p>ภายใต้สมมุติฐานนี้ ฟังก์ชันรองรับสมาชิกได้ไม่ถึง 1,000 คน เพราะ 30,000,000 ÷ 30,000 = 1,000 และทุกธุรกรรมยังต้องจ่ายค่าพื้นฐาน 21,000 gas (intrinsic gas) ด้วย เครื่องคำนวณด้านล่างจึงได้ 999 คน เมื่อสมาชิกเกินจำนวนนี้ <code>payAll()</code> จะเรียกไม่สำเร็จอีกเลย ถ้าใช้เพดานต่อธุรกรรมหลัง Fusaka (16,777,216 gas) จะรองรับได้เพียงราว 558 คน</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 280" role="img" aria-label="กราฟเส้นตรง gas ที่ payAll ต้องใช้เพิ่มขึ้นตามจำนวนสมาชิก ประมาณ 30,000 คูณ N ตัดเส้นเพดาน 30 ล้าน gas ที่ N ประมาณ 1,000 ทางซ้ายของจุดตัดยังเรียกได้ ทางขวาเรียกไม่สำเร็จอีกเลย">
+            <g font-size="13" fill="currentColor">
+              <rect x="90" y="40" width="400" height="180" fill="#e8f5ef" opacity="0.6"/>
+              <rect x="490" y="40" width="200" height="180" fill="#f8e1db" opacity="0.6"/>
+              <text x="90" y="26" font-size="12" fill="#6b655c">gas ที่ payAll() ต้องใช้</text>
+
+              <line x1="90" y1="220" x2="690" y2="220" stroke="currentColor" stroke-width="1.2"/>
+              <line x1="90" y1="40" x2="90" y2="220" stroke="currentColor" stroke-width="1.2"/>
+              <g font-size="11" fill="#6b655c" text-anchor="end">
+                <text x="82" y="224">0</text><text x="82" y="164">15 ล้าน</text><text x="82" y="104">30 ล้าน</text><text x="82" y="44">45 ล้าน</text>
+              </g>
+              <g font-size="11" fill="#6b655c" text-anchor="middle">
+                <text x="90" y="238">0</text><text x="290" y="238">500</text><text x="490" y="238">1,000</text><text x="690" y="238">1,500</text>
+              </g>
+              <text x="390" y="264" text-anchor="middle" font-size="12" fill="#6b655c">จำนวนสมาชิกใน members (N)</text>
+
+              <line x1="90" y1="100" x2="690" y2="100" stroke="#c2412d" stroke-width="1.5" stroke-dasharray="6 4"/>
+              <text x="96" y="93" font-size="12" fill="#c2412d">เพดาน gas ต่อธุรกรรม (สมมุติ 30 ล้าน)</text>
+
+              <line x1="90" y1="220" x2="690" y2="40" stroke="#4a52c0" stroke-width="2.2"/>
+              <text x="330" y="176" font-size="12" fill="#4a52c0">gas ≈ 30,000 × N</text>
+
+              <line x1="490" y1="100" x2="490" y2="220" stroke="#c2412d" stroke-dasharray="3 3"/>
+              <circle cx="490" cy="100" r="5" fill="#c2412d"/>
+
+              <text x="290" y="62" text-anchor="middle" font-weight="700" fill="#1f6e5a">ยังเรียกได้</text>
+              <text x="590" y="196" text-anchor="middle" font-size="12" font-weight="700" fill="#c2412d">เกินเพดาน: เรียกไม่สำเร็จอีกเลย</text>
+            </g>
+          </svg>
+          <figcaption>gas ที่ลูปต้องใช้เพิ่มตามจำนวนสมาชิก แต่เพดาน gas คงที่ เมื่อเส้นทั้งสองตัดกัน การจ่ายค่าธรรมเนียมแพงขึ้นไม่ช่วย เพราะเพดานจำกัดจำนวน gas ไม่ใช่ราคาต่อ gas ตัวเลขในกราฟเป็นค่าสมมุติเพื่อให้คำนวณง่าย</figcaption>
+        </figure>
+
+        <h3>ทดลอง: ลูปนี้จะเกินเพดานเมื่อใด</h3>
+        <p>ปรับจำนวนสมาชิก gas ต่อรอบ และเพดาน เพื่อดูว่า <code>payAll()</code> ยังเรียกได้หรือไม่ ลองเปลี่ยนเพดานเป็น 16,777,216 (เพดานต่อธุรกรรมหลัง Fusaka) แล้วดูว่าจำนวนสมาชิกสูงสุดลดลงเท่าใด ช่องสุดท้ายแสดงผลของการแบ่งงานเป็นชุดตามหัวข้อ 7.5</p>
+        <div class="hash-demo" id="loopcalc">
+          <div class="mtx">
+            <div><label for="lN">จำนวนสมาชิก (N)</label><input id="lN" type="number" min="0" step="100" value="800"></div>
+            <div><label for="lPer">gas ต่อรอบ</label><input id="lPer" type="number" min="1" step="1000" value="30000"></div>
+            <div><label for="lCap">เพดาน gas ต่อธุรกรรม</label><input id="lCap" type="number" min="21000" step="1000000" value="30000000"></div>
+            <div><label for="lBatch">ขนาดชุด (คนต่อธุรกรรม)</label><input id="lBatch" type="number" min="1" step="50" value="200"></div>
+          </div>
+          <div class="stat" id="lOut"></div>
+          <p style="font-size:13px;color:var(--muted);margin:10px 0 0">ตัวอย่างนี้ประมาณอย่างง่ายว่า gas รวม = 21,000 (ค่าพื้นฐานของทุกธุรกรรม หรือ intrinsic gas) + N × gas ต่อรอบ gas จริงขึ้นกับสิ่งที่ทำในแต่ละรอบและสถานะของบัญชีปลายทาง</p>
+        </div>
+
+        <h3>ผู้โจมตีทำอะไรได้บ้าง</h3>
+        <ul>
+          <li><strong>เพิ่มรายการจนเกินเพดาน:</strong> <code>join()</code> ใช้ gas ไม่มากและใครก็เรียกได้ ผู้โจมตีสร้าง address ใหม่หลายพันรายการแล้วสมัครทั้งหมด ผู้โจมตีจ่ายค่าธรรมเนียมเฉพาะตอนสมัครแต่ละครั้ง ต้นทุนจึงจบตั้งแต่ตอนสมัคร แต่ <code>payAll()</code> ใช้งานไม่ได้ตลอดไป ผู้โจมตีไม่ได้เงินจากการกระทำนี้โดยตรง แต่ทำให้สมาชิกจริงเสียหาย การโจมตีแบบนี้เรียกว่า griefing</li>
+          <li><strong>สมัครด้วย contract ที่ปฏิเสธเงิน:</strong> ถ้าสมาชิกคนหนึ่งเป็น contract ที่ไม่มีฟังก์ชัน <code>receive</code> หรือมี <code>receive</code> ที่สั่ง revert คำสั่ง <code>transfer</code> ไปยังสมาชิกคนนั้นจะล้มเหลว และทั้งธุรกรรม <code>payAll()</code> จะ revert ตาม ผู้โจมตีใช้สมาชิกเพียงรายเดียวก็หยุดการจ่ายเงินให้ทุกคนได้ แม้รายการจะสั้น</li>
+          <li><strong>ผู้รับที่ตั้งใจดีก็ทำให้ล้มได้:</strong> <code>transfer</code> ส่ง gas ต่อให้ผู้รับเพียง 2,300 gas (gas stipend) ซึ่งพอสำหรับบันทึก event แต่ไม่พอสำหรับเขียน storage wallet แบบ smart contract บางตัวต้องใช้ gas มากกว่านี้เพื่อรับเงิน การส่งจึงล้มเหลวทั้งที่ไม่มีใครโจมตี</li>
+        </ul>
+
+        <h3>ลูปที่ซ่อนอยู่</h3>
+        <p>บางคำสั่งดูเหมือนทำงานครั้งเดียว แต่ภายในต้องวนตามจำนวนข้อมูล ผู้เขียนจึงมองไม่เห็นว่ามีลูปอยู่</p>
+        <ul>
+          <li><code>delete members;</code> กับ dynamic array ใน storage ต้องล้างค่าทุกช่องทีละช่อง ค่า gas จึงเพิ่มตามความยาวของ array</li>
+          <li>ถ้าค้นหาว่า address หนึ่งอยู่ในรายการหรือไม่ด้วยการวนเทียบทีละตัว gas ก็เพิ่มตามความยาวของรายการเช่นกัน</li>
+          <li>ฟังก์ชัน <code>view</code> ที่คืนค่าทั้ง array ไม่เสียค่าธรรมเนียมเมื่อเรียกผ่าน <code>eth_call</code> โดยไม่ส่งธุรกรรม (หัวข้อ 6.3) แต่โหนดยังรันโค้ดและนับ gas ตามปกติ โหนดส่วนใหญ่จึงตั้งเพดาน gas ของ <code>eth_call</code> ไว้ เมื่อ array ยาวเกินเพดานนั้น การเรียกอ่านก็ล้มเหลวเช่นกัน และถ้า contract อื่นเรียกฟังก์ชันนี้ภายในธุรกรรม contract นั้นต้องจ่าย gas ตามจริงและติดเพดานเดียวกัน</li>
+        </ul>
+
+        <div class="callout">
+          <span class="h">กรณีศึกษา: GovernMental (2016)</span>
+          GovernMental เป็น contract เกมแบบ Ponzi ในยุคแรกของ Ethereum เมื่อถึงเวลาจ่ายรางวัล contract ต้องล้างรายการผู้เล่นที่สะสมไว้ใน array ขนาดใหญ่ งานนี้ใช้ gas เกิน block gas limit ของช่วงนั้น เงินรางวัลราว 1,100 ETH จึงจ่ายออกไม่ได้ในตอนนั้น กรณีนี้มักใช้เป็นตัวอย่างของลูปที่ขยายไม่จำกัด
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          DoS ในหัวข้อนี้ต่างจากลูปไม่รู้จบในหัวข้อ 7.1 ลูปไม่รู้จบเป็นภัยต่อ <strong>เครือข่าย</strong> และโปรโตคอลแก้ไว้แล้วด้วย gas ส่วน DoS จาก unbounded loop เป็นภัยต่อ <strong>contract ตัวนั้น</strong> ลูปของ contract จบได้จริง แต่ต้องใช้ gas เกินเพดานต่อธุรกรรม เครือข่ายยังทำงานปกติ ผู้เขียน contract จึงต้องป้องกันเอง
+        </div>
+      </section>
+
+      <!-- ==================== 7.5 ==================== -->
+      <section id="s5">
+        <h2><span class="no">7.5</span>แนวทางแก้: จำกัดขนาด ประมวลผลเป็นชุด ใช้รูปแบบ Pull over Push และใช้ mapping</h2>
+
+        <p>ปัญหาในหัวข้อ 7.4 มาจากต้นเหตุสองข้อ ข้อแรก gas ที่ฟังก์ชันใช้ต่อหนึ่งธุรกรรมเพิ่มขึ้นตามข้อมูลที่ขยายได้ไม่จำกัด ข้อสอง ธุรกรรมเดียวผูกงานของผู้รับทุกคนไว้ด้วยกัน ถ้าผู้รับรายเดียวล้มเหลว ทุกคนก็ล้มเหลวด้วย หลักของการแก้จึงมีสองข้อ ข้อแรก <strong>gas ที่ธุรกรรมหนึ่งต้องใช้ต้องมีขอบเขตแน่นอน ไม่ว่าข้อมูลใน contract จะเพิ่มเป็นเท่าใด</strong> ข้อสอง <strong>ผู้ใช้รายหนึ่งล้มเหลวได้โดยไม่ทำให้คนอื่นล้มตาม</strong> แนวทางทั้งสี่ข้อด้านล่างตอบหลักเหล่านี้ด้วยวิธีต่างกัน และ Pull over Push ตอบได้ครบทั้งสองข้อ</p>
+
+        <h3>1. จำกัดขนาดของรายการ</h3>
+        <p>วิธีที่ง่ายที่สุดคือกำหนดจำนวนสมาชิกสูงสุดให้ต่ำกว่าจุดที่ลูปจะเกินเพดาน และเผื่อไว้มาก เพราะราคา gas ของ opcode อาจเปลี่ยนในการอัปเกรดครั้งต่อไป</p>
+<pre><code>uint256 public constant MAX_MEMBERS = 200;
+
+function join() external payable {
+    require(members.length &lt; MAX_MEMBERS, "full");
+    require(msg.value == 0.01 ether, "deposit required");   // ทำให้การสมัครด้วย address ปลอมมีต้นทุน
+    members.push(msg.sender);
+}</code></pre>
+        <p>ข้อดีคือแก้ได้ทันทีด้วยโค้ดไม่กี่บรรทัด สิ่งที่ต้องแลกคือ contract รองรับผู้ใช้ได้จำกัด และถ้าสมัครได้ฟรี ผู้โจมตีก็สมัครจนเต็มเพื่อกันไม่ให้คนอื่นเข้าได้ วิธีนี้จึงมักใช้คู่กับเงินมัดจำ (deposit) หรือการจำกัดว่าใครสมัครได้</p>
+
+        <h3>2. ประมวลผลเป็นชุด (batching)</h3>
+        <p>ถ้างานจำเป็นต้องทำกับทุกรายการ ให้แบ่งงานออกเป็นหลายธุรกรรม แต่ละธุรกรรมทำไม่เกินจำนวนที่กำหนด และบันทึกตำแหน่งที่ทำถึงไว้ใน storage ธุรกรรมถัดไปจะเริ่มจากตำแหน่งนั้น</p>
+<pre><code>uint256 public nextIndex;
+mapping(address =&gt; uint256) public pending;
+
+function creditBatch(uint256 maxCount) external {
+    uint256 end = nextIndex + maxCount;
+    if (end &gt; members.length) end = members.length;
+    for (uint256 i = nextIndex; i &lt; end; i++) {
+        pending[members[i]] += SHARE;        // บันทึกยอด ยังไม่ส่งเงินจริง
+    }
+    nextIndex = end;                         // ธุรกรรมถัดไปเริ่มต่อจากตรงนี้
+}</code></pre>
+        <p>ข้อดีคือแต่ละธุรกรรมวนไม่เกิน <code>maxCount</code> รอบ gas ต่อธุรกรรมจึงมีขอบเขตเสมอ และงานทั้งหมดทำได้ไม่ว่ารายการจะยาวเท่าใด สิ่งที่ต้องแลกคือต้องส่งหลายธุรกรรม และระหว่างทาง contract ยังทำงานไม่ครบทุกรายการ ผู้เขียนต้องคิดไว้ด้วยว่าถ้าช่วงนั้นมีสมาชิกใหม่เข้ามา หรือมีคนเรียกฟังก์ชันอื่น จะเกิดอะไรขึ้น ตัวอย่างนี้บันทึกยอดลง <code>pending</code> แทนที่จะส่งเงินทันที จึงใช้ต่อกับแนวทางถัดไปได้เลย</p>
+
+        <h3>3. Pull over Push: ให้ผู้รับถอนเอง</h3>
+        <p>ใน <code>payAll()</code> contract เป็นฝ่าย <strong>ส่ง (push)</strong> เงินไปหาทุกคนในธุรกรรมเดียว ถ้าผู้รับคนใดคนหนึ่งรับเงินไม่สำเร็จ ทั้งธุรกรรมก็ล้มเหลว รูปแบบ Pull over Push กลับทิศ คือ contract เพียงบันทึกว่าแต่ละคนมีสิทธิ์ถอนเท่าใด แล้วให้ผู้รับแต่ละคนเรียก <code>withdraw()</code> เพื่อ <strong>ดึง (pull)</strong> เงินของตัวเอง</p>
+<pre><code>function withdraw() external {
+    uint256 amount = pending[msg.sender];
+    require(amount &gt; 0, "nothing to withdraw");
+    pending[msg.sender] = 0;                 // ตั้งยอดเป็นศูนย์ก่อนส่งเงิน
+    (bool ok, ) = payable(msg.sender).call{value: amount}("");
+    require(ok, "transfer failed");
+}</code></pre>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 290" role="img" aria-label="ด้านซ้าย แบบ Push contract เรียก payAll ส่งเงินให้ A, B และ C ในธุรกรรมเดียว C ปฏิเสธเงิน ทั้งธุรกรรม revert A และ B จึงไม่ได้เงินด้วย ด้านขวา แบบ Pull contract บันทึกยอด pending ของ A, B และ C ไว้ แต่ละคนเรียก withdraw เอง C ถอนไม่สำเร็จแต่เสียเฉพาะธุรกรรมของตัวเอง A และ B ได้เงินตามปกติ">
+            <defs>
+              <marker id="arrC7p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <text x="185" y="22" text-anchor="middle" font-weight="700" fill="#c2412d">Push: ส่งให้ทุกคนในธุรกรรมเดียว</text>
+              <rect x="110" y="38" width="150" height="42" rx="7" fill="#fff" stroke="currentColor"/>
+              <text x="185" y="64" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="12">payAll()</text>
+              <g stroke="#6b655c" stroke-width="1.2">
+                <line x1="170" y1="82" x2="72" y2="146" marker-end="url(#arrC7p)"/>
+                <line x1="185" y1="82" x2="185" y2="146" marker-end="url(#arrC7p)"/>
+                <line x1="200" y1="82" x2="298" y2="146" marker-end="url(#arrC7p)"/>
+              </g>
+              <g stroke="#c2412d" stroke-width="2.2">
+                <line x1="241" y1="106" x2="257" y2="122"/><line x1="257" y1="106" x2="241" y2="122"/>
+              </g>
+              <rect x="20" y="148" width="100" height="36" rx="7" fill="#f0ebe1"/>
+              <text x="70" y="171" text-anchor="middle">A</text>
+              <rect x="135" y="148" width="100" height="36" rx="7" fill="#f0ebe1"/>
+              <text x="185" y="171" text-anchor="middle">B</text>
+              <rect x="250" y="148" width="100" height="36" rx="7" fill="#f8e1db" stroke="#c2412d"/>
+              <text x="300" y="171" text-anchor="middle">C</text>
+              <text x="300" y="200" text-anchor="middle" font-size="11" fill="#c2412d">receive() สั่ง revert</text>
+              <g font-size="12">
+                <text x="20" y="232">C ล้มเหลวรายเดียว ทั้งธุรกรรม revert</text>
+                <text x="20" y="254">A และ B จึงไม่ได้เงินด้วย</text>
+                <text x="20" y="276">และจะล้มแบบนี้ทุกครั้งที่เรียก</text>
+              </g>
+
+              <line x1="380" y1="10" x2="380" y2="282" stroke="#e4ddd0" stroke-width="1.5"/>
+
+              <text x="570" y="22" text-anchor="middle" font-weight="700" fill="#1f6e5a">Pull: แต่ละคนถอนเอง</text>
+              <rect x="480" y="38" width="180" height="70" rx="7" fill="#fff" stroke="currentColor"/>
+              <text x="570" y="58" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="12">pending</text>
+              <text x="570" y="78" text-anchor="middle" font-size="12">A: 0.01   B: 0.01</text>
+              <text x="570" y="97" text-anchor="middle" font-size="12">C: 0.01 ETH</text>
+              <g stroke="#6b655c" stroke-width="1.2">
+                <line x1="450" y1="166" x2="528" y2="112" marker-end="url(#arrC7p)"/>
+                <line x1="570" y1="166" x2="570" y2="112" marker-end="url(#arrC7p)"/>
+                <line x1="690" y1="166" x2="612" y2="112" marker-end="url(#arrC7p)"/>
+              </g>
+              <g stroke="#c2412d" stroke-width="2.2">
+                <line x1="643" y1="131" x2="659" y2="147"/><line x1="659" y1="131" x2="643" y2="147"/>
+              </g>
+              <g font-family="IBM Plex Mono, ui-monospace, monospace" font-size="11" text-anchor="middle">
+                <rect x="395" y="168" width="110" height="36" rx="7" fill="#e8f5ef" stroke="#1f8a70"/>
+                <text x="450" y="190">A: withdraw()</text>
+                <rect x="515" y="168" width="110" height="36" rx="7" fill="#e8f5ef" stroke="#1f8a70"/>
+                <text x="570" y="190">B: withdraw()</text>
+                <rect x="635" y="168" width="110" height="36" rx="7" fill="#f8e1db" stroke="#c2412d"/>
+                <text x="690" y="190">C: withdraw()</text>
+              </g>
+              <g font-size="12">
+                <text x="395" y="232">C ถอนไม่สำเร็จ เสียเฉพาะธุรกรรมของ C</text>
+                <text x="395" y="254">A และ B ได้เงินตามปกติ</text>
+                <text x="395" y="276">แต่ละคนจ่าย gas ของการถอนเอง</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>แบบ Push ผู้รับทุกคนอยู่ในธุรกรรมเดียวกัน ถ้าผู้รับรายเดียวล้มเหลว ทุกคนก็ไม่ได้เงิน และ gas เพิ่มตามจำนวนผู้รับ แบบ Pull แต่ละคนถอนในธุรกรรมของตัวเอง gas ต่อธุรกรรมคงที่ และถ้าคนหนึ่งถอนไม่สำเร็จ คนอื่นก็ไม่ได้รับผลกระทบ</figcaption>
+        </figure>
+
+        <p>Pull over Push แก้ปัญหาทั้งสามข้อของหัวข้อ 7.4 พร้อมกัน ข้อแรก <code>withdraw()</code> ทำงานกับผู้เรียกคนเดียว gas จึงคงที่ไม่ว่าจะมีสมาชิกกี่คน ข้อสอง ผู้รับที่ปฏิเสธเงินทำให้ล้มเหลวได้เฉพาะธุรกรรมของตัวเอง ข้อสาม <code>withdraw()</code> ส่งเงินด้วย <code>call</code> ซึ่งส่ง gas ที่เหลือทั้งหมดต่อให้ผู้รับ ไม่ได้จำกัดไว้ที่ 2,300 gas แบบ <code>transfer</code> wallet แบบ smart contract จึงรับเงินได้ และผู้รับเป็นผู้จ่าย gas ส่วนนี้เองในธุรกรรมของตัวเอง</p>
+        <p>สิ่งที่ Pull over Push ต้องแลกคือผู้ใช้ต้องกดถอนเองและจ่าย gas ของการถอนเอง แอปจึงต้องแจ้งผู้ใช้ว่ามียอดรอถอนอยู่</p>
+        <p>สังเกตลำดับในโค้ด <code>withdraw()</code> contract ตั้ง <code>pending</code> เป็นศูนย์ <strong>ก่อน</strong> ส่งเงิน ถ้าส่งเงินก่อน ผู้รับที่เป็น contract เรียก <code>withdraw()</code> ซ้ำจากใน <code>receive</code> ได้ขณะที่ยอดยังไม่เป็นศูนย์ และถอนเงินซ้ำได้หลายรอบ ลำดับ "ตรวจเงื่อนไข แก้ state แล้วจึงติดต่อภายนอก" เรียกว่า Checks-Effects-Interactions ถ้าไม่ทำตามลำดับนี้ contract จะมีช่องโหว่ reentrancy ซึ่งบทที่ 11 อธิบายผ่านกรณี The DAO</p>
+
+        <h3>4. ใช้ mapping แทนการวนค้นหา</h3>
+        <p>contract จำนวนมากใช้ array เพียงเพื่อตอบคำถามว่า "address นี้เป็นสมาชิกหรือไม่" หรือ "address นี้มียอดเท่าใด" คำถามเหล่านี้ไม่ต้องวนลูปเลย <code>mapping</code> หาค่าจาก key ได้ในขั้นตอนเดียว gas จึงเท่าเดิมไม่ว่าจะมีข้อมูลกี่รายการ</p>
+<pre><code>// วนค้นหา: gas เพิ่มตามจำนวนสมาชิก
+function isMemberSlow(address who) public view returns (bool) {
+    for (uint256 i = 0; i &lt; members.length; i++) {
+        if (members[i] == who) return true;
+    }
+    return false;
+}
+
+// mapping: gas คงที่
+mapping(address =&gt; bool) public isMember;</code></pre>
+        <p>mapping มีข้อจำกัดสำคัญข้อหนึ่ง คือวนลูปดู key ทั้งหมดไม่ได้ เพราะ EVM ไม่ได้เก็บรายการ key ไว้ ถ้าต้องการค้นหาได้เร็วและต้องการรายชื่อทั้งหมดด้วย ให้เก็บ array คู่กับ mapping ที่จำตำแหน่งของแต่ละ address ใน array</p>
+        <p>ปัญหาต่อมาคือการลบสมาชิกออกจากกลาง array ถ้าเลื่อนทุกช่องที่อยู่ถัดไปมาปิดช่องว่าง ก็ต้องวนลูปตามความยาวของ array อีก วิธีที่ใช้ gas คงที่คือนำสมาชิกตัวสุดท้ายมาวางแทนช่องที่ลบ แล้วเรียก <code>pop()</code> ตัดช่องสุดท้ายทิ้ง (swap and pop) สิ่งที่ต้องแลกคือลำดับของรายการจะเปลี่ยน โค้ดด้านล่างเก็บตำแหน่งบวกหนึ่งไว้ใน mapping (<code>indexPlusOne</code>) เพราะ key ที่ยังไม่เคยกำหนดค่าจะอ่านได้ 0 ถ้าเก็บตำแหน่งตรง ๆ จะแยกไม่ออกว่า 0 หมายถึงช่องแรกหรือหมายถึงไม่ใช่สมาชิก</p>
+<pre><code>mapping(address =&gt; uint256) private indexPlusOne;   // 0 หมายถึงไม่ใช่สมาชิก
+
+function remove(address who) internal {
+    uint256 i = indexPlusOne[who];
+    require(i != 0, "not a member");
+    address last = members[members.length - 1];
+    members[i - 1] = last;                   // ย้ายตัวสุดท้ายมาแทนช่องที่ลบ
+    indexPlusOne[last] = i;
+    members.pop();
+    delete indexPlusOne[who];
+}</code></pre>
+        <p>งานบางประเภท เช่น แบ่งผลตอบแทน (dividend) ให้ผู้ถือโทเคนทุกคนตามสัดส่วน ใช้อีกเทคนิคหนึ่งที่ไม่ต้องวนลูปเลย contract เก็บค่าสะสม (accumulator) ไว้ค่าเดียว คือผลตอบแทนสะสมต่อโทเคนหนึ่งหน่วย ทุกครั้งที่มีผลตอบแทนเข้ามา contract บวกค่านี้เพิ่มครั้งเดียวโดยไม่ต้องวนผ่านผู้ถือทุกคน และจำไว้ว่าแต่ละคนถอนครั้งล่าสุดตอนที่ค่าสะสมเป็นเท่าใด เมื่อคนหนึ่งมาถอน ยอดของคนนั้นคือ จำนวนโทเคนที่ถือ × (ค่าสะสมตอนนี้ − ค่าสะสมตอนถอนครั้งก่อน) เช่น ค่าสะสมเพิ่มจาก 2 เป็น 5 wei ต่อโทเคน ผู้ถือ 100 โทเคนก็ถอนได้ 100 × 3 = 300 wei เทคนิคนี้ใช้หลักเดียวกับ Pull over Push คือเปลี่ยนจากธุรกรรมเดียวที่ทำงานให้ทุกคน เป็นงานเล็ก ๆ ที่แต่ละคนทำเอง</p>
+
+        <h3>เปรียบเทียบแนวทางแก้</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>แนวทาง</th><th>แก้ปัญหาอะไร</th><th>สิ่งที่ต้องแลก</th></tr>
+            <tr><td>จำกัดขนาด</td><td>ลูปไม่มีวันเกินเพดาน</td><td>รองรับผู้ใช้ได้จำกัด และถ้าสมัครได้ฟรี ผู้โจมตีสมัครจนเต็มได้</td></tr>
+            <tr><td>ประมวลผลเป็นชุด</td><td>งานกับทุกรายการทำได้ แม้รายการยาวมาก</td><td>ต้องส่งหลายธุรกรรม และต้องออกแบบสถานะระหว่างทาง</td></tr>
+            <tr><td>Pull over Push</td><td>gas ต่อธุรกรรมคงที่ ผู้รับที่ล้มเหลวไม่กระทบคนอื่น</td><td>ผู้ใช้ต้องถอนเอง และต้องเรียงโค้ดตาม Checks-Effects-Interactions</td></tr>
+            <tr><td>mapping</td><td>ค้นหาและแก้ยอดด้วย gas คงที่</td><td>วนดู key ทั้งหมดไม่ได้ ถ้าต้องการรายชื่อต้องเก็บ array คู่กัน</td></tr>
+          </table>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">คำถามสี่ข้อเมื่อตรวจลูปใน contract</span>
+          <ol>
+            <li>อะไรกำหนดจำนวนรอบของลูปนี้ และจำนวนนั้นมีเพดานหรือไม่</li>
+            <li>ใครเพิ่มข้อมูลที่ลูปวนผ่านได้บ้าง ต้องเสียอะไรในการเพิ่ม</li>
+            <li>ถ้ารอบใดรอบหนึ่งล้มเหลว ทั้งธุรกรรมล้มเหลวด้วยหรือไม่</li>
+            <li>เมื่อข้อมูลมากที่สุด gas รวมยังต่ำกว่าเพดานต่อธุรกรรม และเหลือที่เผื่อพอหรือไม่</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li><strong>โจทย์:</strong> ทุกโหนดต้องรันโค้ดของทุกธุรกรรม ลูปไม่รู้จบเพียงชิ้นเดียวจึงหยุดทั้งเครือข่ายได้ และแม้เครือข่ายป้องกันได้แล้ว contract ที่วนลูปบนข้อมูลที่ขยายไม่จำกัดก็ยังใช้งานไม่ได้ถาวร</li>
+          <li><strong>7.1:</strong> Halting problem ทำให้ตรวจล่วงหน้าไม่ได้ว่าโปรแกรมจะหยุดหรือไม่ การจับเวลาก็ใช้ไม่ได้เพราะแต่ละโหนดเร็วไม่เท่ากัน เครือข่ายต้องใช้เพดานที่ทุกโหนดนับได้ตรงกัน ทางเลือกจึงเหลือสองทาง คือตัดลูปออกจากภาษา หรือนับจำนวนขั้นและคิดราคา</li>
+          <li><strong>7.2:</strong> Bitcoin Script ไม่มีคำสั่งกระโดดย้อนกลับ opcode แต่ละตัวรันไม่เกินหนึ่งครั้ง งานจึงไม่เกินความยาวของสคริปต์ และค่าธรรมเนียมต่อไบต์ก็ครอบคลุมงานตรวจได้เกือบทั้งหมด โดยมีเพดานเสริม เช่น ขนาดข้อมูลบน stack และจำนวน sigops สิ่งที่ต้องแลกคือเขียนโปรแกรมทั่วไปไม่ได้</li>
+          <li><strong>7.3:</strong> EVM วนลูปได้ แต่ทุก opcode มีราคาเป็น gas เมื่อ Out of gas state ย้อนกลับ ธุรกรรมยังอยู่ในบล็อก nonce เพิ่ม และผู้ส่งจ่ายเต็ม gas limit เพราะโหนดทำงานไปแล้วจริง ส่วน <code>require</code>/<code>revert</code> คืน gas ส่วนที่เหลือ กติกา 63/64 (EIP-150) ทำให้ contract ที่เรียกต่อยังมี gas เหลือเมื่อชั้นในใช้ gas หมด</li>
+          <li><strong>7.4:</strong> เพดาน gas ทำให้ลูปบน array ที่ใครก็เพิ่มข้อมูลได้กลายเป็น DoS ถาวร ผู้รับรายเดียวที่ปฏิเสธเงินก็ทำให้การจ่ายแบบ push ล้มทั้งหมดได้</li>
+          <li><strong>7.5:</strong> หลักการแก้มีสองข้อ คือ gas ต่อธุรกรรมต้องมีขอบเขตแน่นอน และผู้ใช้รายหนึ่งล้มเหลวได้โดยไม่ทำให้คนอื่นล้มตาม ใช้การจำกัดขนาด แบ่งงานเป็นชุด ให้ผู้รับถอนเอง (Pull over Push ตามลำดับ Checks-Effects-Interactions) และใช้ mapping แทนการวนค้นหา</li>
+        </ul>
+
+        <h3>คำศัพท์ที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำศัพท์</th><th>ความหมาย</th></tr>
+            <tr><td>Halting problem</td><td>โจทย์ว่าโปรแกรมจะหยุดหรือไม่ Turing พิสูจน์แล้วว่าไม่มีอัลกอริทึมใดตัดสินได้ทุกกรณี</td></tr>
+            <tr><td>Turing-complete</td><td>ภาษาที่วนลูปหรือเรียกตัวเองได้ไม่จำกัด จึงคำนวณได้ทุกอย่างที่คอมพิวเตอร์คำนวณได้</td></tr>
+            <tr><td>quasi-Turing-complete</td><td>คำที่ใช้เรียก EVM เพราะภาษาวนลูปได้ แต่ทุกการรันมี gas เป็นเพดาน</td></tr>
+            <tr><td>deterministic</td><td>ได้ผลเดียวกันทุกครั้งบนทุกเครื่อง เมื่อข้อมูลเข้าเหมือนกัน</td></tr>
+            <tr><td>Out of gas</td><td>gas หมดก่อนทำงานเสร็จ state ย้อนกลับ และผู้ส่งเสีย gas เต็ม gas limit</td></tr>
+            <tr><td>block gas limit</td><td>เพดาน gas รวมของทุกธุรกรรมในหนึ่งบล็อก</td></tr>
+            <tr><td>Unbounded loop</td><td>ลูปที่จำนวนรอบเพิ่มได้ไม่จำกัดตามข้อมูลใน contract</td></tr>
+            <tr><td>DoS (Denial of Service)</td><td>สภาพที่ผู้ใช้เรียกใช้บริการไม่ได้ ในบทนี้หมายถึงฟังก์ชันของ contract ที่เรียกไม่สำเร็จอีกเลย</td></tr>
+            <tr><td>griefing</td><td>การโจมตีที่ผู้โจมตีไม่ได้ประโยชน์โดยตรง แต่ทำให้ผู้อื่นเสียหาย</td></tr>
+            <tr><td>Pull over Push</td><td>ให้ผู้รับถอนเงินเองแทนที่ contract จะส่งให้ทุกคนในธุรกรรมเดียว</td></tr>
+            <tr><td>Checks-Effects-Interactions</td><td>ลำดับการเขียนฟังก์ชัน ตรวจเงื่อนไข แก้ state แล้วจึงเรียกภายนอก เพื่อกัน reentrancy</td></tr>
+            <tr><td>gas limit</td><td>จำนวน gas สูงสุดที่ผู้ส่งยอมให้ธุรกรรมใช้</td></tr>
+            <tr><td>intrinsic gas</td><td>gas พื้นฐานที่ทุกธุรกรรมต้องจ่าย อย่างน้อย 21,000</td></tr>
+            <tr><td>exceptional halt</td><td>การหยุดเพราะทำงานต่อไม่ได้ เช่น Out of gas หรือ <code>INVALID</code> EVM เก็บ gas ที่เหลือทั้งหมด ผู้ส่งจึงเสีย gas เต็ม gas limit</td></tr>
+            <tr><td>call-depth attack</td><td>การเรียกซ้อนจนเกือบถึงชั้นที่ 1,024 เพื่อให้การเรียกของ contract เป้าหมายล้มเหลว กติกา 63/64 ของ EIP-150 ทำให้ใช้ไม่ได้</td></tr>
+            <tr><td>gas stipend</td><td>gas 2,300 ที่ <code>transfer</code> และ <code>send</code> ส่งต่อให้ผู้รับ พอสำหรับบันทึก event แต่ไม่พอสำหรับเขียน storage</td></tr>
+            <tr><td>batching</td><td>แบ่งงานเป็นหลายธุรกรรม แต่ละธุรกรรมทำไม่เกินจำนวนที่กำหนด</td></tr>
+            <tr><td>swap and pop</td><td>ลบสมาชิกจาก array โดยนำตัวสุดท้ายมาแทนแล้ว <code>pop()</code> ใช้ gas คงที่ แต่ลำดับเปลี่ยน</td></tr>
+            <tr><td>reentrancy</td><td>ช่องโหว่ที่ผู้ถูกเรียกเรียกฟังก์ชันเดิมกลับเข้ามาก่อนที่ state จะอัปเดต</td></tr>
+          </table>
+        </div>
+
+        <h3>ตัวเลขที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>รายการ</th><th>ค่า</th></tr>
+            <tr><td>Alan Turing พิสูจน์ Halting problem</td><td>ปี 1936</td></tr>
+            <tr><td>เพดานของ Bitcoin Script (legacy และ SegWit v0)</td><td>10,000 ไบต์ต่อสคริปต์, 201 opcode, 520 ไบต์ต่อช่องข้อมูล, 1,000 ช่องบน stack</td></tr>
+            <tr><td>gas ของ <code>ADD</code> / โอน ETH ธรรมดา</td><td>3 / 21,000</td></tr>
+            <tr><td>gas ของ <code>SLOAD</code> แบบ cold / <code>CALL</code> ที่โอนมูลค่า</td><td>2,100 / 9,000 (บวกค่าเข้าถึงบัญชีครั้งแรก 2,600)</td></tr>
+            <tr><td>gas ที่ <code>transfer</code> และ <code>send</code> ส่งให้ผู้รับ</td><td>2,300</td></tr>
+            <tr><td>gas ที่ส่งต่อให้การเรียกชั้นถัดไปได้ (EIP-150, Tangerine Whistle 2016)</td><td>ไม่เกิน 63/64 ของ gas ที่เหลือ</td></tr>
+            <tr><td>ความลึกสูงสุดของการเรียกซ้อน</td><td>1,024 ชั้น</td></tr>
+            <tr><td>จำนวนสมาชิกสูงสุดของ <code>payAll()</code> ในตัวอย่าง (รอบละ 30,000 gas)</td><td>999 คนที่เพดาน 30 ล้าน / 558 คนที่เพดาน 16,777,216</td></tr>
+            <tr><td>เพดาน gas ต่อธุรกรรมหลัง Fusaka</td><td>2<sup>24</sup> = 16,777,216 gas (ประมาณ 16.8 ล้าน)</td></tr>
+            <tr><td>ค่าสูงสุดของ <code>uint8</code></td><td>255</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. ทำไมโหนดจึงไม่ตรวจโค้ดของ contract ล่วงหน้าแล้วปฏิเสธโค้ดที่มีลูปไม่รู้จบ</p>
+          <details><summary>ดูเฉลย</summary><div>เพราะ Halting problem พิสูจน์แล้วว่าไม่มีอัลกอริทึมใดตัดสินได้ทุกกรณีว่าโปรแกรมจะหยุดหรือไม่ เครื่องมือตรวจหาลูปที่เห็นชัดได้บางแบบ แต่ผู้โจมตีต้องการเพียงโค้ดชิ้นเดียวที่หลุดการตรวจ เครือข่ายจึงต้องใช้วิธีที่ไม่ต้องรู้คำตอบนั้น คือไม่มีลูป (Bitcoin) หรือบังคับให้ทุกการรันหยุดก่อนใช้ gas เกิน gas limit (Ethereum)</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. ถ้ากำหนดว่าโปรแกรมใดรันเกิน 10 วินาทีให้ถือว่าธุรกรรมนั้นใช้ไม่ได้ จะเกิดปัญหาอะไร</p>
+          <details><summary>ดูเฉลย</summary><div>แต่ละโหนดใช้ฮาร์ดแวร์และมีภาระงานต่างกัน โปรแกรมเดียวกันอาจรันจบทันเวลาบนเครื่องเร็ว แต่เกินเวลาบนเครื่องช้า โหนดจะตัดสินบล็อกเดียวกันต่างกันและเครือข่ายแยกสาย ผู้โจมตียังเขียนโปรแกรมที่ใช้เวลาใกล้เส้นพอดีเพื่อทำให้แยกสายโดยตั้งใจได้ กติกาของฉันทามติต้อง deterministic จำนวนขั้นของการคำนวณมีคุณสมบัตินี้ แต่เวลาไม่มี</div></details>
+        </div>
+
+        <div class="q">
+          <p>3. Bitcoin Script ป้องกันลูปไม่รู้จบด้วยวิธีใด</p>
+          <ol><li>ก. เก็บค่า gas ตามจำนวน opcode</li><li>ข. ไม่มีคำสั่งที่กระโดดย้อนกลับไปรันโค้ดซ้ำ</li><li>ค. จับเวลาและตัดสคริปต์ที่รันนานเกินไป</li><li>ง. ให้ผู้ขุด (miner) ตรวจโค้ดก่อนรวมเข้าบล็อก</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> opcode ทำงานจากซ้ายไปขวา คำสั่งเงื่อนไขข้ามไปข้างหน้าได้อย่างเดียว opcode แต่ละตัวจึงรันไม่เกินหนึ่งครั้ง และงานไม่เกินความยาวของสคริปต์ ข้อ ก คือวิธีของ Ethereum ข้อ ค ใช้ไม่ได้เพราะไม่ deterministic ส่วนข้อ ง ทำไม่ได้ทุกกรณีตาม Halting problem</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. ธุรกรรมตั้ง gas limit 80,000 ขณะที่ base fee 15 Gwei และ priority fee 1 Gwei แล้วจบด้วย Out of gas ผู้ส่งเสียค่าธรรมเนียมเท่าใด state ของ contract และ nonce ของผู้ส่งเปลี่ยนอย่างไร</p>
+          <details><summary>ดูเฉลย</summary><div>Out of gas ใช้ gas ครบ gas limit ค่าธรรมเนียม = 80,000 × (15 + 1) = 1,280,000 Gwei = <strong>0.00128 ETH</strong> (เผา 1,200,000 Gwei และ validator ได้ 80,000 Gwei) state ของ contract ย้อนกลับเป็นเหมือนเดิมทั้งหมด แต่ธุรกรรมยังอยู่ในบล็อกด้วย status 0 และ nonce ของผู้ส่งเพิ่มขึ้น 1</div></details>
+        </div>
+
+        <div class="q">
+          <p>5. ทำไมธุรกรรมที่ revert ด้วย <code>require</code> จึงได้คืน gas ส่วนที่เหลือ แต่ธุรกรรมที่ Out of gas ไม่ได้คืน</p>
+          <details><summary>ดูเฉลย</summary><div><code>require</code> ใช้ opcode <code>REVERT</code> โปรแกรมเลือกหยุดเองที่จุดนั้น EVM จึงรู้ว่างานจบแล้ว และคิดเฉพาะ gas ที่ใช้ไปแล้ว ส่วน Out of gas เป็น exceptional halt คือการหยุดเพราะทำงานต่อไม่ได้ ไม่ใช่การเลือกหยุดเอง EVM จึงเก็บ gas ที่เหลือไปทั้งหมด ผู้ส่งจ่ายเต็ม gas limit ในทั้งสองกรณี gas ที่ใช้ไปแล้วไม่มีทางได้คืน เพราะทุกโหนดทำงานนั้นไปจริง ถ้าคืน ผู้โจมตีก็ส่งลูปไม่รู้จบมาได้ฟรี</div></details>
+        </div>
+
+        <div class="q">
+          <p>6. contract ด้านล่างมีความเสี่ยงอะไร ผู้โจมตีใช้ประโยชน์อย่างไร และควรแก้อย่างไร</p>
+<pre><code>address[] public players;
+function enter() external payable {
+    require(msg.value == 0.001 ether);
+    players.push(msg.sender);
+}
+function refundAll() external {
+    for (uint256 i = 0; i &lt; players.length; i++) {
+        payable(players[i]).transfer(0.001 ether);
+    }
+}</code></pre>
+          <details><summary>ดูเฉลย</summary><div><code>refundAll()</code> วนลูปบน array ที่ขยายได้ไม่จำกัด gas จึงเพิ่มตามจำนวนผู้เล่นจนวันหนึ่งเกินเพดาน และคืนเงินไม่ได้อีกเลย ผู้โจมตีมีสองวิธี วิธีแรกคือสมัครด้วย address จำนวนมากเพื่อให้รายการยาวเกินเพดาน วิธีที่สองง่ายกว่า คือสมัครด้วย contract ที่ <code>receive</code> สั่ง revert ทำให้ <code>transfer</code> ล้มเหลวและทั้งธุรกรรม revert ทุกครั้ง แนวทางแก้คือเปลี่ยนเป็น Pull over Push บันทึกยอดคืนใน <code>mapping(address =&gt; uint256)</code> แล้วให้ผู้เล่นแต่ละคนเรียก <code>withdraw()</code> เอง และใน <code>withdraw()</code> ให้ตั้งยอดเป็นศูนย์ก่อนส่งเงิน ถ้าจำเป็นต้องทำกับทุกคนก็แบ่งเป็นชุดและจำกัดจำนวนผู้เล่นร่วมด้วย</div></details>
+        </div>
+
+        <div class="q">
+          <p>7. ฟังก์ชันหนึ่งเรียกไม่สำเร็จเพราะลูปใช้ gas เกินเพดานต่อธุรกรรม ผู้ใช้เสนอให้ตั้ง priority fee สูงขึ้นสิบเท่า วิธีนี้ช่วยได้หรือไม่</p>
+          <details><summary>ดูเฉลย</summary><div><strong>ไม่ได้</strong> priority fee เป็นราคาต่อ gas ทำให้ validator อยากรวมธุรกรรมเข้าบล็อกเร็วขึ้น แต่ไม่ได้เพิ่ม <strong>จำนวน</strong> gas ที่ธุรกรรมใช้ได้ เพดาน gas ต่อธุรกรรมและ block gas limit เป็นจำนวน gas ที่ตายตัว งานที่ต้องใช้ gas เกินเพดานจึงทำในธุรกรรมเดียวไม่ได้ไม่ว่าจะจ่ายเท่าใด ต้องแก้ที่การออกแบบ contract</div></details>
+        </div>
+
+        <div class="q">
+          <p>8. <code>for (uint8 i = 0; i &lt; 300; i++) { … }</code> ทำงานอย่างไรใน Solidity 0.7 และใน Solidity 0.8</p>
+          <details><summary>ดูเฉลย</summary><div><code>uint8</code> เก็บค่าได้ถึง 255 ใน Solidity 0.7 ค่า 255 บวก 1 วนกลับเป็น 0 เงื่อนไข <code>i &lt; 300</code> จึงจริงตลอด ลูปวนจน Out of gas และผู้เรียกเสีย gas เต็มเพดาน ใน Solidity 0.8 คอมไพเลอร์ตรวจ overflow ให้ ลูปรันรอบที่ i = 255 ได้ตามปกติ แต่ธุรกรรมจะ revert ด้วย <code>Panic(0x11)</code> ตอนที่ <code>i++</code> พยายามเพิ่ม i จาก 255 เป็น 256 และผู้ส่งได้คืน gas ส่วนที่เหลือ ทั้งสองรุ่นทำงานไม่ครบ 300 รอบ วิธีแก้คือใช้ <code>uint256</code></div></details>
+        </div>
+
+        <div class="q">
+          <p>9. ทำไม Bitcoin คิดค่าธรรมเนียมตามขนาดของธุรกรรมได้ แต่ Ethereum ต้องคิดตาม gas</p>
+          <details><summary>ดูเฉลย</summary><div>Script ของ Bitcoin ไม่มีลูป งานตรวจจึงเพิ่มตามขนาดของสคริปต์ ธุรกรรมที่ตรวจนานก็ต้องมีขนาดใหญ่ ค่าธรรมเนียมต่อไบต์จึงครอบคลุมงานไปด้วย (Bitcoin ยังมีเพดานจำนวน sigops เสริมไว้สำหรับงานตรวจลายเซ็น) ใน Ethereum โค้ดลูปเพียงไม่กี่ไบต์รันได้หลายล้านรอบ ขนาดของธุรกรรมจึงไม่บอกปริมาณงาน และต้องนับงานทีละ opcode ด้วย gas</div></details>
+        </div>
+
+        <div class="q">
+          <p>10. ข้อใดไม่ช่วยป้องกัน DoS จาก unbounded loop</p>
+          <ol><li>ก. กำหนดจำนวนสมาชิกสูงสุด</li><li>ข. แบ่งงานเป็นชุดและบันทึกตำแหน่งที่ทำถึงใน storage</li><li>ค. เปลี่ยนการจ่ายเงินให้ผู้รับถอนเอง</li><li>ง. ตั้ง gas limit ของธุรกรรมให้สูงขึ้นทุกครั้งที่เรียก</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ง.</strong> gas limit ของธุรกรรมตั้งได้ไม่เกินเพดานต่อธุรกรรมและ block gas limit เมื่อรายการยาวจนงานเกินเพดานนั้น การตั้ง gas limit สูงขึ้นก็ไม่ช่วย ข้อ ก ข และ ค ทำให้ gas ต่อธุรกรรมมีขอบเขตแน่นอน จึงป้องกันได้</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+  <script>
+    // จำลองว่าลูปบน array จะเกินเพดาน gas เมื่อใด
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const out = $("lOut");
+      const BASE = 21000;
+      const fmt = (n) => Math.round(n).toLocaleString("en-US");
+
+      function render() {
+        const n = Math.max(0, Math.floor(Number($("lN").value) || 0));
+        const per = Math.max(1, Number($("lPer").value) || 1);
+        const cap = Math.max(BASE, Number($("lCap").value) || BASE);
+        const batch = Math.max(1, Math.floor(Number($("lBatch").value) || 1));
+
+        const total = BASE + n * per;
+        const maxN = Math.floor((cap - BASE) / per);
+        const ok = total <= cap;
+        const batchGas = BASE + Math.min(batch, n) * per;
+        const batchOk = batchGas <= cap;
+        const txCount = n === 0 ? 0 : Math.ceil(n / batch);
+
+        let html = `<p style="margin:0 0 6px">payAll() ต้องใช้ประมาณ <strong>${fmt(total)}</strong> gas จากเพดาน ${fmt(cap)} gas (${(total / cap * 100).toFixed(1)}%)</p>`;
+        html += ok
+          ? `<p style="margin:0 0 6px;color:#1f6e5a"><strong>ยังเรียกได้</strong> รับสมาชิกเพิ่มได้อีก ${fmt(maxN - n)} คน ก่อนถึงเพดานที่ ${fmt(maxN)} คน</p>`
+          : `<p style="margin:0 0 6px;color:#c2412d"><strong>เรียกไม่สำเร็จอีกเลย</strong> เพดานนี้รองรับได้สูงสุด ${fmt(maxN)} คน แต่มีสมาชิก ${fmt(n)} คน ต่อให้ตั้ง gas limit เต็มเพดาน ธุรกรรมก็ Out of gas</p>`;
+        html += batchOk
+          ? `<p style="margin:0">ถ้าแบ่งเป็นชุดละ ${fmt(batch)} คน: ต้องส่ง ${fmt(txCount)} ธุรกรรม แต่ละธุรกรรมใช้ไม่เกิน ${fmt(batchGas)} gas ซึ่งต่ำกว่าเพดาน</p>`
+          : `<p style="margin:0;color:#c2412d">ชุดละ ${fmt(batch)} คนยังใหญ่เกินไป ธุรกรรมหนึ่งต้องใช้ ${fmt(batchGas)} gas ลดขนาดชุดให้ไม่เกิน ${fmt(maxN)} คน</p>`;
+        out.innerHTML = html;
+      }
+
+      ["lN", "lPer", "lCap", "lBatch"].forEach((id) => $(id).addEventListener("input", render));
+      render();
+    })();
+  </script>
+</body>
+</html>

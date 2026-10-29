@@ -1,0 +1,235 @@
+/* สไตล์กลางของทั้งเล่ม — หน้าสารบัญและทุกบทใช้ไฟล์นี้ */
+:root {
+  --bg: #f7f4ee;
+  --surface: #fffdf9;
+  --ink: #1d1b18;
+  --muted: #6b655c;
+  --line: #e4ddd0;
+  --btc: #e2761b;
+  --eth: #5a63d8;
+  --up: #1f8a70;
+  --app: #b0417a;
+  --rev: #7a6a2f;
+  --accent: var(--btc);
+  --code-bg: #f0ebe1;
+  --radius: 14px;
+  --font: "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  /* ใช้ธีมสว่างอย่างเดียว ไม่เปลี่ยนตามโหมดมืดของระบบ */
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 17px;
+  line-height: 1.75;
+}
+a { color: inherit; }
+code, pre { font-family: var(--mono); }
+code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 5px; font-size: 0.9em; }
+
+.wrap { max-width: 920px; margin: 0 auto; padding: 40px 16px 80px; }
+
+/* ---------- หัวหน้าสารบัญ ---------- */
+.hero { padding: 24px 0 32px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
+.hero .eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
+.hero h1 { font-size: clamp(30px, 6vw, 46px); line-height: 1.2; margin: 8px 0 12px; }
+.hero h1 .btc { color: var(--btc); }
+.hero h1 .eth { color: var(--eth); }
+.hero p { color: var(--muted); margin: 0; max-width: 640px; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin: 20px 0 8px; }
+.progress { flex: 1 1 260px; }
+.progress .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.progress .bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--btc), var(--eth)); transition: width 0.3s; }
+.progress small { color: var(--muted); font-size: 13px; }
+.btn {
+  font: inherit; font-size: 14px; cursor: pointer;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px;
+}
+.btn:hover { border-color: var(--muted); }
+
+/* ---------- ภาค ---------- */
+.part { margin-top: 44px; }
+.part-head { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; margin-bottom: 14px; }
+.part-head .label {
+  font-family: var(--mono); font-size: 13px; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 99px; padding: 1px 10px;
+}
+.part-head h2 { margin: 0; font-size: 24px; }
+.part-head p { margin: 0; color: var(--muted); font-size: 15px; flex-basis: 100%; }
+
+/* ---------- การ์ดบท ---------- */
+.chapter {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.chapter summary {
+  list-style: none; cursor: pointer;
+  display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center;
+  padding: 14px 18px;
+}
+.chapter summary::-webkit-details-marker { display: none; }
+.chapter .num {
+  font-family: var(--mono); font-weight: 600; font-size: 15px;
+  width: 38px; height: 38px; border-radius: 10px;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent);
+}
+.chapter .ttl { font-weight: 600; line-height: 1.4; }
+.chapter .ttl small { display: block; font-weight: 400; color: var(--muted); font-size: 13px; font-family: var(--mono); }
+.chapter .status { font-size: 12px; padding: 2px 10px; border-radius: 99px; white-space: nowrap; border: 1px solid var(--line); color: var(--muted); }
+.chapter .status.ready { color: var(--up); border-color: var(--up); }
+.chapter[open] summary { border-bottom: 1px dashed var(--line); }
+
+.chapter .body { padding: 10px 18px 16px 70px; }
+.chapter ul.sec { list-style: none; padding: 0; margin: 0; }
+.chapter ul.sec li { display: flex; gap: 10px; align-items: flex-start; padding: 5px 0; font-size: 15.5px; }
+.chapter ul.sec input { margin-top: 7px; accent-color: var(--accent); flex-shrink: 0; }
+.chapter ul.sec label { cursor: pointer; }
+.chapter ul.sec li.done label { color: var(--muted); text-decoration: line-through; }
+.chapter .kw { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+.chapter .kw span { font-family: var(--mono); font-size: 12px; background: var(--code-bg); padding: 2px 8px; border-radius: 6px; color: var(--muted); }
+.chapter .open-link {
+  display: inline-block; margin-top: 12px; font-size: 14px; text-decoration: none;
+  color: var(--accent); font-weight: 600;
+}
+.chapter .open-link.disabled { color: var(--muted); font-weight: 400; pointer-events: none; }
+
+/* สีตามภาค */
+.p1 { --accent: var(--btc); }
+.p2 { --accent: var(--eth); }
+.p3 { --accent: var(--up); }
+.p4 { --accent: var(--app); }
+.p5 { --accent: var(--rev); }
+
+/* ---------- แผนภาพ (inline SVG) ---------- */
+figure.diagram {
+  margin: 24px 0; padding: 16px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+}
+figure.diagram { overflow-x: auto; }
+/* จอแคบ: ไม่ย่อแผนภาพจนอ่านไม่ออก ให้เลื่อนดูในกรอบแทน */
+figure.diagram svg { display: block; width: 100%; min-width: 600px; height: auto; color: var(--ink); font-family: var(--font); }
+figure.diagram figcaption { margin-top: 10px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+/* ---------- หน้าบท ---------- */
+.crumb { font-size: 14px; color: var(--muted); }
+.crumb a { color: var(--accent); text-decoration: none; }
+.chapter-head { padding: 20px 0 28px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.chapter-head .eyebrow { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 0.06em; }
+.chapter-head h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.25; margin: 6px 0 12px; }
+.chapter-head .lead { color: var(--muted); margin: 0; }
+
+.mini-toc { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 20px; margin: 24px 0 8px; }
+.mini-toc strong { font-size: 14px; color: var(--muted); font-weight: 600; }
+.mini-toc ol { margin: 6px 0 0; padding-left: 20px; }
+.mini-toc a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); }
+.mini-toc a:hover { border-color: var(--accent); }
+
+article section { padding-top: 28px; }
+article h2 { font-size: 26px; line-height: 1.35; margin: 24px 0 12px; scroll-margin-top: 16px; }
+article h2 .no { font-family: var(--mono); color: var(--accent); font-size: 0.8em; margin-right: 8px; }
+article h3 { font-size: 19px; margin: 26px 0 8px; }
+article p { margin: 10px 0; }
+article ul, article ol { padding-left: 22px; margin: 10px 0; }
+article li { margin: 4px 0; }
+article strong { font-weight: 600; }
+
+pre {
+  background: var(--code-bg); border-radius: 10px; padding: 14px 16px;
+  overflow-x: auto; font-size: 14px; line-height: 1.6; margin: 14px 0;
+}
+pre code { background: none; padding: 0; }
+
+table.t { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 15.5px; }
+table.t th, table.t td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+table.t th { font-weight: 600; background: var(--code-bg); }
+.table-wrap { overflow-x: auto; }
+
+.callout {
+  border-left: 4px solid var(--accent); background: var(--surface);
+  border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 18px 0; font-size: 16px;
+}
+.callout .h { display: block; font-weight: 600; margin-bottom: 2px; }
+.callout.exam { border-color: var(--eth); }
+.callout.exam .h { color: var(--eth); }
+.callout.warn { border-color: #c2412d; }
+.callout.warn .h { color: #c2412d; }
+
+/* ทดลองแฮช */
+.hash-demo { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin: 18px 0; }
+.hash-demo label { display: block; font-size: 14px; color: var(--muted); margin-top: 8px; }
+.hash-demo input {
+  width: 100%; font: inherit; font-size: 16px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
+}
+.hash-demo output { display: block; font-family: var(--mono); font-size: 13.5px; word-break: break-all; padding: 6px 0 4px; }
+.hash-demo output b { color: #c2412d; font-weight: 600; }
+.hash-demo .diff { margin-top: 10px; font-size: 15px; }
+.hash-demo .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+.hash-demo select {
+  font: inherit; font-size: 15px; padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
+}
+.hash-demo .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.hash-demo .btn:disabled { opacity: 0.5; cursor: default; }
+.hash-demo .stat { font-size: 15px; margin-top: 10px; }
+
+/* แบบฝึกหัด */
+.quiz .q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 18px; margin: 12px 0; }
+.quiz .q p { margin: 0 0 6px; font-weight: 600; }
+.quiz .q ol { list-style: none; padding-left: 0; margin: 4px 0 8px; }
+.quiz details summary { cursor: pointer; color: var(--accent); font-size: 15px; }
+.quiz details div { margin-top: 6px; font-size: 15.5px; }
+
+.chapter-nav { display: flex; justify-content: space-between; gap: 12px; margin-top: 48px; flex-wrap: wrap; }
+.chapter-nav a {
+  flex: 1 1 240px; text-decoration: none; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px;
+}
+.chapter-nav a:hover { border-color: var(--accent); }
+.chapter-nav small { display: block; color: var(--muted); font-size: 13px; }
+.chapter-nav .next { text-align: right; }
+
+footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 18px; }
+
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  .chapter summary { grid-template-columns: auto 1fr; }
+  .chapter .status { grid-column: 2; justify-self: start; }
+  .chapter .body { padding-left: 18px; }
+}
+
+/* ---------- Merkle tree demo (บทที่ 3) ---------- */
+.mtx { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.mtree { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.mtree .node {
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: #fff;
+  text-align: center; min-width: 0;
+}
+.mtree .node small { display: block; font-size: 12px; color: var(--muted); }
+.mtree .node code { display: block; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtree .span4 { grid-column: span 4; }
+.mtree .span2 { grid-column: span 2; }
+.mtree .node.root { border-color: var(--btc); }
+.mtree .node.path { border-color: var(--up); background: #e8f5ef; }
+.mtree .node.sib { border-color: var(--btc); background: #fdf0e3; }
+.mtree .node.chg { animation: mflash 1.2s ease-out; }
+@keyframes mflash { from { background: #fff1b8; } }
+.mproof { margin-top: 12px; font-size: 15px; }
+.mproof ol { margin: 6px 0 0; padding-left: 22px; }
+.mproof code { font-size: 13px; word-break: break-all; }
+@media (max-width: 560px) {
+  .mtx { grid-template-columns: 1fr; }
+}

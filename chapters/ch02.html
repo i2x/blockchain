@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 2 Whitepaper ส่วนที่ 2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p1" data-chapter="ch02">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 1 Bitcoin</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 2 · Whitepaper ข้อ 4–6</div>
+      <h1>Whitepaper ส่วนที่ 2: การหาฉันทามติด้วย Proof-of-Work</h1>
+      <p class="lead">บทที่ 1 จบลงที่คำถามว่า เมื่อไม่มีตัวกลาง เครือข่ายจะตกลงลำดับธุรกรรมร่วมกัน หรือหาฉันทามติ (consensus) ได้อย่างไร ข้อ 4 ตอบด้วย Proof-of-Work ผู้ที่จะสร้างบล็อกต้องใช้พลังประมวลผล (CPU power) และเครือข่ายวัดเสียงส่วนใหญ่จากพลังประมวลผลนั้น ข้อ 5 อธิบายขั้นตอนการทำงานของโหนด ส่วนข้อ 6 อธิบายแรงจูงใจที่ทำให้โหนดเลือกทำตามกติกา</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: ใครได้เขียนบล็อกถัดไป</a></li>
+        <li><a href="#s1">[ข้อ 4] Proof-of-Work: การหา nonce ให้ได้ค่าแฮชตามเป้าหมาย</a></li>
+        <li><a href="#s2">[ข้อ 4] การปรับความยาก (Difficulty adjustment) และหลัก one-CPU-one-vote</a></li>
+        <li><a href="#s3">[ข้อ 4] กฎสายโซ่ที่ยาวที่สุด และเหตุที่แก้ไขบล็อกเก่าได้ยาก</a></li>
+        <li><a href="#s4">[ข้อ 5] Network: ขั้นตอนการทำงานของโหนด 6 ขั้น</a></li>
+        <li><a href="#s5">[ข้อ 5] การแยกสายชั่วคราวเมื่อมีบล็อกเกิดขึ้นพร้อมกัน</a></li>
+        <li><a href="#s6">[ข้อ 6] Incentive: รางวัลบล็อก ค่าธรรมเนียม Halving และอุปทาน 21 ล้าน BTC</a></li>
+        <li><a href="#s7">[ข้อ 6] เหตุที่ผู้ถือพลังประมวลผลส่วนใหญ่ยังเลือกทำตามกติกา (51% attack)</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: ใครได้เขียนบล็อกถัดไป</h2>
+
+        <p>ลองนึกภาพสมุดบัญชี (ledger) เล่มหนึ่งที่ทุกคนในเครือข่ายถือสำเนาเหมือนกัน ประมาณทุก 10 นาที ต้องมีคนเขียนหน้าใหม่ลงในสมุด หน้าใหม่นี้คือบล็อก ผู้เขียนเป็นคนเลือกว่าจะบันทึกธุรกรรมใด และบันทึกในลำดับใด คำถามคือ <strong>ในเมื่อไม่มีหัวหน้า ใครควรได้เป็นผู้เขียน</strong></p>
+
+        <h3>ทุกคนอยากเป็นผู้เขียน</h3>
+        <p>ผู้เขียนบล็อกได้รับเหรียญใหม่เป็นรางวัลบล็อก (block subsidy) และได้ค่าธรรมเนียม (transaction fee) ของทุกธุรกรรมในบล็อก รายละเอียดอยู่ในหัวข้อ 2.6 ปัจจุบันรางวัลอยู่ที่ 3.125 BTC ต่อบล็อก ทุกคนในเครือข่ายจึงอยากเป็นคนแรกที่ได้เขียนบล็อกใหม่ เมื่อทุกคนแย่งกัน เครือข่ายจึงต้องมีวิธีเลือกผู้เขียนที่ยุติธรรมและโกงไม่ได้</p>
+
+        <h3>วิธีที่ใช้ไม่ได้</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>วิธีเลือกผู้เขียน</th><th>ปัญหา</th></tr>
+            <tr><td>ใครส่งบล็อกมาก็รับ</td><td>ทุกคนส่งบล็อกของตัวเองพร้อมกันนับพันบล็อก สำเนาของแต่ละคนจะไม่มีวันตรงกัน และผู้โจมตีเขียนประวัติใหม่ได้ตามใจ</td></tr>
+            <tr><td>ผลัดกันเขียนตามคิว</td><td>ต้องมีผู้จัดคิว ซึ่งก็คือตัวกลางที่ Bitcoin ต้องการเลิกใช้</td></tr>
+            <tr><td>ลงคะแนนเสียง หนึ่งคนหนึ่งเสียง</td><td>บนอินเทอร์เน็ตไม่รู้ว่าใครเป็นใคร ผู้โจมตีสร้างตัวตนปลอมได้นับล้านเพื่อชนะการลงคะแนน การโจมตีแบบนี้เรียกว่า Sybil attack (หัวข้อ 2.2)</td></tr>
+          </table>
+        </div>
+
+        <h3>ทางออกของ Bitcoin: แข่งกันแก้โจทย์ที่ไม่มีทางลัด</h3>
+        <p>Bitcoin เปลี่ยนการเลือกผู้เขียนให้เป็นการแข่งขันคล้ายการจับสลาก ผู้แข่งแต่ละรายเรียกว่าผู้ขุด (miner) และต้อง <strong>เสียต้นทุนจริง</strong> (ไฟฟ้าและฮาร์ดแวร์) เพื่อซื้อสลาก โจทย์คือ <strong>หาค่า nonce ที่ทำให้ค่าแฮชของบล็อกผ่านเกณฑ์</strong> โจทย์นี้ไม่มีทางลัด ต้องเดาไปทีละค่า ผู้ที่หาเจอก่อนได้สิทธิ์เขียนบล็อกนั้นและรับรางวัล</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 210" role="img" aria-label="ผู้ขุด A B และ C ลอง nonce ไปพร้อมกัน ผู้ขุด B พบ nonce ที่ผ่านเกณฑ์ก่อนและประกาศบล็อก ผู้ขุด A และ C หยุดแล้วเริ่มขุดบล็อกถัดไปต่อจากบล็อกของ B">
+            <defs>
+              <marker id="arrRace" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13">
+              <text x="440" y="20" text-anchor="middle" font-size="12" fill="#1f6e5a" font-weight="700">B พบ nonce ก่อน และประกาศบล็อก</text>
+              <line x1="440" y1="28" x2="440" y2="178" stroke="#1f8a70" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+              <text x="10" y="64" font-weight="700" fill="currentColor">ผู้ขุด A</text>
+              <rect x="90" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="108" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="126" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="144" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="162" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="180" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="198" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="216" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="234" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="252" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="270" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="288" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="306" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="324" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="342" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="360" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="378" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="396" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="414" y="52" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="470" y="45" width="280" height="30" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.2"/>
+              <text x="610" y="65" text-anchor="middle" font-size="12" fill="currentColor">ทิ้งงานเดิม เริ่มบล็อกถัดไปต่อจากบล็อกของ B</text>
+
+              <text x="10" y="114" font-weight="700" fill="currentColor">ผู้ขุด B</text>
+              <rect x="90" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="108" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="126" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="144" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="162" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="180" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="198" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="216" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="234" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="252" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="270" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="288" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="306" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="324" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="342" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="360" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="378" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="396" y="102" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="414" y="100" width="16" height="20" rx="3" fill="#1f8a70"/>
+              <rect x="470" y="95" width="280" height="30" rx="8" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="610" y="115" text-anchor="middle" font-size="12" fill="#1f6e5a">ได้รางวัลบล็อก แล้วเริ่มบล็อกถัดไป</text>
+
+              <text x="10" y="164" font-weight="700" fill="currentColor">ผู้ขุด C</text>
+              <rect x="90" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="108" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="126" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="144" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="162" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="180" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="198" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="216" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="234" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="252" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="270" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="288" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="306" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="324" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="342" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="360" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="378" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="396" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="414" y="152" width="12" height="16" rx="2" fill="#e4ddd0"/>
+              <rect x="470" y="145" width="280" height="30" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.2"/>
+              <text x="610" y="165" text-anchor="middle" font-size="12" fill="currentColor">ทิ้งงานเดิม เริ่มบล็อกถัดไปต่อจากบล็อกของ B</text>
+
+              <line x1="90" y1="196" x2="430" y2="196" stroke="#6b655c" stroke-width="1.2" marker-end="url(#arrRace)"/>
+              <text x="90" y="190" font-size="11" fill="#6b655c">เวลา (สี่เหลี่ยมแต่ละช่อง = ลอง nonce หนึ่งค่าแล้วไม่ผ่าน)</text>
+            </g>
+          </svg>
+          <figcaption>ผู้ขุดทุกรายแข่งกันอยู่ตลอดเวลา แต่ละรายเลือกธุรกรรมใส่บล็อกของตัวเองและลอง nonce ไปเรื่อย ๆ ผู้ที่พบ nonce ที่ผ่านเกณฑ์ก่อนได้เป็นผู้เขียนบล็อกนั้น ในรูปนี้ B ไม่ได้ลองมากกว่ารายอื่น แต่บังเอิญพบค่าที่ผ่านก่อน ผู้ที่ลองได้เร็วกว่าเพียงมีโอกาสพบก่อนมากกว่า ส่วนรายอื่นทิ้งงานที่ทำค้างไว้ เพราะบล็อกถัดไปต้องต่อจากบล็อกล่าสุด</figcaption>
+        </figure>
+
+        <p>การแข่งขันแบบนี้ให้ผลหลายอย่างพร้อมกัน</p>
+        <ul>
+          <li><strong>เลือกผู้เขียนได้โดยไม่มีผู้จัด</strong> ทุกคนแข่งกันเอง และตรวจผลได้เองว่าใครชนะ</li>
+          <li><strong>ยุติธรรมตามต้นทุนที่ลง</strong> โอกาสชนะแปรผันตามพลังประมวลผล การสร้างตัวตนปลอมไม่ช่วยเพิ่มโอกาส</li>
+          <li><strong>บล็อกเกิดทีละบล็อก</strong> เพราะต้องใช้เวลาหาคำตอบ และเครือข่ายปรับความยากให้ใช้เวลาเฉลี่ยประมาณ 10 นาที (หัวข้อ 2.2)</li>
+          <li><strong>เขียนประวัติย้อนหลังได้ยาก</strong> ผู้ที่ต้องการแก้บล็อกเก่าต้องชนะการแข่งขันซ้ำหลายรอบติดกัน</li>
+          <li><strong>คนอยากเข้าร่วมดูแลเครือข่าย</strong> เพราะมีรางวัลให้ผู้ชนะ</li>
+        </ul>
+
+        <p>หัวข้อที่เหลือในบทนี้ตอบคำถามที่ตามมาจากการแข่งขันนี้</p>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำถาม</th><th>หัวข้อ</th></tr>
+            <tr><td>โจทย์ที่แข่งกันคืออะไร และทำไมต้องมี nonce</td><td>2.1</td></tr>
+            <tr><td>ถ้ามีผู้ขุดเพิ่มขึ้น บล็อกจะเกิดเร็วขึ้นไหม</td><td>2.2</td></tr>
+            <tr><td>ถ้ามีหลายสายที่ขัดแย้งกัน จะเชื่อสายไหน</td><td>2.3 และ 2.5</td></tr>
+            <tr><td>ผู้ชนะส่งบล็อกแล้ว คนอื่นทำอะไรต่อ</td><td>2.4</td></tr>
+            <tr><td>ผู้ชนะได้อะไร และได้มาจากไหน</td><td>2.6</td></tr>
+            <tr><td>ถ้าผู้แข่งรายหนึ่งมีพลังมากกว่าทุกคนรวมกัน จะโกงไหม</td><td>2.7</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 2.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">2.1</span>[ข้อ 4] Proof-of-Work: การหา nonce ให้ได้ค่าแฮชตามเป้าหมาย</h2>
+
+        <p>Timestamp Server ในข้อ 3 ยังไม่ได้บอกว่าใครเป็นผู้ประทับเวลา ถ้าให้เซิร์ฟเวอร์เครื่องเดียวทำหน้าที่นี้ ก็จะกลับไปมีตัวกลางอีก ข้อ 4 จึงใช้ <strong>Proof-of-Work (PoW)</strong> ใครที่แสดงได้ว่าทำงานคำนวณครบตามเกณฑ์จะได้สิทธิ์สร้างบล็อก โดยไม่ต้องมีใครอนุญาต</p>
+        <p>PoW ดัดแปลงมาจาก <strong>Hashcash</strong> ของ Adam Back (1997) ซึ่งเดิมออกแบบมาเพื่อกันอีเมลขยะ (spam) Hashcash บังคับให้ผู้ส่งคำนวณงานเล็ก ๆ ก่อนส่งอีเมลทุกฉบับ ผู้ส่งทั่วไปแทบไม่รู้สึกถึงต้นทุนนี้ แต่ผู้ส่ง spam นับล้านฉบับต้องเสียต้นทุนสูงมาก Bitcoin นำหลักเดียวกันมาใช้ คือสิทธิ์ต้องแลกด้วยต้นทุนที่ปลอมไม่ได้</p>
+
+        <h3>หลักการ</h3>
+        <p>ผู้สร้างบล็อกต้องทำให้ <strong>ค่าแฮชของ block header ขึ้นต้นด้วยบิตศูนย์ตามจำนวนที่กำหนด</strong> ใน block header มีฟิลด์ <strong>nonce</strong> ไว้สำหรับเรื่องนี้ ผู้ขุดเพิ่มค่า nonce ไปทีละหนึ่งแล้วแฮช header ใหม่ จนกว่าจะได้ค่าแฮชที่ผ่านเกณฑ์</p>
+
+        <div class="callout">
+          <span class="h">Target ในทางปฏิบัติ</span>
+          Whitepaper อธิบายด้วยจำนวนบิตศูนย์นำหน้าเพื่อให้เข้าใจง่าย ส่วนโปรแกรม Bitcoin จริงกำหนดเกณฑ์เป็นตัวเลข <strong>target</strong> เก็บไว้ในฟิลด์ Bits โหนดตีความค่าแฮชเป็นตัวเลข และถือว่าบล็อกถูกต้องเมื่อตัวเลขนั้น <strong>น้อยกว่าหรือเท่ากับ target</strong> ยิ่ง target ต่ำ ค่าแฮชยิ่งต้องมีศูนย์นำหน้ามาก และยิ่งหายาก
+        </div>
+
+        <h3>ทำไมต้องมี nonce</h3>
+        <p>ฟิลด์อื่นใน block header นอกจาก nonce ผู้ขุดเปลี่ยนตามใจไม่ได้ Prev hash ต้องชี้ไปยังบล็อกล่าสุด Merkle root มาจากธุรกรรมที่ผู้ขุดเลือก และ Timestamp คือเวลาปัจจุบัน ถ้านำ header ชุดเดิมไปแฮชซ้ำ ก็จะได้ค่าแฮชเดิมทุกครั้ง เพราะฟังก์ชันแฮชเป็น deterministic (บทที่ 0) การลองครั้งที่สองจึงไม่มีประโยชน์เลย</p>
+        <p>ผู้ขุดจึงต้องมีฟิลด์หนึ่งที่เปลี่ยนค่าได้อิสระโดยไม่กระทบเนื้อหาของบล็อก เมื่อเปลี่ยนค่าในฟิลด์นี้ การลองแต่ละครั้งก็ได้ค่าแฮชใหม่ ฟิลด์นั้นคือ <strong>nonce</strong> ย่อมาจาก <em>number used once</em> เปรียบได้กับเลขสลากที่ผู้ขุดเปลี่ยนไปเรื่อย ๆ จนกว่าจะถูกรางวัล</p>
+        <p>nonce มีขนาด 4 ไบต์ จึงมีค่าที่เป็นไปได้ 2<sup>32</sup> หรือประมาณ 4,295 ล้านค่า เครื่องขุดในปัจจุบันลองครบทุกค่าได้ในเวลาไม่ถึงหนึ่งวินาที ถ้าลองครบแล้วยังไม่ผ่าน ผู้ขุดต้องเปลี่ยนข้อมูลส่วนอื่นให้ได้ header ชุดใหม่ แล้วเริ่มนับ nonce ใหม่ ข้อมูลที่นิยมเปลี่ยนคือ Timestamp หรือค่า <strong>extra nonce</strong> ใน Coinbase transaction</p>
+        <p>Coinbase transaction คือธุรกรรมแรกของบล็อกที่จ่ายรางวัลให้ผู้ขุด (หัวข้อ 2.6) ธุรกรรมนี้เป็นหนึ่งในธุรกรรมที่ใช้คำนวณ Merkle root เมื่อผู้ขุดเปลี่ยน extra nonce ใน Coinbase transaction ค่า Merkle root จึงเปลี่ยน และได้ header ชุดใหม่ให้ลอง nonce ได้อีกรอบ</p>
+
+        <h3>ทำไมโจทย์ต้องไม่มีทางลัด</h3>
+        <p>ถ้ามีวิธีคำนวณ nonce ที่ถูกต้องได้ทันที ผู้ที่รู้วิธีนั้นจะชนะทุกรอบโดยไม่ต้องเสียต้นทุนใด ๆ การแข่งขันก็ไม่ยุติธรรม แต่ฟังก์ชันแฮชย้อนกลับไม่ได้ (pre-image resistance ในบทที่ 0) ทุกคนจึงต้องเดาเหมือนกัน และโอกาสชนะของแต่ละรายขึ้นกับจำนวนครั้งที่ลองได้ต่อวินาที (hash rate) เท่านั้น</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 215" role="img" aria-label="นำ block header ไปแฮชด้วย SHA-256 สองรอบ ถ้าค่าแฮชไม่น้อยกว่า target ให้เพิ่ม nonce แล้วลองใหม่ ถ้าน้อยกว่าหรือเท่ากับ target ให้ประกาศบล็อก">
+            <defs>
+              <marker id="arrP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+              <marker id="arrPr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c2412d"/></marker>
+            </defs>
+            <g font-size="13" text-anchor="middle">
+              <rect x="10" y="30" width="200" height="150" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="110" y="50" font-size="12" fill="#6b655c">Block header</text>
+              <rect x="20" y="58" width="180" height="24" rx="5" fill="#f0ebe1"/>
+              <text x="110" y="75" font-size="12" fill="currentColor">Prev hash</text>
+              <rect x="20" y="86" width="180" height="24" rx="5" fill="#f0ebe1"/>
+              <text x="110" y="103" font-size="12" fill="currentColor">Merkle root</text>
+              <rect x="20" y="114" width="180" height="24" rx="5" fill="#f0ebe1"/>
+              <text x="110" y="131" font-size="12" fill="currentColor">Timestamp · Bits</text>
+              <rect x="20" y="142" width="180" height="26" rx="5" fill="#fdf0e4" stroke="#e2761b"/>
+              <text x="110" y="160" font-size="12" font-weight="700" fill="#b85a0e">Nonce = n</text>
+
+              <line x1="210" y1="105" x2="268" y2="105" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrP)"/>
+              <text x="239" y="96" font-size="11" fill="#6b655c">SHA-256d</text>
+
+              <rect x="270" y="81" width="150" height="48" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="345" y="110" fill="currentColor">ค่าแฮชของ header</text>
+              <line x1="420" y1="105" x2="478" y2="105" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrP)"/>
+
+              <polygon points="550,55 620,105 550,155 480,105" fill="#f0ebe1" stroke="currentColor" stroke-width="1.5"/>
+              <text x="550" y="101" font-size="12" fill="currentColor">ค่าแฮช</text>
+              <text x="550" y="119" font-size="12" fill="currentColor">≤ target ?</text>
+
+              <line x1="620" y1="105" x2="668" y2="105" stroke="#1f8a70" stroke-width="1.5" marker-end="url(#arrP)"/>
+              <text x="644" y="96" font-size="12" fill="#1f6e5a">ใช่</text>
+              <rect x="670" y="81" width="82" height="48" rx="8" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="711" y="101" font-size="12" fill="#1f6e5a">ประกาศ</text>
+              <text x="711" y="118" font-size="12" fill="#1f6e5a">บล็อก</text>
+
+              <path d="M550,155 V198 H110 V182" fill="none" stroke="#c2412d" stroke-width="1.5" marker-end="url(#arrPr)"/>
+              <text x="330" y="192" font-size="12" fill="#c2412d">ไม่ใช่: เพิ่ม nonce เป็น n + 1 แล้วแฮชใหม่</text>
+            </g>
+          </svg>
+          <figcaption>วงจรการขุด: ผู้ขุดไม่มีทางรู้ล่วงหน้าว่า nonce ค่าใดจะให้ค่าแฮชผ่านเกณฑ์ จึงต้องลองไปทีละค่า (Bitcoin แฮช header ด้วย SHA-256 สองรอบซ้อนกัน)</figcaption>
+        </figure>
+
+        <h3>คุณสมบัติสำคัญ: หายาก แต่ตรวจง่าย</h3>
+        <ul>
+          <li><strong>หายาก:</strong> งานโดยเฉลี่ย <strong>เพิ่มขึ้นแบบเอกซ์โพเนนเชียล</strong> ตามจำนวนบิตศูนย์ที่กำหนด ถ้าเพิ่มบิตศูนย์หนึ่งบิต งานจะเพิ่มเป็นสองเท่า</li>
+          <li><strong>ตรวจง่าย:</strong> ผู้ตรวจสอบแฮช header <strong>เพียงครั้งเดียว</strong> ก็รู้ว่าผ่านเกณฑ์หรือไม่</li>
+          <li><strong>แก้ไขไม่ได้โดยไม่ทำงานใหม่:</strong> ถ้าข้อมูลใดในบล็อกเปลี่ยน ค่าแฮชจะเปลี่ยน และต้องหา nonce ใหม่ทั้งหมด</li>
+        </ul>
+
+        <p>ตัวอย่างจริงคือค่าแฮชของ Genesis block (บล็อกแรกของ Bitcoin ขุดเมื่อปี 2009) ค่าแฮชนี้ขึ้นต้นด้วยศูนย์ 10 ตัวในฐานสิบหก เท่ากับบิตศูนย์ 40 บิต</p>
+<pre><code>000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f</code></pre>
+
+        <h3>ลองขุดเอง</h3>
+        <p>ส่วนนี้จำลองว่าคุณเป็นผู้ขุดหนึ่งราย เลือกจำนวนศูนย์ที่ต้องการ แล้วกด "เริ่มขุด" ระบบจะนำข้อความต่อกับ nonce แล้วแฮช และเพิ่ม nonce ทีละหนึ่งไปเรื่อย ๆ จนได้ค่าแฮช SHA-256 ที่ขึ้นต้นด้วยศูนย์ตามจำนวนที่เลือก ลองขุดหลายระดับแล้วเทียบผลในตาราง</p>
+        <p>ศูนย์ฐานสิบหกหนึ่งตัวเท่ากับบิตศูนย์สี่บิต ดังนั้นศูนย์ที่เพิ่มขึ้นแต่ละตัวจะทำให้งานโดยเฉลี่ยเพิ่มประมาณ 2<sup>4</sup> = 16 เท่า เครื่องจำลองนี้แฮช SHA-256 รอบเดียวเพื่อให้เข้าใจง่าย ส่วน Bitcoin แฮชสองรอบ</p>
+
+        <div class="hash-demo" id="miner">
+          <label for="mdata">ข้อมูลในบล็อก</label>
+          <input id="mdata" value="บล็อก #1 | Alice จ่าย Bob 1 BTC" autocomplete="off">
+          <div class="row">
+            <label for="mzeros" style="margin:0">ศูนย์นำหน้า (ฐานสิบหก)</label>
+            <select id="mzeros">
+              <option value="1">1 ตัว</option>
+              <option value="2">2 ตัว</option>
+              <option value="3">3 ตัว</option>
+              <option value="4" selected>4 ตัว</option>
+              <option value="5">5 ตัว (อาจใช้หลายวินาที)</option>
+              <option value="6">6 ตัว (อาจใช้หลายนาที)</option>
+            </select>
+            <button class="btn primary" id="mstart">เริ่มขุด</button>
+            <button class="btn" id="mstop" disabled>หยุด</button>
+          </div>
+          <div class="stat" id="mstat">ยังไม่ได้เริ่ม</div>
+          <output id="mout"></output>
+          <div class="table-wrap">
+            <table class="t" id="mlog" hidden>
+              <tr><th>ศูนย์นำหน้า</th><th>จำนวนครั้งที่ลอง</th><th>ค่าเฉลี่ยตามทฤษฎี (16<sup>n</sup>)</th><th>เวลา</th></tr>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 2.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">2.2</span>[ข้อ 4] การปรับความยาก (Difficulty adjustment) และหลัก one-CPU-one-vote</h2>
+
+        <h3>การปรับความยาก (Difficulty adjustment)</h3>
+        <p>พลังประมวลผลของเครือข่ายเปลี่ยนแปลงตลอดเวลา ทั้งจากฮาร์ดแวร์ที่เร็วขึ้นและจำนวนผู้ขุดที่เข้าออก ถ้าความยากคงที่ บล็อกจะเกิดเร็วขึ้นเมื่อพลังประมวลผลรวมเพิ่ม และเกิดช้าลงเมื่อพลังประมวลผลรวมลด Whitepaper จึงตั้งเป้าจำนวนบล็อกต่อชั่วโมงไว้ และปรับความยากตาม <strong>ค่าเฉลี่ยเคลื่อนที่ (moving average)</strong> ของอัตราการเกิดบล็อก ถ้าบล็อกเกิดเร็วเกินเป้า ความยากจะเพิ่มขึ้น</p>
+
+        <p>ถ้าไม่ปรับความยาก เมื่อมีผู้ขุดเข้ามาแข่งเพิ่ม บล็อกจะเกิดถี่ขึ้น ระบบจะปล่อยเหรียญใหม่เร็วกว่ากำหนด และเครือข่ายจะแยกสาย (fork) บ่อยขึ้น (หัวข้อ 2.5) ในทางกลับกัน ถ้าผู้ขุดจำนวนมากเลิกขุด บล็อกจะเกิดช้าลงจนธุรกรรมรอนานเกินไป</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ค่าที่ Bitcoin ใช้จริง</th><th></th></tr>
+            <tr><td>เวลาเฉลี่ยต่อบล็อกที่ตั้งเป้า</td><td>10 นาที</td></tr>
+            <tr><td>รอบการปรับความยาก</td><td>ทุก 2,016 บล็อก (ประมาณ 2 สัปดาห์)</td></tr>
+            <tr><td>วิธีปรับ</td><td>เทียบเวลาที่ 2,016 บล็อกล่าสุดใช้จริงกับ 2 สัปดาห์ ถ้าเร็วกว่า 2 สัปดาห์ ลด target (ยากขึ้น) ถ้าช้ากว่า เพิ่ม target (ง่ายลง)</td></tr>
+            <tr><td>ขีดจำกัดต่อรอบ</td><td>ปรับได้ไม่เกิน 4 เท่าในแต่ละทิศทาง</td></tr>
+          </table>
+        </div>
+
+        <h3>ทำไมต้องเป็น 10 นาที</h3>
+        <p>Whitepaper ไม่ได้ให้เหตุผลของตัวเลขนี้ไว้ เหตุผลที่อธิบายกันทั่วไปคือ บล็อกใหม่ต้องใช้เวลาหลายวินาทีกว่าจะกระจายไปถึงโหนดทั่วโลก ถ้าบล็อกเกิดทุกไม่กี่วินาที ผู้ขุดจำนวนมากจะหาบล็อกได้ก่อนรู้ว่ามีคนหาได้แล้ว ผลคือเครือข่ายแยกสายบ่อยและงานจำนวนมากสูญเปล่า ผู้ขุดรายใหญ่ก็ได้เปรียบด้วย เพราะบล็อกที่ตนขุดได้ถึงมือตนทันที จึงเริ่มขุดบล็อกถัดไปได้ก่อน ขณะที่รายอื่นยังรอรับบล็อกนั้นอยู่ ตัวเลข 10 นาทีจึงเป็นการเลือกแบบได้อย่างเสียอย่าง (trade-off) ระหว่างความเร็วในการยืนยันธุรกรรมกับความเสถียรของเครือข่าย</p>
+
+        <h3>one-CPU-one-vote</h3>
+        <p>PoW ยังแก้อีกปัญหาหนึ่ง คือ <strong>จะนับเสียงส่วนใหญ่จากอะไร</strong> เมื่อเกิดสายที่ขัดแย้งกัน เครือข่ายต้องตัดสินว่าประวัติธุรกรรมสายใดถูกต้อง (หัวข้อ 2.3) จึงต้องมีวิธีนับเสียง ถ้านับหนึ่ง IP address เป็นหนึ่งเสียง ผู้ที่จัดหา IP address ได้จำนวนมากก็ครอบงำการตัดสินได้ ส่วน PoW ให้ <strong>พลังประมวลผลหนึ่งหน่วยเท่ากับหนึ่งเสียง</strong> และพลังประมวลผลปลอมไม่ได้ เพราะต้องลงทุนฮาร์ดแวร์และค่าไฟจริง</p>
+
+        <div class="callout warn">
+          <span class="h">จุดที่มักสับสน</span>
+          เสียงส่วนใหญ่ของ Bitcoin <strong>ไม่ได้</strong> นับจากจำนวนโหนดหรือจำนวนผู้ใช้ แต่นับจากพลังประมวลผล การโจมตีที่สร้างโหนดปลอมจำนวนมาก (Sybil attack) จึงไม่ช่วยให้ผู้โจมตีได้เสียงข้างมาก
+        </div>
+      </section>
+
+      <!-- ==================== 2.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">2.3</span>[ข้อ 4] กฎสายโซ่ที่ยาวที่สุด และเหตุที่แก้ไขบล็อกเก่าได้ยาก</h2>
+
+        <h3>ทำไมต้องมีกฎนี้</h3>
+        <p>โหนดกระจายอยู่ทั่วโลก ได้รับข้อมูลไม่พร้อมกัน และไม่มีใครให้ถามว่าสายไหนถูก ผู้โจมตีก็อาจส่งสายปลอมเข้ามาได้ เครือข่ายจึงต้องมีกฎที่ <strong>แต่ละโหนดใช้ตัดสินเองได้โดยไม่ต้องคุยกับใคร</strong> แต่ทุกโหนดยังได้คำตอบเดียวกันในที่สุด</p>
+
+        <p>กฎคือ แต่ละโหนดถือว่า <strong>สายโซ่ที่ยาวที่สุด (Longest chain)</strong> เป็นประวัติที่ถูกต้อง และขุดบล็อกใหม่ต่อจากปลายสายนั้น โหนดนับเฉพาะสายที่บล็อกทุกบล็อกผ่านการตรวจ ถ้าสายใดมีบล็อกผิดกติกาแม้เพียงบล็อกเดียว โหนดจะไม่นับสายนั้น แม้สายนั้นจะยาวกว่าก็ตาม</p>
+        <p>เสียงส่วนใหญ่ (majority decision) จึงตัดสินผ่านสายโซ่ที่ยาวที่สุด เพราะสายนี้มีงาน PoW สะสมอยู่มากที่สุด ถ้าพลังประมวลผลส่วนใหญ่เป็นของโหนดสุจริต (honest nodes) สายโซ่สุจริตจะยาวขึ้นเร็วที่สุดและทิ้งห่างสายอื่น กฎนี้ใช้ได้เพราะไม่มีใครปลอมงาน PoW ได้ สายที่มีงานสะสมมากที่สุดจึงต้องมาจากฝ่ายที่ลงพลังประมวลผลมากที่สุดจริง</p>
+
+        <div class="callout">
+          <span class="h">"ยาวที่สุด" หมายถึงอะไร</span>
+          ในโปรแกรมจริง Bitcoin เลือกสายที่มี <strong>งานสะสมรวมมากที่สุด (most cumulative work)</strong> ไม่ใช่สายที่มีจำนวนบล็อกมากที่สุด ปกติสองเกณฑ์นี้ให้ผลเหมือนกัน แต่ถ้ามีคนสร้างสายที่มีบล็อกมากแต่ความยากต่ำ โหนดจะไม่เลือกสายนั้น
+        </div>
+
+        <h3>ผู้โจมตีต้องทำอะไรบ้างจึงจะแก้บล็อกเก่าได้</h3>
+        <ol>
+          <li>ทำ PoW ของบล็อกที่ต้องการแก้ใหม่</li>
+          <li>ทำ PoW ของ <strong>ทุกบล็อกที่ต่อท้ายบล็อกนั้น</strong> ใหม่ทั้งหมด เพราะ Prev hash ของบล็อกถัดไปเปลี่ยนตาม (บทที่ 0)</li>
+          <li>ทำงานให้ <strong>ตามทันและแซง</strong> สายโซ่สุจริต ระหว่างที่ผู้โจมตีไล่ตาม สายสุจริตก็ยาวขึ้นเรื่อย ๆ</li>
+        </ol>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 240" role="img" aria-label="สายโซ่สุจริตยาวถึงบล็อก 107 ผู้โจมตีแยกสายตั้งแต่บล็อก 101 และทำได้ถึงบล็อก 104 ยังตามไม่ทัน">
+            <g font-size="13" text-anchor="middle">
+              <text x="10" y="22" text-anchor="start" font-weight="700" fill="currentColor">สายโซ่สุจริต (พลังประมวลผลส่วนใหญ่)</text>
+              <g stroke="currentColor" stroke-width="1.5">
+                <line x1="80" y1="62" x2="100" y2="62"/><line x1="170" y1="62" x2="190" y2="62"/>
+                <line x1="260" y1="62" x2="280" y2="62"/><line x1="350" y1="62" x2="370" y2="62"/>
+                <line x1="440" y1="62" x2="460" y2="62"/><line x1="530" y1="62" x2="550" y2="62"/>
+                <line x1="620" y1="62" x2="640" y2="62"/>
+              </g>
+              <g>
+                <rect x="10" y="40" width="70" height="44" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/><text x="45" y="67" fill="currentColor">#100</text>
+                <rect x="100" y="40" width="70" height="44" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/><text x="135" y="67" fill="currentColor">#101</text>
+                <rect x="190" y="40" width="70" height="44" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/><text x="225" y="67" fill="currentColor">#102</text>
+                <rect x="280" y="40" width="70" height="44" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/><text x="315" y="67" fill="currentColor">#103</text>
+                <rect x="370" y="40" width="70" height="44" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/><text x="405" y="67" fill="currentColor">#104</text>
+                <rect x="460" y="40" width="70" height="44" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/><text x="495" y="67" fill="currentColor">#105</text>
+                <rect x="550" y="40" width="70" height="44" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/><text x="585" y="67" fill="currentColor">#106</text>
+                <rect x="640" y="40" width="70" height="44" rx="8" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/><text x="675" y="67" fill="#1f6e5a">#107</text>
+              </g>
+              <path d="M100,96 v6 H710 v-6" fill="none" stroke="#6b655c"/>
+              <text x="405" y="120" font-size="12" fill="#6b655c">งานที่ผู้โจมตีต้องทำซ้ำ และต้องแซงให้ได้ก่อนสายสุจริตจะยาวขึ้นอีก</text>
+
+              <g stroke="#c2412d" stroke-width="1.5" stroke-dasharray="5 4">
+                <path d="M45,84 V175 H100" fill="none"/>
+                <line x1="170" y1="175" x2="190" y2="175"/><line x1="260" y1="175" x2="280" y2="175"/>
+                <line x1="350" y1="175" x2="370" y2="175"/>
+              </g>
+              <g>
+                <rect x="100" y="153" width="70" height="44" rx="8" fill="#fbe9e6" stroke="#c2412d" stroke-width="1.5"/><text x="135" y="180" fill="#c2412d">#101′</text>
+                <rect x="190" y="153" width="70" height="44" rx="8" fill="#fbe9e6" stroke="#c2412d" stroke-width="1.5"/><text x="225" y="180" fill="#c2412d">#102′</text>
+                <rect x="280" y="153" width="70" height="44" rx="8" fill="#fbe9e6" stroke="#c2412d" stroke-width="1.5"/><text x="315" y="180" fill="#c2412d">#103′</text>
+                <rect x="370" y="153" width="70" height="44" rx="8" fill="#fbe9e6" stroke="#c2412d" stroke-width="1.5"/><text x="405" y="180" fill="#c2412d">#104′</text>
+              </g>
+              <text x="460" y="180" text-anchor="start" font-size="12" fill="#c2412d">ยังตามไม่ทัน โหนดจึงไม่เลือกสายนี้</text>
+              <text x="10" y="228" text-anchor="start" font-weight="700" fill="#c2412d">สายของผู้โจมตี (แก้ธุรกรรมในบล็อก #101)</text>
+            </g>
+          </svg>
+          <figcaption>ผู้โจมตีแยกสายตั้งแต่บล็อกที่ต้องการแก้ ถ้ามีพลังประมวลผลน้อยกว่าฝ่ายสุจริต สายของผู้โจมตีจะยาวขึ้นช้ากว่า และโหนดอื่นจะยังเลือกสายสุจริตเพราะยาวกว่า</figcaption>
+        </figure>
+
+        <p>Whitepaper แสดงในข้อ 11 ว่า ถ้าผู้โจมตีมีพลังประมวลผลน้อยกว่าฝ่ายสุจริต <strong>โอกาสที่จะตามทันลดลงแบบเอกซ์โพเนนเชียล</strong> ตามจำนวนบล็อกที่ต่อท้ายธุรกรรมนั้น ข้อ 11 อยู่นอกขอบเขตรายวิชา แต่ตัวเลขในตารางด้านล่างช่วยให้เห็นภาพ q คือสัดส่วนพลังประมวลผลของผู้โจมตี z คือจำนวนบล็อกที่ต่อท้ายธุรกรรมแล้ว ฝั่งซ้ายและฝั่งขวาเป็นคนละกรณีกัน ค่าในแถวเดียวกันจึงไม่ได้เทียบกัน</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th colspan="2">ผู้โจมตีมีพลัง 10% (q = 0.1)</th><th colspan="2">ผู้โจมตีมีพลัง 30% (q = 0.3)</th></tr>
+            <tr><th>บล็อกที่ต่อท้าย (z)</th><th>โอกาสตามทัน</th><th>บล็อกที่ต่อท้าย (z)</th><th>โอกาสตามทัน</th></tr>
+            <tr><td>0</td><td>100%</td><td>0</td><td>100%</td></tr>
+            <tr><td>1</td><td>20.5%</td><td>5</td><td>17.7%</td></tr>
+            <tr><td>2</td><td>5.1%</td><td>10</td><td>4.2%</td></tr>
+            <tr><td>3</td><td>1.3%</td><td>15</td><td>1.0%</td></tr>
+            <tr><td>4</td><td>0.35%</td><td>20</td><td>0.25%</td></tr>
+            <tr><td>5</td><td>0.09%</td><td>25</td><td>0.06%</td></tr>
+            <tr><td>6</td><td>0.02%</td><td>30</td><td>0.015%</td></tr>
+          </table>
+        </div>
+        <p>ตารางนี้เป็นที่มาของธรรมเนียมรอ <strong>6 confirmation</strong> ในบทที่ 0 ถ้าผู้โจมตีมีพลัง 10% การรอ 6 บล็อกจะเหลือโอกาสสำเร็จราว 0.02% ถ้าผู้โจมตีมีพลังมากขึ้น ต้องรอนานขึ้น เช่น ผู้โจมตีที่มีพลัง 30% ต้องรอราว 30 บล็อกจึงจะได้ความเสี่ยงระดับใกล้เคียงกัน (0.015%)</p>
+        <p>ถ้าผู้โจมตีมีพลังเกินครึ่ง ตารางนี้ใช้ไม่ได้ เพราะเมื่อเวลาผ่านไปนานพอ ผู้โจมตีจะตามทันเสมอ</p>
+      </section>
+
+      <!-- ==================== 2.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">2.4</span>[ข้อ 5] Network: ขั้นตอนการทำงานของโหนด 6 ขั้น</h2>
+
+        <p>หัวข้อ 2.1–2.3 อธิบายกติกาการแข่งทีละส่วน ข้อ 5 นำมาร้อยเป็นวงจรเดียวที่ทุกโหนดทำซ้ำทุกบล็อก ธุรกรรมต้องกระจายออกไปก่อน ผู้ขุดจึงมีธุรกรรมใส่บล็อก บล็อกที่ขุดได้ต้องกระจายออกไปให้โหนดอื่นตรวจ และโหนดอื่นแสดงว่ายอมรับด้วยการขุดต่อ ข้อนี้ออกสอบบ่อย ถ้าเข้าใจว่าแต่ละขั้นต้องรอผลจากขั้นก่อน จะจำลำดับได้ไม่ยาก</p>
+        <ol>
+          <li>ประกาศ (broadcast) ธุรกรรมใหม่ไปยังทุกโหนด</li>
+          <li>แต่ละโหนดรวบรวมธุรกรรมใหม่เข้าเป็นบล็อก</li>
+          <li>แต่ละโหนดพยายามหา Proof-of-Work ของบล็อกตนเอง</li>
+          <li>เมื่อโหนดใดหา Proof-of-Work ได้ โหนดนั้นประกาศบล็อกไปยังทุกโหนด</li>
+          <li>โหนดอื่นยอมรับบล็อกนั้นก็ต่อเมื่อ <strong>ธุรกรรมทุกรายการในบล็อกถูกต้อง และไม่มีการใช้จ่ายซ้ำ (double-spending)</strong> คือไม่มีธุรกรรมใดใช้เหรียญที่เคยใช้จ่ายไปแล้ว</li>
+          <li>โหนดแสดงว่ายอมรับบล็อกด้วยการเริ่มสร้างบล็อกถัดไป โดยใช้ค่าแฮชของบล็อกที่ยอมรับเป็น Prev hash</li>
+        </ol>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 170" role="img" aria-label="หกขั้นตอน: ประกาศธุรกรรม รวมเป็นบล็อก หา Proof-of-Work ประกาศบล็อก ตรวจบล็อก และเริ่มบล็อกถัดไป แล้ววนกลับไปขั้นที่สอง">
+            <defs>
+              <marker id="arrN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+              <marker id="arrNr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c2412d"/></marker>
+            </defs>
+            <g font-size="12" text-anchor="middle">
+              <rect x="10" y="30" width="110" height="74" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="65" y="52" font-size="16" font-weight="700" fill="#e2761b">1</text>
+              <text x="65" y="74" fill="currentColor">ประกาศ</text><text x="65" y="91" fill="currentColor">ธุรกรรมใหม่</text>
+
+              <rect x="138" y="30" width="110" height="74" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="193" y="52" font-size="16" font-weight="700" fill="#e2761b">2</text>
+              <text x="193" y="74" fill="currentColor">รวมธุรกรรม</text><text x="193" y="91" fill="currentColor">เป็นบล็อก</text>
+
+              <rect x="266" y="30" width="110" height="74" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="321" y="52" font-size="16" font-weight="700" fill="#e2761b">3</text>
+              <text x="321" y="74" fill="currentColor">หา</text><text x="321" y="91" fill="currentColor">Proof-of-Work</text>
+
+              <rect x="394" y="30" width="110" height="74" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="449" y="52" font-size="16" font-weight="700" fill="#e2761b">4</text>
+              <text x="449" y="74" fill="currentColor">ประกาศ</text><text x="449" y="91" fill="currentColor">บล็อกที่พบ</text>
+
+              <rect x="522" y="30" width="110" height="74" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="577" y="52" font-size="16" font-weight="700" fill="#e2761b">5</text>
+              <text x="577" y="74" fill="currentColor">ตรวจธุรกรรม</text><text x="577" y="91" fill="currentColor">ในบล็อก</text>
+
+              <rect x="650" y="30" width="100" height="74" rx="10" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="700" y="52" font-size="16" font-weight="700" fill="#1f8a70">6</text>
+              <text x="700" y="74" fill="#1f6e5a">ใช้แฮชบล็อกนี้</text><text x="700" y="91" fill="#1f6e5a">เริ่มบล็อกใหม่</text>
+
+              <g stroke="currentColor" stroke-width="1.5">
+                <line x1="120" y1="67" x2="136" y2="67" marker-end="url(#arrN)"/>
+                <line x1="248" y1="67" x2="264" y2="67" marker-end="url(#arrN)"/>
+                <line x1="376" y1="67" x2="392" y2="67" marker-end="url(#arrN)"/>
+                <line x1="504" y1="67" x2="520" y2="67" marker-end="url(#arrN)"/>
+                <line x1="632" y1="67" x2="648" y2="67" marker-end="url(#arrN)"/>
+              </g>
+              <path d="M700,104 V150 H193 V106" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrN)"/>
+              <text x="446" y="144" fill="#6b655c">วนซ้ำสำหรับบล็อกถัดไป</text>
+              <line x1="577" y1="104" x2="577" y2="126" stroke="#c2412d" stroke-width="1.5" marker-end="url(#arrNr)"/>
+              <text x="570" y="121" text-anchor="end" font-size="11" fill="#c2412d">ไม่ถูกต้อง: ทิ้งบล็อก</text>
+            </g>
+          </svg>
+          <figcaption>ในขั้นที่ 6 โหนดไม่ได้ส่งข้อความ "ยอมรับ" กลับไป แต่แสดงว่ายอมรับด้วยการลงมือสร้างบล็อกต่อจากบล็อกนั้นทันที ถ้าขั้นที่ 5 พบว่าบล็อกมีธุรกรรมไม่ถูกต้อง โหนดจะทิ้งบล็อกนั้นและขุดต่อบนสายเดิม</figcaption>
+        </figure>
+
+        <h3>ข้อความตกหล่นบางส่วน เครือข่ายก็ยังทำงานได้</h3>
+        <ul>
+          <li>ธุรกรรมที่ประกาศ <strong>ไม่จำเป็นต้องไปถึงทุกโหนด</strong> ขอเพียงไปถึงโหนดจำนวนมาก ไม่นานก็จะมีโหนดบรรจุธุรกรรมนั้นลงบล็อก</li>
+          <li>ถ้าโหนดใดไม่ได้รับบล็อกหนึ่ง เมื่อได้รับบล็อกถัดไปแล้วพบว่า Prev hash ชี้ไปยังบล็อกที่ตนไม่มี โหนดนั้นจะ <strong>ขอบล็อกที่ขาดไป</strong> จากโหนดอื่น</li>
+        </ul>
+      </section>
+
+      <!-- ==================== 2.5 ==================== -->
+      <section id="s5">
+        <h2><span class="no">2.5</span>[ข้อ 5] การแยกสายชั่วคราวเมื่อมีบล็อกเกิดขึ้นพร้อมกัน</h2>
+
+        <p>การแข่งขันในหัวข้อ "เริ่มจากโจทย์" มีผู้ชนะได้เพียงรายเดียวต่อบล็อก แต่ข่าวว่ามีผู้ชนะแล้วต้องใช้เวลากระจายไปทั่วเครือข่าย ระหว่างนั้นผู้ขุดที่ยังไม่รู้ข่าวก็ยังขุดต่อจากบล็อกเดิม และอาจหาคำตอบได้เช่นกัน</p>
+        <p>บางครั้งโหนดสองโหนดหา PoW ได้ในเวลาใกล้เคียงกัน และประกาศบล็อกคนละเวอร์ชันออกมา แต่ละโหนดจะได้รับบล็อกใดบล็อกหนึ่งก่อน ขึ้นกับตำแหน่งในเครือข่าย เครือข่ายจึงแยกเป็นสองสาย เรียกว่า <strong>การแยกสายชั่วคราว (temporary fork)</strong> Whitepaper กำหนดวิธีจัดการไว้ดังนี้</p>
+        <ul>
+          <li>โหนดทำงานต่อจาก <strong>บล็อกที่ได้รับก่อน</strong></li>
+          <li>แต่ <strong>เก็บอีกสายไว้ด้วย</strong> เผื่อสายนั้นยาวกว่าในภายหลัง</li>
+          <li>เมื่อมีผู้หา PoW ของบล็อกถัดไปได้ สายหนึ่งจะยาวกว่า และโหนดที่ทำงานบนสายสั้นจะ <strong>ย้ายไปสายที่ยาวกว่า</strong></li>
+        </ul>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 225" role="img" aria-label="ซ้าย: บล็อก 102A และ 102B เกิดพร้อมกันต่อจาก 101 ขวา: บล็อก 103 ต่อจาก 102A ทำให้สายของ 102A ยาวกว่า บล็อก 102B กลายเป็น stale block">
+            <g font-size="13" text-anchor="middle">
+              <text x="185" y="20" font-weight="700" fill="currentColor">ช่วงที่เสมอกัน</text>
+              <g stroke="currentColor" stroke-width="1.5">
+                <line x1="70" y1="105" x2="90" y2="105"/>
+                <line x1="150" y1="105" x2="190" y2="62"/>
+                <line x1="150" y1="105" x2="190" y2="150"/>
+              </g>
+              <rect x="10" y="85" width="60" height="40" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/><text x="40" y="110" fill="currentColor">#100</text>
+              <rect x="90" y="85" width="60" height="40" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/><text x="120" y="110" fill="currentColor">#101</text>
+              <rect x="190" y="42" width="70" height="40" rx="8" fill="#fdf0e4" stroke="#e2761b" stroke-width="1.5"/><text x="225" y="67" fill="#b85a0e">#102A</text>
+              <rect x="190" y="130" width="70" height="40" rx="8" fill="#eceefb" stroke="#5a63d8" stroke-width="1.5"/><text x="225" y="155" fill="#3f47b0">#102B</text>
+              <text x="270" y="67" text-anchor="start" font-size="12" fill="#b85a0e">กลุ่ม A ขุดต่อ</text>
+              <text x="270" y="155" text-anchor="start" font-size="12" fill="#3f47b0">กลุ่ม B ขุดต่อ</text>
+              <text x="185" y="205" font-size="12" fill="#6b655c">ทุกโหนดเก็บทั้งสองสายไว้</text>
+
+              <line x1="385" y1="10" x2="385" y2="215" stroke="#b8b0a2" stroke-dasharray="5 5"/>
+
+              <text x="575" y="20" font-weight="700" fill="currentColor">หลังพบบล็อก #103</text>
+              <g stroke="currentColor" stroke-width="1.5">
+                <line x1="460" y1="105" x2="480" y2="105"/>
+                <line x1="540" y1="105" x2="580" y2="62"/>
+                <line x1="650" y1="62" x2="670" y2="62"/>
+              </g>
+              <line x1="540" y1="105" x2="580" y2="150" stroke="#b8b0a2" stroke-width="1.5" stroke-dasharray="5 4"/>
+              <rect x="400" y="85" width="60" height="40" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/><text x="430" y="110" fill="currentColor">#100</text>
+              <rect x="480" y="85" width="60" height="40" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/><text x="510" y="110" fill="currentColor">#101</text>
+              <rect x="580" y="42" width="70" height="40" rx="8" fill="#fdf0e4" stroke="#e2761b" stroke-width="1.5"/><text x="615" y="67" fill="#b85a0e">#102A</text>
+              <rect x="670" y="42" width="70" height="40" rx="8" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/><text x="705" y="67" fill="#1f6e5a">#103</text>
+              <rect x="580" y="130" width="70" height="40" rx="8" fill="#f7f4ee" stroke="#b8b0a2" stroke-width="1.5" stroke-dasharray="5 4"/><text x="615" y="155" fill="#6b655c">#102B</text>
+              <text x="660" y="155" text-anchor="start" font-size="12" fill="#6b655c">stale block</text>
+              <text x="575" y="205" font-size="12" fill="#1f6e5a">กลุ่ม B ย้ายมาขุดต่อจาก #103</text>
+            </g>
+          </svg>
+          <figcaption>เมื่อสายของ #102A ยาวกว่า ทุกโหนดเลือกสายนี้และทิ้ง #102B บล็อกที่ถูกต้องแต่ไม่ได้อยู่ในสายหลักแบบนี้เรียกว่า stale block ธุรกรรมใน #102B ที่ไม่มีในสายของ #102A จะกลับไปรอใน mempool (ที่พักธุรกรรมที่ยังไม่ได้ลงบล็อก ซึ่งแต่ละโหนดเก็บไว้เอง) เพื่อรอลงบล็อกถัดไป ส่วนผู้ขุด #102B ไม่ได้รับรางวัล</figcaption>
+        </figure>
+
+        <div class="callout exam">
+          <span class="h">เชื่อมกับบทที่ 9</span>
+          การแยกสายแบบนี้เกิดขึ้นเองตามปกติ และจบลงภายในหนึ่งหรือสองบล็อก ส่วน Hard fork และ Soft fork ในบทที่ 9 เกิดจากการเปลี่ยนกติกาของเครือข่าย
+        </div>
+      </section>
+
+      <!-- ==================== 2.6 ==================== -->
+      <section id="s6">
+        <h2><span class="no">2.6</span>[ข้อ 6] Incentive: รางวัลบล็อก ค่าธรรมเนียม Halving และอุปทาน 21 ล้าน BTC</h2>
+
+        <p>ผู้ขุดต้องจ่ายค่าฮาร์ดแวร์และค่าไฟ จึงต้องมีเหตุผลที่คุ้มจะลงทุน ข้อ 6 ให้แรงจูงใจ (incentive) สองทาง</p>
+
+        <h3>1. รางวัลบล็อก (Block subsidy)</h3>
+        <p>ธุรกรรมแรกของทุกบล็อกเป็นธุรกรรมพิเศษที่ <strong>สร้างเหรียญใหม่</strong> ให้ผู้สร้างบล็อก เรียกว่า <strong>Coinbase transaction</strong> Whitepaper เขียนว่าเป็นธรรมเนียม (by convention) แต่ในโปรแกรม Bitcoin จริงเป็นกฎบังคับ บล็อกต้องมี Coinbase transaction เป็นธุรกรรมแรก และมีได้เพียงรายการเดียว ถ้าไม่เป็นไปตามนี้ โหนดจะปฏิเสธบล็อกนั้น</p>
+        <p>ธุรกรรมนี้ทำสองหน้าที่ หน้าที่แรกคือจูงใจให้โหนดช่วยดูแลเครือข่าย หน้าที่ที่สองคือ <strong>ปล่อยเหรียญเข้าสู่ระบบ</strong> เพราะไม่มีหน่วยงานกลางคอยออกเหรียญ Whitepaper เปรียบการออกเหรียญใหม่กับการขุดทอง ผู้ขุดทองต้องใช้แรงงานและทรัพยากรกว่าจะได้ทองออกมาหมุนเวียน ผู้ขุด Bitcoin ก็ต้องใช้เวลาประมวลผลและไฟฟ้ากว่าจะได้เหรียญใหม่ Whitepaper พูดถึงการเพิ่มเหรียญในอัตราคงที่ แต่โปรแกรมจริงลดรางวัลลงเป็นช่วง ๆ (ดูหัวข้อ Halving ด้านล่าง)</p>
+
+        <h3>2. ค่าธรรมเนียมธุรกรรม (Transaction fee)</h3>
+        <p>ถ้ามูลค่า output ของธุรกรรมน้อยกว่ามูลค่า input ส่วนต่างคือค่าธรรมเนียม ธุรกรรมไม่มีฟิลด์ค่าธรรมเนียมแยกต่างหาก ผู้สร้างบล็อกเก็บส่วนต่างนี้ด้วยการรวมเข้าไปใน output ของ Coinbase transaction ของบล็อกนั้น</p>
+<pre><code>Input:   1.000 BTC   (เหรียญที่ Alice ได้รับมา)
+Output:  0.700 BTC → Bob
+         0.299 BTC → Alice (เงินทอน หรือ change)
+ค่าธรรมเนียม = 1.000 − (0.700 + 0.299) = 0.001 BTC</code></pre>
+        <p>ผู้ขุดเป็นผู้เลือกว่าจะใส่ธุรกรรมใดลงในบล็อก และสิ่งที่มีจำกัดคือพื้นที่ในบล็อก ผู้ขุดจึงเลือกธุรกรรมที่จ่าย <strong>ค่าธรรมเนียมต่อขนาด (fee rate)</strong> สูงก่อน มีหน่วยเป็น sat/vB (satoshi ต่อ virtual byte) ผู้ขุดไม่ได้ดูยอดค่าธรรมเนียมรวม ธุรกรรมขนาดใหญ่ที่จ่ายค่าธรรมเนียมรวมสูงจึงอาจได้ลำดับหลังธุรกรรมขนาดเล็กที่จ่ายน้อยกว่าแต่มี fee rate สูงกว่า ในช่วงที่เครือข่ายคับคั่ง ผู้ที่อยากให้ธุรกรรมยืนยันเร็วจึงต้องตั้ง fee rate สูงขึ้น</p>
+        <p>รายได้ของผู้ขุดต่อบล็อกจึงเท่ากับ <strong>รางวัลบล็อก + ค่าธรรมเนียมของทุกธุรกรรมในบล็อก</strong> เมื่อระบบปล่อยเหรียญครบตามจำนวนที่กำหนดแล้ว แรงจูงใจทั้งหมดจะมาจากค่าธรรมเนียม และระบบจะ <strong>ไม่มีเหรียญใหม่เพิ่มเข้ามาอีก</strong> Whitepaper เรียกสภาพนี้ว่า inflation free</p>
+
+        <h3>Halving และอุปทาน 21 ล้าน BTC</h3>
+        <p>Whitepaper กล่าวเพียงว่าจำนวนเหรียญทั้งหมดกำหนดไว้ล่วงหน้า รายละเอียดอยู่ในโปรแกรม Bitcoin: รางวัลเริ่มที่ 50 BTC และ <strong>ลดลงครึ่งหนึ่งทุก 210,000 บล็อก</strong> (ประมาณ 4 ปี) เรียกว่า <strong>Halving</strong> ตารางด้านล่างระบุช่วงด้วยความสูงบล็อก (block height) คือลำดับที่ของบล็อกนับจาก Genesis block ซึ่งมีความสูงเป็น 0</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ช่วง</th><th>ความสูงบล็อก (block height)</th><th>ปีที่เริ่ม</th><th>รางวัลต่อบล็อก</th></tr>
+            <tr><td>1</td><td>0 – 209,999</td><td>2009</td><td>50 BTC</td></tr>
+            <tr><td>2</td><td>210,000 – 419,999</td><td>2012</td><td>25 BTC</td></tr>
+            <tr><td>3</td><td>420,000 – 629,999</td><td>2016</td><td>12.5 BTC</td></tr>
+            <tr><td>4</td><td>630,000 – 839,999</td><td>2020</td><td>6.25 BTC</td></tr>
+            <tr><td>5</td><td>840,000 – 1,049,999</td><td>2024</td><td>3.125 BTC</td></tr>
+            <tr><td>6</td><td>1,050,000 – 1,259,999</td><td>ประมาณ 2028</td><td>1.5625 BTC</td></tr>
+          </table>
+        </div>
+
+        <p>อุปทานรวม (total supply) คำนวณได้จากอนุกรมเรขาคณิต</p>
+<pre><code>210,000 × 50 × (1 + ½ + ¼ + ⅛ + …) = 210,000 × 50 × 2 = 21,000,000 BTC</code></pre>
+        <p>ค่าจริงคือประมาณ 20,999,999.9769 BTC ต่ำกว่า 21 ล้านเล็กน้อย เพราะหน่วยที่เล็กที่สุดคือ 1 satoshi (0.00000001 BTC) โปรแกรมจึงปัดเศษรางวัลส่วนที่เล็กกว่า 1 satoshi ทิ้ง เหรียญชุดสุดท้ายจะออกมาราวปี 2140</p>
+
+        <h3>ทำไมรางวัลต้องลดลง</h3>
+        <p>Whitepaper ไม่ได้อธิบายเหตุผลของ Halving ไว้โดยตรง สองข้อแรกด้านล่างเป็นเหตุผลที่อธิบายกันทั่วไป ส่วนข้อที่สามมาจาก Whitepaper</p>
+        <ul>
+          <li><strong>จำนวนเหรียญคาดการณ์ได้และมีจำกัด</strong> ไม่มีใครพิมพ์เหรียญเพิ่มได้ตามใจ คล้ายทองคำที่มีปริมาณจำกัดและขุดได้ยากขึ้นเรื่อย ๆ ต่างจากเงินที่ธนาคารกลางพิมพ์เพิ่มได้</li>
+          <li><strong>ช่วงแรกต้องดึงคนเข้ามาขุด</strong> ตอนเริ่มต้นยังมีธุรกรรมน้อย ค่าธรรมเนียมแทบไม่มี รางวัลบล็อกที่สูงจึงเป็นแรงจูงใจหลัก</li>
+          <li><strong>ระยะยาวค่าธรรมเนียมต้องรับช่วงต่อ</strong> เมื่อรางวัลลดลงจนใกล้ศูนย์ ผู้ขุดจะมีรายได้จากค่าธรรมเนียมเป็นหลัก ตรงกับที่ Whitepaper ระบุว่าในที่สุดแรงจูงใจจะมาจากค่าธรรมเนียมทั้งหมด</li>
+        </ul>
+      </section>
+
+      <!-- ==================== 2.7 ==================== -->
+      <section id="s7">
+        <h2><span class="no">2.7</span>[ข้อ 6] เหตุที่ผู้ถือพลังประมวลผลส่วนใหญ่ยังเลือกทำตามกติกา (51% attack)</h2>
+
+        <p>Whitepaper ตั้งคำถามว่า ถ้าผู้โจมตีที่โลภรวบรวมพลังประมวลผลได้มากกว่าโหนดสุจริตทั้งหมด ผู้โจมตีจะทำอะไร สถานการณ์นี้เรียกกันว่า <strong>51% attack</strong> และผู้โจมตีมีทางเลือกสองทาง</p>
+        <ol>
+          <li>ใช้พลังนั้น <strong>โกงผู้อื่น</strong> ด้วยการย้อนธุรกรรมที่ตนเคยจ่ายไปแล้ว</li>
+          <li>ใช้พลังนั้น <strong>ขุดตามกติกา</strong> และได้เหรียญใหม่มากกว่าผู้ขุดรายอื่นทั้งหมดรวมกัน</li>
+        </ol>
+        <p>Whitepaper สรุปว่า ผู้โจมตีควรเห็นว่าเล่นตามกติกาได้กำไรมากกว่า เพราะถ้าโจมตี คนจะเลิกเชื่อถือระบบ และเหรียญที่ผู้โจมตีถืออยู่เองก็จะเสื่อมค่าลง</p>
+
+        <h3>ผู้ที่คุมพลังประมวลผลเกินครึ่งทำอะไรได้ และทำอะไรไม่ได้</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ทำได้</th><th>ทำไม่ได้</th></tr>
+            <tr><td>ย้อนธุรกรรมของตนเองที่เพิ่งจ่ายไป เพื่อใช้จ่ายซ้ำ (double-spend)</td><td>ขโมยเหรียญจาก address ของผู้อื่น เพราะไม่มี private key</td></tr>
+            <tr><td>ไม่บรรจุธุรกรรมบางรายการลงบล็อก (censorship)</td><td>สร้างเหรียญเกินกติกา หรือสร้างธุรกรรมที่ไม่ถูกต้อง เพราะโหนดอื่นจะปฏิเสธบล็อกนั้น</td></tr>
+            <tr><td>ทำให้บล็อกของผู้ขุดรายอื่นกลายเป็น stale block</td><td>เปลี่ยนกติกาของเครือข่าย เช่น เพิ่มรางวัลบล็อก</td></tr>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <span class="h">จุดที่มักสับสน</span>
+          51% attack ไม่ได้ทำให้ผู้โจมตีควบคุม Bitcoin ได้ทั้งหมด ทุกโหนดยังตรวจเองว่าบล็อกถูกต้องหรือไม่ (ขั้นที่ 5 ในหัวข้อ 2.4) พลังประมวลผลมีผลแค่ว่าโหนดจะเลือกสายใด แต่ไม่มีผลต่อการตัดสินว่าธุรกรรมใดถูกต้อง
+        </div>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li><strong>ข้อ 4:</strong> Proof-of-Work คือการหา nonce ที่ทำให้ค่าแฮชของ block header ผ่านเกณฑ์ งานเพิ่มขึ้นแบบเอกซ์โพเนนเชียลตามจำนวนบิตศูนย์ แต่ตรวจได้ด้วยการแฮชเพียงครั้งเดียว แนวคิดนี้มาจาก Hashcash</li>
+          <li><strong>ข้อ 4:</strong> Whitepaper ปรับความยากตามค่าเฉลี่ยเคลื่อนที่ของอัตราการเกิดบล็อก ส่วนโปรแกรม Bitcoin ตั้งเป้า 10 นาทีต่อบล็อก และปรับเป็นรอบทุก 2,016 บล็อก (ปรับได้ไม่เกิน 4 เท่าต่อรอบ)</li>
+          <li><strong>ข้อ 4:</strong> เสียงส่วนใหญ่วัดจากพลังประมวลผล (one-CPU-one-vote) ไม่ใช่จำนวน IP หรือโหนด และตัดสินผ่านสายโซ่ที่ยาวที่สุด คือสายที่มีงานสะสมมากที่สุด</li>
+          <li><strong>ข้อ 4:</strong> ผู้ที่จะแก้บล็อกเก่าต้องทำ PoW ของบล็อกนั้นและทุกบล็อกหลังจากนั้นใหม่ แล้วแซงสายสุจริตให้ได้ โอกาสสำเร็จลดลงแบบเอกซ์โพเนนเชียลตามจำนวนบล็อกที่ต่อท้าย</li>
+          <li><strong>ข้อ 5:</strong> หกขั้นตอน: ประกาศธุรกรรม รวมเป็นบล็อก หา PoW ประกาศบล็อก ตรวจบล็อก และเริ่มบล็อกถัดไปโดยใช้แฮชของบล็อกที่ยอมรับ</li>
+          <li><strong>ข้อ 5:</strong> เมื่อเกิดบล็อกพร้อมกัน โหนดทำงานต่อจากบล็อกที่ได้รับก่อน แต่เก็บอีกสายไว้ และย้ายไปสายที่ยาวกว่าเมื่อมีบล็อกถัดไป</li>
+          <li><strong>ข้อ 6:</strong> แรงจูงใจมาจากรางวัลบล็อก (block subsidy) และค่าธรรมเนียม (transaction fee) ผู้ขุดรับทั้งสองส่วนผ่าน Coinbase transaction ของบล็อกที่ตนสร้าง รางวัลบล็อกลดลงครึ่งหนึ่งทุก 210,000 บล็อก อุปทานรวมจึงไม่เกิน 21 ล้าน BTC</li>
+          <li><strong>ข้อ 6:</strong> ผู้ที่มีพลังประมวลผลส่วนใหญ่ควรได้กำไรมากกว่าถ้าทำตามกติกา เพราะถ้าโจมตี เหรียญที่ตนถืออยู่จะเสื่อมค่า</li>
+        </ul>
+
+        <h3>ตัวเลขที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>รายการ</th><th>ค่า</th></tr>
+            <tr><td>เวลาเฉลี่ยต่อบล็อก</td><td>10 นาที</td></tr>
+            <tr><td>รอบการปรับความยาก</td><td>2,016 บล็อก (ประมาณ 2 สัปดาห์)</td></tr>
+            <tr><td>รางวัลเริ่มต้น</td><td>50 BTC</td></tr>
+            <tr><td>รอบ Halving</td><td>210,000 บล็อก (ประมาณ 4 ปี)</td></tr>
+            <tr><td>รางวัลปัจจุบัน (ตั้งแต่ Halving เมษายน 2024)</td><td>3.125 BTC</td></tr>
+            <tr><td>อุปทานสูงสุด</td><td>21 ล้าน BTC (ประมาณ 20,999,999.9769)</td></tr>
+            <tr><td>หน่วยที่เล็กที่สุด</td><td>1 satoshi = 0.00000001 BTC</td></tr>
+            <tr><td>Confirmation ที่นิยมถือว่าปลอดภัย</td><td>6 บล็อก</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. ข้อใดอธิบาย Proof-of-Work ได้ถูกต้องที่สุด</p>
+          <ol><li>ก. คำตอบหายาก และการตรวจคำตอบก็ใช้เวลานานพอกัน</li><li>ข. คำตอบหายาก แต่ตรวจคำตอบได้ด้วยการแฮชเพียงครั้งเดียว</li><li>ค. ผู้ขุดคำนวณย้อนจาก target เพื่อหา nonce ได้โดยตรง</li><li>ง. ผู้ที่มีโหนดมากที่สุดเป็นผู้สร้างบล็อก</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> หัวใจของ PoW คือความไม่สมมาตร (asymmetry): หาคำตอบยาก แต่ตรวจง่าย ข้อ ค ผิด เพราะฟังก์ชันแฮชย้อนกลับไม่ได้ ผู้ขุดจึงต้องลองทีละค่า ข้อ ง ผิด เพราะสิทธิ์สร้างบล็อกวัดจากพลังประมวลผล ไม่ใช่จำนวนโหนด</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. ถ้าเพิ่มจำนวนบิตศูนย์ที่ต้องการจาก 20 บิตเป็น 24 บิต งานโดยเฉลี่ยจะเพิ่มขึ้นกี่เท่า</p>
+          <ol><li>ก. 4 เท่า</li><li>ข. 8 เท่า</li><li>ค. 16 เท่า</li><li>ง. 24 เท่า</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค. 16 เท่า</strong> บิตศูนย์แต่ละบิตทำให้งานเพิ่มเป็นสองเท่า เพิ่มสี่บิตจึงเท่ากับ 2<sup>4</sup> = 16 เท่า</div></details>
+        </div>
+
+        <div class="q">
+          <p>3. Whitepaper ใช้ Proof-of-Work แทนการนับหนึ่ง IP address เป็นหนึ่งเสียง เพราะเหตุใด</p>
+          <details><summary>ดูเฉลย</summary><div>ผู้ไม่หวังดีจัดหา IP address จำนวนมากได้ด้วยต้นทุนต่ำ จึงครอบงำการลงคะแนนได้ง่าย ส่วนพลังประมวลผลปลอมไม่ได้ ต้องลงทุนฮาร์ดแวร์และค่าไฟจริง PoW จึงทำให้เสียงหนึ่งเสียงเท่ากับพลังประมวลผลหนึ่งหน่วย (one-CPU-one-vote)</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. เรียงลำดับขั้นตอนของเครือข่ายตาม Whitepaper ข้อ 5: (ก) ตรวจธุรกรรมในบล็อก (ข) หา Proof-of-Work (ค) ประกาศธุรกรรมใหม่ (ง) ใช้แฮชของบล็อกที่ยอมรับเริ่มบล็อกถัดไป (จ) รวมธุรกรรมเป็นบล็อก (ฉ) ประกาศบล็อกที่พบ</p>
+          <details><summary>ดูเฉลย</summary><div><strong>ค → จ → ข → ฉ → ก → ง</strong></div></details>
+        </div>
+
+        <div class="q">
+          <p>5. โหนดหนึ่งได้รับบล็อก #102A ก่อน แล้วจึงได้รับ #102B ซึ่งต่อจากบล็อก #101 เดียวกัน โหนดนี้ควรทำอย่างไร</p>
+          <ol><li>ก. ทิ้ง #102B ทันทีและไม่เก็บไว้</li><li>ข. ทำงานต่อจาก #102A แต่เก็บ #102B ไว้ เผื่อสายนั้นยาวกว่าในภายหลัง</li><li>ค. ทำงานต่อจาก #102B เพราะเป็นบล็อกล่าสุด</li><li>ง. หยุดขุดจนกว่าผู้ดูแลเครือข่ายจะตัดสิน</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> ตาม Whitepaper ข้อ 5 โหนดทำงานต่อจากบล็อกที่ได้รับก่อน และเก็บอีกสายไว้ เมื่อมีบล็อกถัดไปเกิดขึ้น สายใดยาวกว่า โหนดจะย้ายไปสายนั้น ข้อ ง ผิด เพราะไม่มีผู้ดูแลกลาง</div></details>
+        </div>
+
+        <div class="q">
+          <p>6. ผู้ขุดสร้างบล็อกที่มี 3 ธุรกรรม ค่าธรรมเนียม 0.002, 0.001 และ 0.0005 BTC ในช่วงที่รางวัลบล็อกคือ 3.125 BTC ผู้ขุดได้รับเท่าใด</p>
+          <details><summary>ดูเฉลย</summary><div>3.125 + 0.002 + 0.001 + 0.0005 = <strong>3.1285 BTC</strong> ผู้ขุดรับเงินจำนวนนี้ผ่าน Coinbase transaction ของบล็อกนั้น</div></details>
+        </div>
+
+        <div class="q">
+          <p>7. ผู้โจมตีที่คุมพลังประมวลผลเกินครึ่งของเครือข่ายทำสิ่งใดไม่ได้</p>
+          <ol><li>ก. ย้อนธุรกรรมที่ตนเพิ่งจ่ายไป</li><li>ข. ไม่บรรจุธุรกรรมบางรายการลงบล็อก</li><li>ค. โอนเหรียญจาก address ของผู้อื่นมาเป็นของตน</li><li>ง. ทำให้บล็อกของผู้ขุดรายอื่นกลายเป็น stale block</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> การโอนเหรียญต้องมีลายเซ็นดิจิทัล (digital signature) จาก private key ของเจ้าของ พลังประมวลผลช่วยปลอมลายเซ็นไม่ได้ และโหนดอื่นจะปฏิเสธบล็อกที่มีธุรกรรมไม่ถูกต้อง</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+  <script src="../assets/sha256.js"></script>
+  <script>
+    // ทดลองขุด: แฮช "ข้อมูล + nonce" ไปเรื่อย ๆ จนได้ศูนย์นำหน้าตามที่เลือก
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const data = $("mdata"), zeros = $("mzeros"), start = $("mstart"), stop = $("mstop");
+      const stat = $("mstat"), out = $("mout"), log = $("mlog");
+      let running = false;
+      // ใช้ MessageChannel แทน setTimeout เพราะเบราว์เซอร์หน่วง timer เมื่อแท็บไม่ได้แสดงอยู่
+      const channel = new MessageChannel();
+      let onTick = null;
+      channel.port1.onmessage = () => onTick && onTick();
+      const yieldThen = (fn) => { onTick = fn; channel.port2.postMessage(0); };
+
+      function finish() {
+        running = false;
+        start.disabled = false;
+        stop.disabled = true;
+      }
+
+      start.addEventListener("click", () => {
+        const n = Number(zeros.value);
+        const prefix = "0".repeat(n);
+        const text = data.value;
+        let nonce = 0;
+        const t0 = performance.now();
+        running = true;
+        start.disabled = true;
+        stop.disabled = false;
+        out.textContent = "";
+
+        (function batch() {
+          if (!running) {
+            stat.textContent = `หยุดแล้วหลังจากลอง ${nonce.toLocaleString()} ครั้ง`;
+            return;
+          }
+          // ทำงานเป็นช่วงละประมาณ 50 ms แล้วคืนการควบคุมให้หน้าเว็บอัปเดต
+          const tick = performance.now();
+          for (; performance.now() - tick < 50; nonce++) {
+            const h = sha256(text + nonce);
+            if (h.startsWith(prefix)) {
+              const tries = nonce + 1;
+              const sec = (performance.now() - t0) / 1000;
+              stat.innerHTML = `พบแล้ว: nonce = <strong>${nonce.toLocaleString()}</strong> ลองไป ${tries.toLocaleString()} ครั้ง ใช้เวลา ${sec.toFixed(2)} วินาที`;
+              out.innerHTML = `<b>${h.slice(0, n)}</b>${h.slice(n)}`;
+              log.hidden = false;
+              const row = log.insertRow(-1);
+              row.innerHTML = `<td>${n} ตัว</td><td>${tries.toLocaleString()}</td><td>${(16 ** n).toLocaleString()}</td><td>${sec.toFixed(2)} วินาที</td>`;
+              finish();
+              return;
+            }
+          }
+          stat.textContent = `กำลังขุด… ลองไปแล้ว ${nonce.toLocaleString()} ครั้ง`;
+          yieldThen(batch);
+        })();
+      });
+
+      stop.addEventListener("click", finish);
+    })();
+  </script>
+</body>
+</html>

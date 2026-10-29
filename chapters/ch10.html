@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 10 Scaling: Lightning และ Rollups</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p3" data-chapter="ch10">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 3 การอัปเกรดและการขยายระบบ</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 10 · Layer 2</div>
+      <h1>Scaling: Lightning Network และ Ethereum Rollups</h1>
+      <p class="lead">Bitcoin และ Ethereum ปลอดภัยได้เพราะทุกโหนดตรวจทุกธุรกรรมเอง แต่เงื่อนไขเดียวกันนี้ก็จำกัดจำนวนธุรกรรมที่เครือข่ายรับได้ เมื่อมีผู้ใช้มากขึ้น ค่าธรรมเนียม (fee) จึงแพงขึ้น บทนี้อธิบายว่าทำไมการขยายบล็อกตรง ๆ จึงต้องแลกกับการกระจายศูนย์ และทำไมทั้งสองเครือข่ายจึงเลือกย้ายธุรกรรมส่วนใหญ่ไปทำนอกเชน (off-chain) บน Layer 2 แล้วให้ Layer 1 ทำหน้าที่ถือเงินค้ำประกันและตัดสินข้อพิพาท ตัวอย่างหลักคือ Lightning Network ของ Bitcoin และ Rollup ของ Ethereum</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: เครือข่ายที่ทุกโหนดทำงานชิ้นเดียวกันซ้ำ</a></li>
+        <li><a href="#s1">Blockchain Trilemma: การกระจายศูนย์ ความปลอดภัย และการขยายตัว</a></li>
+        <li><a href="#s2">การขยายบน Layer 1 (ขนาดบล็อก, Sharding) กับ Layer 2</a></li>
+        <li><a href="#s3">Lightning Network: Payment channel การเปิดและปิดช่อง และการส่งต่อด้วย HTLC</a></li>
+        <li><a href="#s4">Rollup: ประมวลผลนอกเชนแล้วส่งข้อมูลกลับ Layer 1</a></li>
+        <li><a href="#s5">Optimistic Rollup (Fraud proof, ถอนเงินรอประมาณ 7 วัน) กับ ZK Rollup (Validity proof)</a></li>
+        <li><a href="#s6">ตารางเปรียบเทียบ Lightning, Optimistic Rollup, ZK Rollup และ Sidechain</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: เครือข่ายที่ทุกโหนดทำงานชิ้นเดียวกันซ้ำ</h2>
+
+        <p>บทที่ 3 อธิบายว่า full node ตรวจทุกธุรกรรมตั้งแต่ Genesis block ด้วยตัวเอง ส่วนบทที่ 5 อธิบายว่าทุกโหนดของ Ethereum รันทุก contract บน EVM และต้องได้ผลตรงกัน เครือข่ายจึงไม่ต้องเชื่อใจผู้ใด แต่ความปลอดภัยแบบนี้ต้องแลกกับความจุ ทั้งเครือข่ายรับงานได้เพียงเท่าที่โหนดหนึ่งเครื่องรับได้ การเพิ่มโหนดอีกพันเครื่องช่วยให้ตรวจสอบกันได้มากขึ้น แต่ไม่ได้ทำให้รับธุรกรรมได้มากขึ้นเลย เพราะทุกเครื่องทำงานชิ้นเดียวกันซ้ำ</p>
+
+        <h3>เครือข่ายรับธุรกรรมได้เท่าใด</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ระบบ</th><th>ธุรกรรมต่อวินาที (TPS) โดยประมาณ</th><th>สิ่งที่จำกัด</th></tr>
+            <tr><td>Bitcoin</td><td>ราว 3–7</td><td>บล็อกเกิดทุกประมาณ 10 นาที และขนาดบล็อกมีเพดาน (block weight ไม่เกิน 4 ล้านหน่วย)</td></tr>
+            <tr><td>Ethereum (Layer 1)</td><td>ราว 15–30</td><td>บล็อกเกิดทุก 12 วินาที และ gas รวมต่อบล็อกไม่เกิน block gas limit (บทที่ 5)</td></tr>
+            <tr><td>ระบบบัตรชำระเงินขนาดใหญ่</td><td>เฉลี่ยหลักพัน</td><td>ระบบรวมศูนย์ เพิ่มเซิร์ฟเวอร์ได้ตามต้องการ</td></tr>
+          </table>
+        </div>
+
+        <p>เมื่อมีธุรกรรมมากกว่าที่บล็อกรับได้ ผู้ใช้ต้องแข่งกันเสนอค่าธรรมเนียม ธุรกรรมที่จ่ายน้อยต้องรอใน mempool นานขึ้น ช่วงที่มีผู้ใช้มาก ค่าธรรมเนียมเฉลี่ยของทั้งสองเครือข่ายเคยขึ้นไปหลายสิบดอลลาร์ต่อธุรกรรม และบางวันเกินร้อยดอลลาร์ ราคานี้รับได้สำหรับการโอนเงินก้อนใหญ่ แต่ไม่เหมาะกับการซื้อกาแฟ หรือการกดใช้แอปหลายครั้งต่อวัน</p>
+
+        <h3>คำถามของบทนี้</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำถาม</th><th>แนวคิดหรือกลไก</th><th>หัวข้อ</th></tr>
+            <tr><td>ทำไมเพิ่มขนาดบล็อกแล้วปัญหาไม่จบ</td><td>Blockchain trilemma</td><td>10.1</td></tr>
+            <tr><td>ขยายตัว chain เอง กับสร้างชั้นใหม่ไว้ด้านบน ต่างกันอย่างไร</td><td>ขนาดบล็อก, Sharding, Layer 2</td><td>10.2</td></tr>
+            <tr><td>คนสองคนที่จ่ายเงินกันบ่อยจะจ่ายกันนอกเชนโดยไม่ต้องเชื่อใจกันได้อย่างไร</td><td>Payment channel และ HTLC</td><td>10.3</td></tr>
+            <tr><td>ถ้าต้องการรัน smart contract นอกเชนกับผู้ใช้จำนวนมาก จะทำอย่างไร</td><td>Rollup</td><td>10.4</td></tr>
+            <tr><td>Layer 1 รู้ได้อย่างไรว่าผลที่ Rollup ส่งมาถูกต้อง โดยไม่ต้องรันซ้ำ</td><td>Fraud proof และ Validity proof</td><td>10.5</td></tr>
+            <tr><td>แต่ละทางเลือกฝากความปลอดภัยไว้กับใคร</td><td>ตารางเปรียบเทียบ</td><td>10.6</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 10.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">10.1</span>Blockchain Trilemma: การกระจายศูนย์ ความปลอดภัย และการขยายตัว</h2>
+
+        <h3>สามสิ่งที่ทุกเครือข่ายต้องการ</h3>
+        <p>Vitalik Buterin ใช้คำว่า trilemma อธิบายว่า blockchain ต้องการคุณสมบัติสามข้อพร้อมกัน แต่ blockchain แบบเรียบง่ายที่ให้ทุกโหนดตรวจทุกอย่าง ทำได้ครบเพียงสองข้อ</p>
+        <ul>
+          <li><strong>การกระจายศูนย์ (Decentralization):</strong> คนทั่วไปรันโหนดตรวจเองได้ด้วยคอมพิวเตอร์และอินเทอร์เน็ตธรรมดา จึงไม่ต้องเชื่อผู้ให้บริการรายใหญ่ เป็นโจทย์เดียวกับบทที่ 3</li>
+          <li><strong>ความปลอดภัย (Security):</strong> ผู้โจมตีต้องลงทุนมหาศาลจึงจะย้อนแก้ธุรกรรมที่บันทึกไปแล้วหรือหยุดเครือข่ายได้ เช่น ต้องมีพลังขุด (hash power) เกินครึ่ง (บทที่ 2) หรือต้องยอมเสีย stake จำนวนมาก (บทที่ 8)</li>
+          <li><strong>การขยายตัว (Scalability):</strong> รับธุรกรรมได้มากในราคาถูก</li>
+        </ul>
+
+        <h3>ทำไมจึงได้ครบทั้งสามข้อยาก</h3>
+        <p>ใน blockchain แบบเรียบง่าย ทุกธุรกรรมต้องผ่านทุกโหนด งานต่อวินาทีของเครือข่ายจึงเท่ากับงานต่อวินาทีของโหนดหนึ่งเครื่อง ถ้าจะเพิ่มข้อใดข้อหนึ่ง ต้องยอมเสียอีกข้อ</p>
+        <ul>
+          <li><strong>เพิ่มขนาดบล็อกหรือลดเวลาต่อบล็อก:</strong> รับธุรกรรมได้มากขึ้น แต่โหนดต้องใช้ดิสก์ แบนด์วิดท์ และ CPU มากขึ้น คนที่รันโหนดได้จึงน้อยลง เครือข่ายก็รวมศูนย์มากขึ้น</li>
+          <li><strong>แบ่งเป็นหลาย chain ย่อย ให้แต่ละ chain รับงานส่วนหนึ่ง:</strong> รวมกันแล้วรับธุรกรรมได้มาก และโหนดแต่ละเครื่องยังเบา แต่แต่ละ chain มีผู้ตรวจน้อยลง ผู้โจมตีเลือกโจมตี chain ที่อ่อนที่สุดได้ ปัญหานี้เป็นปัญหาเดียวกับ chain ขนาดเล็กในบทที่ 5 chain ที่มีผู้ขุดน้อยมีพลังขุดรวมต่ำ ผู้โจมตีจึงหาพลังขุดเกินครึ่งได้ด้วยต้นทุนต่ำ</li>
+          <li><strong>ให้ทุกโหนดตรวจทุกอย่างด้วยฮาร์ดแวร์ธรรมดาต่อไป:</strong> ปลอดภัยและกระจายศูนย์ แต่รับธุรกรรมได้น้อย Bitcoin และ Ethereum Layer 1 เลือกทางนี้</li>
+        </ul>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 350" role="img" aria-label="สามเหลี่ยม trilemma มุมบนคือความปลอดภัย มุมซ้ายล่างคือการกระจายศูนย์ มุมขวาล่างคือการขยายตัว ด้านซ้ายคือ Bitcoin และ Ethereum Layer 1 ที่ปลอดภัยและกระจายศูนย์แต่รับธุรกรรมได้น้อย ด้านขวาคือบล็อกใหญ่ที่มีโหนดและผู้ผลิตบล็อกไม่กี่รายจึงรวมศูนย์ ด้านล่างคือการแบ่งหลาย chain ย่อยที่โจมตีได้ง่าย">
+            <g font-size="13" fill="currentColor">
+              <polygon points="380,62 170,290 590,290" fill="#fff" stroke="currentColor" stroke-width="1.4"/>
+              <line x1="380" y1="62" x2="170" y2="290" stroke="#1f8a70" stroke-width="3"/>
+
+              <circle cx="380" cy="62" r="7" fill="#5a63d8"/>
+              <circle cx="170" cy="290" r="7" fill="#1f8a70"/>
+              <circle cx="590" cy="290" r="7" fill="#e2761b"/>
+
+              <text x="380" y="28" text-anchor="middle" font-weight="700">ความปลอดภัย (Security)</text>
+              <text x="380" y="46" text-anchor="middle" font-size="12" fill="#6b655c">โจมตีได้ยากและแพง</text>
+              <text x="170" y="318" text-anchor="middle" font-weight="700">การกระจายศูนย์ (Decentralization)</text>
+              <text x="170" y="336" text-anchor="middle" font-size="12" fill="#6b655c">คนทั่วไปรันโหนดตรวจเองได้</text>
+              <text x="590" y="318" text-anchor="middle" font-weight="700">การขยายตัว (Scalability)</text>
+              <text x="590" y="336" text-anchor="middle" font-size="12" fill="#6b655c">รับธุรกรรมได้มาก ราคาถูก</text>
+
+              <g text-anchor="end" font-size="12">
+                <text x="240" y="140" font-weight="700" fill="#1f6e5a">ทุกโหนดตรวจทุกอย่าง</text>
+                <text x="240" y="158">Bitcoin, Ethereum Layer 1</text>
+                <text x="240" y="176">ได้: ปลอดภัย + กระจายศูนย์</text>
+                <text x="240" y="194" fill="#c2412d">เสีย: รับธุรกรรมได้น้อย</text>
+              </g>
+              <g font-size="12">
+                <text x="520" y="140" font-weight="700">บล็อกใหญ่หรือบล็อกถี่</text>
+                <text x="520" y="158">โหนดและผู้ผลิตบล็อกไม่กี่ราย</text>
+                <text x="520" y="176">ได้: ปลอดภัย + ขยายตัว</text>
+                <text x="520" y="194" fill="#c2412d">เสีย: รวมศูนย์</text>
+              </g>
+              <g text-anchor="middle" font-size="12">
+                <text x="380" y="236" font-weight="700">แบ่งเป็นหลาย chain ย่อย</text>
+                <text x="380" y="254">ได้: กระจายศูนย์ + ขยายตัว</text>
+                <text x="380" y="272" fill="#c2412d">เสีย: ผู้ตรวจต่อ chain น้อย โจมตีง่าย</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>แต่ละด้านของสามเหลี่ยมแทนการออกแบบหนึ่งแบบ การออกแบบนั้นได้คุณสมบัติของสองมุมที่ปลายด้าน และเสียคุณสมบัติของมุมที่สาม เส้นสีเขียวคือทางที่ Bitcoin และ Ethereum Layer 1 เลือก Layer 2 ในหัวข้อถัดไปเพิ่มการขยายตัวโดยไม่ต้องย้าย Layer 1 ออกจากด้านนี้</figcaption>
+        </figure>
+
+        <div class="callout">
+          <span class="h">trilemma ไม่ใช่ทฤษฎีบท</span>
+          trilemma เป็นข้อสังเกตเรื่องการได้อย่างเสียอย่างในการออกแบบ (design trade-off) ไม่มีใครพิสูจน์ทางคณิตศาสตร์ว่าได้ครบสามข้อไม่ได้ ข้อสังเกตนี้ใช้กับระบบที่ให้ทุกโหนดทำงานทุกชิ้นเอง Layer 2 พยายามเลี่ยงข้อจำกัดนี้ โดยให้ Layer 1 ตรวจเพียงหลักฐานหรือข้อพิพาท ไม่ต้องรันทุกธุรกรรมเอง
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ: ประมาณ TPS จากขนาดบล็อก</span>
+          TPS ≈ จำนวนธุรกรรมต่อบล็อก ÷ จำนวนวินาทีต่อบล็อก ถ้าคิดตามเพดานเดิมของ Bitcoin คือ 1 MB (ก่อน SegWit) และธุรกรรมเฉลี่ยราว 250 ไบต์ บล็อกหนึ่งจะมีราว 4,000 ธุรกรรม บล็อกเกิดทุก 600 วินาที จึงได้ TPS ≈ 4,000 ÷ 600 ≈ 6.7 ถ้าเพิ่มขนาดบล็อกเป็น 8 เท่า จะได้ราว 53 TPS ตัวเลขนี้ยังห่างจากระบบชำระเงินขนาดใหญ่มาก แต่ภาระของทุกโหนดเพิ่มขึ้น 8 เท่าทันที
+          <br><br>คิดแบบเดียวกันกับ Ethereum ได้ สมมุติ block gas limit เท่ากับ 30 ล้าน gas และการโอน ETH ธรรมดาใช้ 21,000 gas บล็อกหนึ่งรับการโอนธรรมดาได้ไม่เกินราว 1,428 รายการ บล็อกเกิดทุก 12 วินาที จึงได้ไม่เกินราว 119 TPS ตัวเลขนี้เป็นเพดานของธุรกรรมที่ง่ายที่สุด ธุรกรรมที่เรียก contract ใช้ gas มากกว่านี้หลายเท่า TPS จริงจึงต่ำกว่ามาก (ค่า block gas limit จริงปรับขึ้นเป็นระยะ ตัวเลข 30 ล้านใช้เพื่อฝึกคำนวณเท่านั้น)
+        </div>
+      </section>
+
+      <!-- ==================== 10.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">10.2</span>การขยายบน Layer 1 (ขนาดบล็อก, Sharding) กับ Layer 2</h2>
+
+        <p>ทางออกจากข้อจำกัดในหัวข้อ 10.1 แบ่งได้สองแนว แนวแรกแก้ที่ตัว chain เอง (Layer 1) ให้รับงานได้มากขึ้น แนวนี้มีสองทาง คือเพิ่มขนาดบล็อกหรือลดเวลาต่อบล็อก (ทางที่ 1) และ Sharding (ทางที่ 2) แนวที่สองคือ Layer 2 (ทางที่ 3) แนวนี้คงตัว chain ไว้ให้เล็กเหมือนเดิม แล้วย้ายงานส่วนใหญ่ไปทำที่ชั้นบน ทั้งสองแนวต้องตอบคำถามเดียวกัน คือ ได้ความจุเพิ่มมาแล้วต้องเสียอะไร</p>
+
+        <h3>ทางที่ 1: เพิ่มขนาดบล็อกหรือลดเวลาต่อบล็อก</h3>
+        <p>วิธีนี้ตรงที่สุด และได้ผลทันที แต่ทุกโหนดต้องรับภาระเพิ่มตามขนาดบล็อก ชุมชน Bitcoin ถกเถียงเรื่องนี้กันในช่วงปี 2015–2017 (block size war) ข้อถกเถียงจบด้วยการแยกสาย ฝั่งที่ต้องการบล็อกใหญ่แยกไปเป็น Bitcoin Cash ในเดือนสิงหาคม 2017 พร้อมเพิ่มขนาดบล็อกเป็น 8 MB การแยกสายครั้งนี้เป็น hard fork (บทที่ 9 หัวข้อ 9.4) ส่วน Bitcoin เลือกใช้ SegWit ซึ่งเป็น soft fork ที่เพิ่มความจุได้บางส่วน แล้วขยายต่อด้วย Layer 2</p>
+        <p>การลดเวลาต่อบล็อกมีปัญหาคล้ายกัน บล็อกใหม่ต้องใช้เวลากระจายไปทั่วเครือข่าย ถ้าบล็อกเกิดถี่เกินไป fork ชั่วคราวจะเกิดบ่อยขึ้น (บทที่ 2 หัวข้อ 2.5) ผู้ขุด (miner) รายใหญ่ที่มีเครือข่ายเร็วได้เปรียบ เพราะบล็อกของตนกลายเป็น stale block น้อยกว่า ผู้ขุดรายเล็กจึงค่อย ๆ หายไป และเครือข่ายรวมศูนย์มากขึ้น</p>
+
+        <h3>ทางที่ 2: Sharding</h3>
+        <p>Sharding แบ่งเครือข่ายเป็นหลายส่วน แต่ละส่วนเรียกว่า shard มีกลุ่ม validator ของตัวเอง และประมวลผลธุรกรรมเพียงส่วนหนึ่ง โหนดหนึ่งเครื่องจึงไม่ต้องตรวจทุกธุรกรรม ปัญหาคือแต่ละ shard มีผู้ตรวจน้อย ผู้โจมตีรวมกำลังไปยึด shard เดียวได้ง่ายกว่ายึดทั้งเครือข่าย ระบบจึงต้องสุ่มสลับ validator ไปตาม shard ต่าง ๆ เพื่อไม่ให้ผู้โจมตีเลือก shard ได้เอง นอกจากนี้ ธุรกรรมที่ข้าม shard ก็ซับซ้อนกว่าธุรกรรมใน chain เดียวมาก</p>
+        <p>แผนเดิมของ Ethereum คือแบ่งเป็นหลาย shard chain (เคยวางไว้ 64 chain) แต่ราวปี 2020 ทีมวิจัยเปลี่ยนไปใช้แนวทางที่ยึด Rollup เป็นหลัก (rollup-centric roadmap) เหตุผลคือ Rollup (ทางที่ 3) ย้ายงานประมวลผลออกไปนอก Layer 1 ได้อยู่แล้ว โดยไม่ต้องแก้ปัญหาธุรกรรมข้าม shard ที่ซับซ้อน สิ่งที่ Rollup ยังขาดคือที่เก็บข้อมูลราคาถูกบน Layer 1 Ethereum จึงเลิกแผนที่แบ่งการรัน contract ไปไว้หลาย shard (execution sharding) แล้วพัฒนา Layer 1 ให้เก็บข้อมูลของ Rollup ได้ถูกลงแทน แนวคิดนี้เรียกว่า data sharding หรือ Danksharding ขั้นแรกคือ EIP-4844 ในหัวข้อ 10.4</p>
+
+        <h3>ทางที่ 3: Layer 2</h3>
+        <p>Layer 2 เริ่มจากข้อสังเกตว่า Layer 1 ไม่จำเป็นต้องรันทุกธุรกรรมเอง Layer 1 ทำเพียงสามอย่างก็พอ คือ ถือเงินที่ผู้ใช้ฝากไว้ บันทึกผลสุดท้าย และตัดสินเมื่อมีข้อพิพาท ธุรกรรมส่วนใหญ่ย้ายไปทำบน Layer 2 ซึ่งเร็วและถูกกว่า เงื่อนไขสำคัญคือ ถ้าผู้ใช้ไม่พอใจหรือผู้ให้บริการ Layer 2 หายไป ผู้ใช้ต้องถอนเงินกลับ Layer 1 ได้เอง โดยไม่ต้องขออนุญาตใคร</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>แนวทาง</th><th>ตัวอย่าง</th><th>ได้อะไร</th><th>เสียอะไร</th></tr>
+            <tr><td>เพิ่มขนาดบล็อก</td><td>Bitcoin Cash</td><td>รับธุรกรรมได้มากขึ้นทันที</td><td>ภาระของโหนดเพิ่มขึ้น การกระจายศูนย์ลดลง และต้อง hard fork</td></tr>
+            <tr><td>ลดเวลาต่อบล็อก</td><td>chain ที่ตั้งเวลาต่อบล็อกสั้น</td><td>ยืนยันธุรกรรมเร็วขึ้น</td><td>stale block มากขึ้น ผู้ขุดรายใหญ่ได้เปรียบ</td></tr>
+            <tr><td>Sharding</td><td>แผนเดิมของ Ethereum</td><td>งานกระจายไปหลาย shard</td><td>ความปลอดภัยต่อ shard ลดลง ธุรกรรมข้าม shard ซับซ้อน</td></tr>
+            <tr><td>Layer 2</td><td>Lightning, Rollup</td><td>รับธุรกรรมได้มาก โดยแก้กติกาของ Layer 1 น้อย</td><td>ระบบซับซ้อนขึ้น และผู้ใช้ต้องย้ายเงินเข้าออกระหว่างสองชั้น</td></tr>
+          </table>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ: อะไรนับเป็น Layer 2</span>
+          ให้ถามคำถามเดียวว่า ถ้าผู้ให้บริการโกงหรือหายไป ผู้ใช้ยังนำเงินกลับ Layer 1 ได้ด้วยหลักฐานที่ Layer 1 ตรวจเองได้หรือไม่ ถ้าได้ ระบบนั้นอาศัยความปลอดภัยของ Layer 1 (inherit security) และนับเป็น Layer 2 ถ้าไม่ได้ และผู้ใช้ต้องเชื่อกลุ่ม validator ของระบบนั้นเอง ระบบนั้นคือ sidechain (หัวข้อ 10.6)
+        </div>
+      </section>
+
+      <!-- ==================== 10.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">10.3</span>Lightning Network: Payment channel การเปิดและปิดช่อง และการส่งต่อด้วย HTLC</h2>
+
+        <h3>โจทย์: จ่ายเงินก้อนเล็กบ่อย ๆ</h3>
+        <p>สมมุติ Alice ซื้อกาแฟจากร้านของ Bob ทุกวัน ถ้าจ่ายบนเชนทุกครั้ง Alice ต้องเสียค่าธรรมเนียมทุกแก้ว บางช่วงค่าธรรมเนียมแพงกว่าราคากาแฟ และ Bob ต้องรอบล็อกยืนยันอย่างน้อยราว 10 นาที แต่สิ่งที่ทั้งสองคนสนใจจริง ๆ คือยอดสุทธิเมื่อเลิกค้าขายกัน ไม่ใช่ทุกรายการระหว่างทาง</p>
+        <p>วิธีที่ง่ายที่สุดคือให้ Alice ค้างจ่ายไว้แล้วชำระทีเดียวตอนสิ้นเดือน แต่ Bob ต้องเชื่อใจ Alice ถ้า Alice ไม่จ่ายตอนท้าย Bob ก็เสียหาย Lightning Network แก้ข้อนี้โดยล็อกเงินไว้บนเชนก่อน แล้วให้ทั้งสองฝ่ายถือธุรกรรมที่แสดงยอดล่าสุดและมีลายเซ็น (signature) ครบแล้ว ฝ่ายใดก็นำธุรกรรมนี้ขึ้นเชนได้ทุกเมื่อ โดยไม่ต้องรออีกฝ่ายยินยอม Joseph Poon และ Thaddeus Dryja เสนอแนวคิดนี้ในเอกสารปี 2016 และเครือข่ายเริ่มใช้งานบน mainnet ในปี 2018</p>
+
+        <h3>ขั้นที่ 1: เปิดช่องด้วย Funding transaction</h3>
+        <p>Alice สร้างธุรกรรมเปิดช่อง (funding transaction) เพื่อฝากเงิน เช่น 100,000 sat (satoshi, 1 sat = 10<sup>-8</sup> BTC) เข้า output แบบ 2-of-2 multisig เงินก้อนนี้จะใช้ได้ก็ต่อเมื่อมีลายเซ็นของทั้ง Alice และ Bob Alice จึงถอนเงินคืนฝ่ายเดียวไม่ได้ และ Bob มั่นใจได้ว่ายอดที่ตนได้รับในช่องมีเงินจริงรองรับ แต่ก่อนประกาศ funding transaction ขึ้นเชน Alice ต้องให้ Bob ลงลายเซ็นธุรกรรมคืนเงินให้ Alice ไว้ก่อน ธุรกรรมคืนเงินนี้คือ commitment transaction ฉบับแรก (state 0) ถ้า Bob หายไปหลังเปิดช่อง Alice ก็ยังนำเงินคืนได้ เงินจึงไม่ติดอยู่ใน multisig ตลอดไป ขั้นที่ 2 จะอธิบาย commitment transaction อีกครั้ง</p>
+
+        <div class="callout">
+          <span class="h">ทำไม Lightning ต้องรอ SegWit</span>
+          Bob ลงลายเซ็นธุรกรรมคืนเงินก่อนที่ funding transaction จะขึ้นเชน ธุรกรรมคืนเงินจึงต้องอ้างถึง txid ของ funding transaction ไว้ล่วงหน้า ก่อนมี SegWit ผู้อื่นแก้รูปแบบลายเซ็นให้ txid เปลี่ยนได้ โดยที่ธุรกรรมยังใช้ได้เหมือนเดิม ปัญหานี้เรียกว่า transaction malleability ถ้า txid เปลี่ยน ธุรกรรมคืนเงินที่ลงลายเซ็นไว้จะอ้างถึง output ที่ไม่มีอยู่จริง และใช้ไม่ได้ SegWit ย้ายลายเซ็นไปไว้ในส่วน witness ซึ่งไม่นำมาคำนวณ txid (บทที่ 3 และบทที่ 9) ปัญหานี้จึงหมดไป
+        </div>
+
+        <h3>ขั้นที่ 2: จ่ายเงินนอกเชนด้วย Commitment transaction</h3>
+        <p>ทุกครั้งที่ Alice จ่าย Bob ทั้งสองฝ่ายลงลายเซ็นธุรกรรมฉบับใหม่ที่ใช้ output ของ funding transaction เดิม แต่แบ่งยอดใหม่ เช่น Alice 95,000 sat และ Bob 5,000 sat ธุรกรรมนี้เรียกว่า <strong>commitment transaction</strong> แต่ละฝ่ายเก็บไว้กับตัวและไม่ประกาศขึ้นเชน การจ่ายแต่ละครั้งจึงเสร็จภายในไม่กี่วินาที และไม่เสียค่าธรรมเนียมบนเชน ทั้งสองฝ่ายอัปเดตยอดกี่ครั้งก็ได้ ตราบใดที่ยอดรวมเท่ากับเงินในช่อง</p>
+
+        <h3>ปัญหา: ส่ง state เก่าขึ้นเชน</h3>
+        <p>commitment ทุกฉบับมีลายเซ็นครบทั้งสองฝ่าย ฉบับเก่าจึงยังใช้ได้ในทางเทคนิค สมมุติยอดล่าสุดคือ Alice 90,000 และ Bob 10,000 ถ้า Alice นำฉบับแรก (state 0: Alice 100,000) ขึ้นเชน Alice ก็ได้กาแฟฟรี Bitcoin Script ไม่รู้ว่าฉบับใดใหม่กว่า กติกาจึงต้องทำให้คนที่โกงแบบนี้ขาดทุน Lightning ใช้สองกลไกร่วมกัน</p>
+        <ol>
+          <li><strong>หน่วงเวลาเงินของผู้ประกาศ:</strong> ใน commitment ที่ Alice ถืออยู่ เงินส่วนของ Alice ใช้ได้หลังรอจำนวนบล็อกที่ตกลงกันไว้ (relative timelock ด้วย <code>OP_CHECKSEQUENCEVERIFY</code>) ส่วนเงินของ Bob ใช้ได้ทันที การหน่วงเวลานี้ทำให้ Bob มีเวลาตรวจว่า Alice ประกาศ state ล่าสุดหรือไม่ ก่อนที่ Alice จะนำเงินออกไปได้ แต่ละฝ่ายถือ commitment ของ state เดียวกันคนละฉบับ ในฉบับที่ Bob ถือ เงื่อนไขกลับด้าน คือเงินส่วนของ Bob ต้องรอ และเงินส่วนของ Alice ใช้ได้ทันที</li>
+          <li><strong>เพิกถอน state เก่า (revocation):</strong> ทุกครั้งที่อัปเดตเป็น state ใหม่ แต่ละฝ่ายส่งความลับของ state เก่า (revocation secret) ให้อีกฝ่าย ฝ่ายที่รับเงินจะยังไม่นับว่าการจ่ายเสร็จ จนกว่าจะได้ revocation secret ของ state เก่าจากผู้จ่าย ผู้จ่ายจึงต้องส่งความลับนี้ไป และไม่เสียอะไร ตราบใดที่ไม่นำ state เก่าขึ้นเชน ถ้า Alice นำ state เก่าขึ้นเชน Bob ใช้ความลับนั้นเอาเงินส่วนของ Alice ไปได้ในช่วงที่ Alice ยังต้องรอ Bob จึงได้เงิน <strong>ทั้งช่อง</strong> ธุรกรรมที่ Bob ใช้เรียกว่า penalty transaction หรือ justice transaction</li>
+        </ol>
+        <p>ผลคือคนที่โกงเสี่ยงเสียเงินทั้งหมดในช่อง แต่กลไกนี้มีเงื่อนไขว่า Bob ต้องเห็นธุรกรรมของ Alice ก่อนพ้นช่วงหน่วงเวลา ถ้า Bob ออฟไลน์นาน Bob จ้าง <strong>watchtower</strong> ให้เฝ้าดูเชนแทนได้</p>
+
+        <h3>ขั้นที่ 3: ปิดช่อง</h3>
+        <ul>
+          <li><strong>ปิดแบบตกลงกัน (cooperative close):</strong> ทั้งสองฝ่ายลงลายเซ็นธุรกรรมปิดตามยอดล่าสุด แล้วประกาศขึ้นเชนหนึ่งธุรกรรม ทั้งสองฝ่ายได้เงินเมื่อธุรกรรมเข้าบล็อก</li>
+          <li><strong>ปิดฝ่ายเดียว (force close):</strong> ใช้เมื่ออีกฝ่ายหายไปหรือไม่ยอมตอบ ฝ่ายที่ต้องการปิดนำ commitment ล่าสุดของตนขึ้นเชน แล้วรอให้พ้นช่วงหน่วงเวลาก่อนใช้เงินส่วนของตน</li>
+        </ul>
+        <p>ไม่ว่าในช่องจะจ่ายกันกี่ร้อยครั้ง บนเชนจะเห็นเพียงสองธุรกรรม คือธุรกรรมเปิดช่องและธุรกรรมปิดช่อง</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 270" role="img" aria-label="วงจรของ payment channel เปิดช่องด้วย funding transaction บนเชน จ่ายกันนอกเชนสาม state แล้วปิดช่องด้วย closing transaction บนเชน บนเชนมีเพียงสองธุรกรรม">
+            <defs>
+              <marker id="arrCh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <rect x="215" y="32" width="370" height="108" rx="10" fill="none" stroke="#b9b1a3" stroke-dasharray="5 4"/>
+              <text x="400" y="22" text-anchor="middle" font-size="12" fill="#6b655c">นอกเชน (off-chain): ลงลายเซ็นแลกกันเอง ไม่ขึ้นบล็อก</text>
+
+              <rect x="20" y="40" width="170" height="92" rx="10" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.5"/>
+              <text x="105" y="64" text-anchor="middle" font-weight="700">เปิดช่อง</text>
+              <text x="105" y="84" text-anchor="middle" font-size="12">Funding transaction</text>
+              <text x="105" y="103" text-anchor="middle" font-size="12">Alice ฝาก 100,000 sat</text>
+              <text x="105" y="121" text-anchor="middle" font-size="12">เข้า 2-of-2 multisig</text>
+
+              <rect x="230" y="52" width="100" height="72" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="280" y="74" text-anchor="middle" font-weight="700">state 1</text>
+              <text x="280" y="94" text-anchor="middle" font-size="12">A 95,000</text>
+              <text x="280" y="111" text-anchor="middle" font-size="12">B 5,000</text>
+
+              <rect x="350" y="52" width="100" height="72" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="400" y="74" text-anchor="middle" font-weight="700">state 2</text>
+              <text x="400" y="94" text-anchor="middle" font-size="12">A 90,000</text>
+              <text x="400" y="111" text-anchor="middle" font-size="12">B 10,000</text>
+
+              <rect x="470" y="52" width="100" height="72" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.6"/>
+              <text x="520" y="74" text-anchor="middle" font-weight="700">state 3</text>
+              <text x="520" y="94" text-anchor="middle" font-size="12">A 92,000</text>
+              <text x="520" y="111" text-anchor="middle" font-size="12">B 8,000</text>
+
+              <rect x="600" y="40" width="145" height="92" rx="10" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.5"/>
+              <text x="672" y="64" text-anchor="middle" font-weight="700">ปิดช่อง</text>
+              <text x="672" y="84" text-anchor="middle" font-size="12">Closing transaction</text>
+              <text x="672" y="103" text-anchor="middle" font-size="12">Alice 92,000 sat</text>
+              <text x="672" y="121" text-anchor="middle" font-size="12">Bob 8,000 sat</text>
+
+              <g stroke="#6b655c" stroke-width="1.3" fill="none">
+                <line x1="191" y1="88" x2="227" y2="88" marker-end="url(#arrCh)"/>
+                <line x1="331" y1="88" x2="347" y2="88" marker-end="url(#arrCh)"/>
+                <line x1="451" y1="88" x2="467" y2="88" marker-end="url(#arrCh)"/>
+                <line x1="571" y1="88" x2="597" y2="88" marker-end="url(#arrCh)"/>
+                <line x1="112" y1="134" x2="112" y2="193" stroke-dasharray="4 3" marker-end="url(#arrCh)"/>
+                <line x1="670" y1="134" x2="670" y2="193" stroke-dasharray="4 3" marker-end="url(#arrCh)"/>
+              </g>
+
+              <text x="400" y="168" text-anchor="middle" font-size="12" fill="#6b655c">A จ่าย B 5,000 · A จ่าย B 5,000 · B จ่ายคืน A 2,000</text>
+
+              <line x1="20" y1="210" x2="745" y2="210" stroke="#b9b1a3" stroke-width="2"/>
+              <g fill="#f0ebe1" stroke="#b9b1a3">
+                <rect x="30" y="197" width="40" height="26" rx="4"/>
+                <rect x="154" y="197" width="40" height="26" rx="4"/>
+                <rect x="216" y="197" width="40" height="26" rx="4"/>
+                <rect x="278" y="197" width="40" height="26" rx="4"/>
+                <rect x="340" y="197" width="40" height="26" rx="4"/>
+                <rect x="402" y="197" width="40" height="26" rx="4"/>
+                <rect x="464" y="197" width="40" height="26" rx="4"/>
+                <rect x="526" y="197" width="40" height="26" rx="4"/>
+                <rect x="588" y="197" width="40" height="26" rx="4"/>
+                <rect x="712" y="197" width="30" height="26" rx="4"/>
+              </g>
+              <rect x="92" y="197" width="40" height="26" rx="4" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.5"/>
+              <rect x="650" y="197" width="40" height="26" rx="4" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.5"/>
+
+              <text x="400" y="250" text-anchor="middle" font-size="12">บล็อกบนเชนมีธุรกรรมของช่องนี้เพียง 2 รายการ ไม่ว่าในช่องจะจ่ายกันกี่ครั้ง</text>
+            </g>
+          </svg>
+          <figcaption>วงจรของ payment channel กรอบสีส้มคือธุรกรรมที่ขึ้นเชน ส่วน state 1–3 ในกรอบเส้นประคือ commitment transaction ที่สองฝ่ายลงลายเซ็นแลกกันเองนอกเชน ทุกครั้งที่สร้าง state ใหม่ ทั้งสองฝ่ายส่ง revocation secret ของ state ก่อนหน้าให้กัน ตอนปิดช่อง ยอดสุดท้ายคือยอดของ state 3 ก่อน state 1 ยังมี state 0 คือ commitment ฉบับแรกที่คืนเงินให้ Alice (Alice 100,000 / Bob 0) สองฝ่ายลงลายเซ็น state 0 ไว้ตั้งแต่เปิดช่อง เลข state ในรูปจึงตรงกับตัวจำลองด้านล่าง</figcaption>
+        </figure>
+
+        <h3>ทดลอง: จ่ายเงินในช่อง แล้วลองโกง</h3>
+        <p>กดจ่ายเงินไปมาหลายครั้ง แล้วดูว่าจำนวนธุรกรรมบนเชนไม่เพิ่มขึ้น จากนั้นลองให้ Alice นำ state เก่าที่ตนได้เงินมากกว่าขึ้นเชน เทียบผลเมื่อ Bob ออนไลน์อยู่ กับเมื่อ Bob ออฟไลน์นานเกินช่วงหน่วงเวลา</p>
+
+        <div class="hash-demo" id="chan">
+          <div class="stat" id="chState" style="margin-top:0"></div>
+          <div style="display:flex;height:22px;border-radius:6px;overflow:hidden;border:1px solid var(--line);margin-top:8px" aria-hidden="true">
+            <div id="barA" style="background:#fdf0e3;transition:width .2s"></div>
+            <div id="barB" style="background:#e8f5ef;transition:width .2s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:4px"><span>ฝั่ง Alice</span><span>ฝั่ง Bob</span></div>
+          <div class="row">
+            <button class="btn" id="payAB" type="button">Alice จ่าย Bob 5,000 sat</button>
+            <button class="btn" id="payBA" type="button">Bob จ่ายคืน Alice 2,000 sat</button>
+          </div>
+          <div class="row">
+            <button class="btn primary" id="coop" type="button">ปิดช่องแบบตกลงกัน</button>
+            <button class="btn" id="cheat" type="button">Alice ส่ง state เก่าขึ้นเชน</button>
+            <button class="btn" id="chReset" type="button">เริ่มใหม่</button>
+          </div>
+          <div class="row">
+            <label style="margin:0;display:flex;gap:8px;align-items:center"><input type="checkbox" id="bobOff" style="width:auto"> Bob ออฟไลน์นานเกินช่วงหน่วงเวลา และไม่มี watchtower</label>
+          </div>
+          <div class="stat" id="chLog"></div>
+          <p style="font-size:13px;color:var(--muted);margin:10px 0 0">ตัวอย่างนี้นับธุรกรรมบนเชนแบบย่อ ในการปิดฝ่ายเดียวจริง ผู้ประกาศต้องส่งธุรกรรมอีกหนึ่งรายการหลังพ้นช่วงหน่วงเวลา เพื่อนำเงินส่วนของตนออกจาก output ที่ติด timelock</p>
+        </div>
+
+        <h3>ส่งต่อผ่านหลายช่องด้วย HTLC</h3>
+        <p>ถ้าทุกคู่ต้องเปิดช่องของตัวเอง Alice ต้องเปิดช่องกับทุกร้านที่ซื้อของ และต้องล็อกเงินไว้ในทุกช่อง วิธีนี้แพงกว่าจ่ายบนเชนเสียอีก Lightning จึงให้ส่งเงินผ่านช่องที่มีอยู่แล้วต่อกันเป็นทอด ๆ เช่น Alice มีช่องกับ Bob และ Bob มีช่องกับ Carol Alice ก็จ่าย Carol ผ่าน Bob ได้ เมื่อช่องจำนวนมากต่อกันแบบนี้ ก็กลายเป็นเครือข่าย (network) ตามชื่อ Lightning Network</p>
+        <p>ปัญหาคือ Alice ไม่ควรต้องเชื่อใจ Bob ถ้า Alice โอนให้ Bob ก่อน Bob อาจเก็บเงินไว้เองโดยไม่ส่งต่อให้ Carol Lightning แก้ด้วย <strong>HTLC (Hash Time-Locked Contract)</strong> HTLC คือเงื่อนไขการจ่ายเงินในช่อง เงื่อนไขนี้มีสองส่วน</p>
+        <ul>
+          <li><strong>Hashlock:</strong> ผู้รับจะเอาเงินไปได้ก็ต่อเมื่อแสดงค่า R ที่นำไปแฮชแล้วได้ H ตามที่กำหนด ค่า R นี้เรียกว่า preimage ของ H</li>
+          <li><strong>Timelock:</strong> ถ้าผู้รับไม่แสดง R ภายในเวลาที่กำหนด เงินจะกลับไปหาผู้จ่าย</li>
+        </ul>
+        <p>ขั้นตอนการจ่ายจาก Alice ไปถึง Carol ผ่าน Bob มีดังนี้</p>
+        <ol>
+          <li>Carol สุ่มค่าลับ R แล้วส่ง H = SHA-256(R) ให้ Alice ในใบแจ้งหนี้ (invoice) Carol ยังไม่เปิดเผย R ให้ใคร</li>
+          <li>Alice ตั้ง HTLC ในช่องกับ Bob ว่า Bob ได้ 1,001 sat ถ้าแสดง R ได้ภายใน 2 วัน ถ้าไม่ได้ เงินคืน Alice</li>
+          <li>Bob ตั้ง HTLC ในช่องกับ Carol ว่า Carol ได้ 1,000 sat ถ้าแสดง R ได้ภายใน 1 วัน</li>
+          <li>Carol แสดง R ให้ Bob เพื่อรับ 1,000 sat เมื่อ Carol แสดง R แล้ว Bob ก็รู้ R ทันที</li>
+          <li>Bob นำ R เดียวกันไปรับ 1,001 sat จาก Alice ส่วนต่าง 1 sat คือค่าธรรมเนียมส่งต่อ (routing fee) ของ Bob</li>
+        </ol>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 275" role="img" aria-label="Carol ส่งค่าแฮช H ให้ Alice จากนั้น Alice ตั้ง HTLC 1,001 sat หมดเวลา 2 วันให้ Bob และ Bob ตั้ง HTLC 1,000 sat หมดเวลา 1 วันให้ Carol แล้ว Carol เปิดเผย R เพื่อรับเงินจาก Bob และ Bob ใช้ R เดียวกันรับเงินจาก Alice">
+            <defs>
+              <marker id="arrHt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+              <marker id="arrHtG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f8a70"/></marker>
+              <marker id="arrHtB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5a63d8"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <path d="M670,78 Q380,-30 92,78" fill="none" stroke="#5a63d8" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#arrHtB)"/>
+              <text x="380" y="64" text-anchor="middle" font-size="12" fill="#3d44a8">(1) Carol สุ่ม R แล้วส่ง H = SHA-256(R) ให้ Alice ใน invoice</text>
+
+              <rect x="30" y="80" width="120" height="46" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="90" y="100" text-anchor="middle" font-weight="700">Alice</text>
+              <text x="90" y="117" text-anchor="middle" font-size="11" fill="#6b655c">ผู้จ่าย</text>
+              <rect x="320" y="80" width="120" height="46" rx="10" fill="#f0ebe1" stroke="currentColor" stroke-width="1.3"/>
+              <text x="380" y="100" text-anchor="middle" font-weight="700">Bob</text>
+              <text x="380" y="117" text-anchor="middle" font-size="11" fill="#6b655c">ผู้ส่งต่อ</text>
+              <rect x="610" y="80" width="120" height="46" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="670" y="100" text-anchor="middle" font-weight="700">Carol</text>
+              <text x="670" y="117" text-anchor="middle" font-size="11" fill="#6b655c">ผู้รับ</text>
+
+              <g stroke="#b9b1a3" stroke-dasharray="3 4">
+                <line x1="90" y1="126" x2="90" y2="262"/>
+                <line x1="380" y1="126" x2="380" y2="262"/>
+                <line x1="670" y1="126" x2="670" y2="262"/>
+              </g>
+
+              <g stroke="#6b655c" stroke-width="1.4">
+                <line x1="94" y1="165" x2="374" y2="165" marker-end="url(#arrHt)"/>
+                <line x1="384" y1="165" x2="664" y2="165" marker-end="url(#arrHt)"/>
+              </g>
+              <text x="234" y="156" text-anchor="middle" font-size="12" font-weight="700">(2) HTLC 1,001 sat</text>
+              <text x="234" y="183" text-anchor="middle" font-size="11" fill="#6b655c">ล็อกด้วย H · หมดเวลา 2 วัน</text>
+              <text x="524" y="156" text-anchor="middle" font-size="12" font-weight="700">(3) HTLC 1,000 sat</text>
+              <text x="524" y="183" text-anchor="middle" font-size="11" fill="#6b655c">ล็อกด้วย H · หมดเวลา 1 วัน</text>
+
+              <g stroke="#1f8a70" stroke-width="1.4">
+                <line x1="666" y1="232" x2="386" y2="232" marker-end="url(#arrHtG)"/>
+                <line x1="376" y1="232" x2="96" y2="232" marker-end="url(#arrHtG)"/>
+              </g>
+              <text x="524" y="223" text-anchor="middle" font-size="12" font-weight="700" fill="#1f6e5a">(4) Carol เปิดเผย R</text>
+              <text x="524" y="250" text-anchor="middle" font-size="11" fill="#6b655c">รับ 1,000 sat</text>
+              <text x="234" y="223" text-anchor="middle" font-size="12" font-weight="700" fill="#1f6e5a">(5) Bob ใช้ R เดียวกัน</text>
+              <text x="234" y="250" text-anchor="middle" font-size="11" fill="#6b655c">รับ 1,001 sat (ค่าธรรมเนียม 1 sat)</text>
+            </g>
+          </svg>
+          <figcaption>ขาไป (เส้นสีเทา) แต่ละทอดตั้ง HTLC ที่ล็อกด้วย H เดียวกัน และเวลาหมดอายุลดลงเมื่อเข้าใกล้ผู้รับ ขากลับ (เส้นสีเขียว) R ส่งย้อนจากผู้รับไปหาผู้จ่าย ผู้ส่งต่อ (routing node) ทุกคนรับเงินจากทอดก่อนหน้าได้ทันทีที่รู้ R ตัวเลขเวลาเป็นตัวอย่าง ของจริงกำหนดเป็นจำนวนบล็อก</figcaption>
+        </figure>
+
+        <h3>ทำไมผู้จ่ายจึงไม่ต้องเชื่อใจผู้ส่งต่อเมื่อใช้ HTLC</h3>
+        <ul>
+          <li><strong>Bob โกงไม่ได้:</strong> Bob จะได้เงินจาก Alice ก็ต่อเมื่อรู้ R และ R อยู่กับ Carol เท่านั้น Carol จะเปิดเผย R ตอนรับเงินจาก HTLC ที่ Bob ตั้งให้ ถ้า Bob ไม่ส่งต่อ Bob ก็จะไม่ได้ R และเอาเงินของ Alice ไปไม่ได้</li>
+          <li><strong>Bob ไม่ขาดทุน:</strong> Bob จ่าย Carol ก็ต่อเมื่อ Carol แสดง R และ R ค่าเดียวกันนี้ใช้รับเงินจาก Alice ได้ทันที</li>
+          <li><strong>timelock ต้องลดลงตามเส้นทาง:</strong> สมมุติ HTLC ระหว่าง Alice กับ Bob หมดเวลาก่อน HTLC ระหว่าง Bob กับ Carol แล้ว Carol รอแสดง R ในนาทีสุดท้าย ตอนนั้น HTLC ระหว่าง Alice กับ Bob หมดเวลาไปแล้ว Bob ต้องจ่าย Carol แต่เรียกเงินจาก Alice ไม่ได้ ทอดที่อยู่ใกล้ผู้จ่ายจึงต้องหมดเวลาช้ากว่าเสมอ ผู้ส่งต่อจะได้มีเวลาเหลือใช้ R</li>
+          <li><strong>สำเร็จหรือล้มเหลวพร้อมกันทุกทอด (atomic):</strong> ถ้า Carol ไม่แสดง R ทุก HTLC จะหมดเวลา และเงินคืนตามทางเดิม ไม่มีใครเสียเงิน</li>
+          <li><strong>R เป็นหลักฐานการจ่าย:</strong> Alice ได้ R ก็ต่อเมื่อ Carol รับเงินแล้ว Alice จึงใช้ R พิสูจน์ว่าจ่ายแล้ว (proof of payment)</li>
+        </ul>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          HTLC ประกอบด้วย hashlock กับ timelock ผู้รับปลายทางเป็นผู้สร้าง R จึงรู้ R ก่อนใคร R ส่งย้อนจากผู้รับไปหาผู้จ่าย เวลาหมดอายุของ HTLC ลดลงจากฝั่งผู้จ่ายไปฝั่งผู้รับ และผู้ส่งต่อตรงกลางขโมยเงินไม่ได้ สำหรับ payment channel ธุรกรรมบนเชนมีเพียงสองครั้ง คือเปิดและปิด กลไกกันการโกงคือ revocation secret ร่วมกับ timelock และต้องมีคนเฝ้าดูเชน (ตัวเองหรือ watchtower)
+        </div>
+
+        <h3>ข้อจำกัดของ Lightning</h3>
+        <ul>
+          <li><strong>ต้องล็อกเงินไว้ล่วงหน้า:</strong> แต่ละฝ่ายส่งได้ไม่เกินยอดที่อยู่ฝั่งของตนในช่อง ถ้าร้านเปิดช่องด้วยเงินของตัวเอง เงินทั้งหมดในช่องจะอยู่ฝั่งร้าน อีกฝ่ายในช่องนั้นจึงยังไม่มียอดที่จะจ่ายให้ร้าน ร้านจะรับเงินผ่านช่องนี้ได้ก็ต่อเมื่ออีกฝ่ายมียอดอยู่ฝั่งของตน ยอดที่ร้านรับเข้าได้นี้เรียกว่า inbound liquidity</li>
+          <li><strong>เงินก้อนใหญ่หาเส้นทางยาก:</strong> ทุกช่องตลอดเส้นทางต้องมีเงินพอในทิศที่ส่ง</li>
+          <li><strong>ต้องออนไลน์:</strong> ผู้รับต้องออนไลน์ตอนรับเงิน เพราะต้องเปิดเผย R ก่อน HTLC หมดเวลา และต้องเฝ้าดูการโกงเองหรือจ้าง watchtower</li>
+          <li><strong>เปิดและปิดช่องยังเสียค่าธรรมเนียมบนเชน:</strong> ถ้าค่าธรรมเนียมบนเชนแพง ผู้ใช้รายย่อยเปิดช่องเองได้ยาก</li>
+          <li><strong>ใช้กับการชำระเงินเป็นหลัก:</strong> ช่องเหมาะกับคู่ที่โอนเงินกันไปมา แต่ไม่รองรับ smart contract ทั่วไปที่มีผู้ใช้จำนวนมาก โจทย์ข้อนี้นำไปสู่ Rollup ในหัวข้อถัดไป</li>
+        </ul>
+      </section>
+
+      <!-- ==================== 10.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">10.4</span>Rollup: ประมวลผลนอกเชนแล้วส่งข้อมูลกลับ Layer 1</h2>
+
+        <h3>โจทย์: payment channel ไม่พอสำหรับ smart contract</h3>
+        <p>payment channel เหมาะกับคู่ที่รู้จักกันล่วงหน้าและโอนเงินกันไปมา แต่แอปบน Ethereum เช่น ตลาดแลกเปลี่ยนโทเคนแบบกระจายศูนย์ (DEX) มีผู้ใช้หลายพันคนเรียก contract เดียวกัน ผู้ใช้ไม่รู้ล่วงหน้าว่าจะทำธุรกรรมกับใคร และ state ของ contract ก็ไม่ได้เป็นของคนสองคน payment channel จึงใช้กับงานแบบนี้ไม่ได้ Ethereum ต้องการวิธีที่ย้ายการรัน contract ทั่วไปออกไปนอกเชน โดยที่ Layer 1 ยังรับประกันผลได้</p>
+
+        <h3>บทเรียนจาก Plasma: ข้อมูลต้องอยู่บน Layer 1</h3>
+        <p>ก่อนมี Rollup เคยมีแนวคิดชื่อ Plasma (ปี 2017) ที่เก็บธุรกรรมไว้นอกเชนทั้งหมด และส่งเพียง Merkle root ของแต่ละบล็อกขึ้น Layer 1 ปัญหาเกิดเมื่อผู้ดำเนินการ (operator) แอบใส่ธุรกรรมที่ไม่ถูกต้อง เช่น โอนเงินของผู้ใช้ให้ตัวเอง แล้วส่งเพียง Merkle root ของบล็อกนั้นขึ้นมา โดยไม่เปิดเผยข้อมูลธุรกรรม ผู้ใช้ชี้ไม่ได้ว่าธุรกรรมใดผิด ไม่รู้ว่ายอดของตนตอนนี้เป็นเท่าใด และพิสูจน์ยอดของตนต่อ Layer 1 ไม่ได้ ทางที่เหลือคือทุกคนรีบถอนเงินออกพร้อมกัน (mass exit) แต่ Layer 1 รับธุรกรรมจำนวนนั้นไม่ไหว ปัญหานี้เรียกว่า <strong>data availability problem</strong></p>
+        <p>Rollup แก้ปัญหานี้โดยส่งข้อมูลธุรกรรมทุกรายการขึ้น Layer 1 ด้วย ข้อมูลนี้บีบอัดแล้วจึงใช้พื้นที่น้อย ใครก็ใช้ข้อมูลนั้นคำนวณ state ของ Rollup ขึ้นมาใหม่ได้เอง จึงไม่ต้องพึ่งผู้ดำเนินการ</p>
+
+        <h3>ขั้นตอนการทำงานของ Rollup</h3>
+        <ol>
+          <li>ผู้ใช้ฝาก ETH หรือโทเคนเข้า bridge contract บน Layer 1 แล้วได้ยอดเท่ากันบน Rollup</li>
+          <li>ผู้ใช้ส่งธุรกรรมให้ <strong>sequencer</strong> ของ Rollup sequencer เรียงลำดับและรันธุรกรรมทันที ผู้ใช้จึงเห็นผลภายในไม่กี่วินาที</li>
+          <li>sequencer รวมธุรกรรมหลายร้อยหรือหลายพันรายการเป็นชุด (batch) บีบอัด แล้วส่งขึ้น Layer 1 พร้อม state root ใหม่ของ Rollup</li>
+          <li>rollup contract บน Layer 1 เก็บ state root ไว้ และยอมรับว่า state root นั้นถูกต้องด้วยวิธีในหัวข้อ 10.5</li>
+          <li>เมื่อต้องการถอน ผู้ใช้สั่งถอนบน Rollup คำสั่งนี้จะอยู่ใน state root ของ batch ถัดไป เมื่อ state root นั้นเป็นที่สิ้นสุดตามวิธีในหัวข้อ 10.5 แล้ว ผู้ใช้นำ Merkle proof ที่แสดงว่าคำสั่งถอนของตนอยู่ใน state root นั้น ไปรับเงินจาก bridge contract บน Layer 1</li>
+        </ol>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 330" role="img" aria-label="ผู้ใช้ส่งธุรกรรมให้ sequencer บน Layer 2 sequencer รันธุรกรรมและรวมเป็น batch ที่มีข้อมูลธุรกรรมบีบอัดและ state root ใหม่ แล้วส่งขึ้น Layer 1 ข้อมูลไปอยู่ใน blob ส่วน state root ไปอยู่ใน rollup contract และผู้ใช้ฝากถอนผ่าน bridge contract">
+            <defs>
+              <marker id="arrRu" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <rect x="10" y="10" width="740" height="134" rx="12" fill="#e8f5ef" stroke="#1f8a70"/>
+              <text x="24" y="32" font-weight="700" fill="#1f6e5a">Layer 2 (Rollup)</text>
+
+              <g font-size="12" text-anchor="middle">
+                <rect x="40" y="44" width="60" height="22" rx="5" fill="#fff" stroke="currentColor"/>
+                <text x="70" y="60">tx</text>
+                <rect x="40" y="72" width="60" height="22" rx="5" fill="#fff" stroke="currentColor"/>
+                <text x="70" y="88">tx</text>
+                <rect x="40" y="100" width="60" height="22" rx="5" fill="#fff" stroke="currentColor"/>
+                <text x="70" y="116">tx</text>
+              </g>
+              <text x="108" y="118" font-size="11" fill="#6b655c">ผู้ใช้</text>
+
+              <line x1="104" y1="83" x2="266" y2="83" stroke="#6b655c" stroke-width="1.3" marker-end="url(#arrRu)"/>
+              <text x="185" y="74" text-anchor="middle" font-size="12">ส่งธุรกรรม</text>
+
+              <rect x="270" y="48" width="180" height="72" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="360" y="72" text-anchor="middle" font-weight="700">Sequencer</text>
+              <text x="360" y="92" text-anchor="middle" font-size="12">เรียงลำดับและรันธุรกรรม</text>
+              <text x="360" y="110" text-anchor="middle" font-size="11" fill="#6b655c">ผู้ใช้เห็นผลในไม่กี่วินาที</text>
+
+              <line x1="452" y1="83" x2="516" y2="83" stroke="#6b655c" stroke-width="1.3" marker-end="url(#arrRu)"/>
+              <text x="484" y="74" text-anchor="middle" font-size="12">รวมชุด</text>
+
+              <rect x="520" y="42" width="210" height="88" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="625" y="64" text-anchor="middle" font-weight="700">Batch</text>
+              <text x="625" y="84" text-anchor="middle" font-size="12">ข้อมูลธุรกรรมที่บีบอัดแล้ว</text>
+              <text x="625" y="102" text-anchor="middle" font-size="12">+ state root ใหม่</text>
+              <text x="625" y="120" text-anchor="middle" font-size="11" fill="#6b655c">(+ validity proof ถ้าเป็น ZK Rollup)</text>
+
+              <rect x="10" y="190" width="740" height="130" rx="12" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="24" y="310" font-weight="700" fill="#3d44a8">Layer 1 (Ethereum)</text>
+
+              <line x1="595" y1="132" x2="405" y2="221" stroke="#6b655c" stroke-width="1.3" marker-end="url(#arrRu)"/>
+              <line x1="655" y1="132" x2="640" y2="221" stroke="#6b655c" stroke-width="1.3" marker-end="url(#arrRu)"/>
+              <text x="495" y="171" text-anchor="end" font-size="12">ส่งขึ้น Layer 1 ในธุรกรรมเดียว</text>
+
+              <line x1="110" y1="221" x2="76" y2="127" stroke="#6b655c" stroke-width="1.3" marker-start="url(#arrRu)" marker-end="url(#arrRu)"/>
+              <text x="104" y="176" font-size="12">ฝากเข้า / ถอนออก</text>
+
+
+              <rect x="30" y="223" width="200" height="72" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="130" y="246" text-anchor="middle" font-weight="700">Bridge contract</text>
+              <text x="130" y="266" text-anchor="middle" font-size="12">ถือ ETH และโทเคนที่ฝากไว้</text>
+              <text x="130" y="284" text-anchor="middle" font-size="12">จ่ายคืนเมื่อผู้ใช้ถอน</text>
+
+              <rect x="280" y="223" width="200" height="72" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="380" y="246" text-anchor="middle" font-weight="700">ข้อมูลธุรกรรม</text>
+              <text x="380" y="266" text-anchor="middle" font-size="12">อยู่ใน blob (EIP-4844)</text>
+              <text x="380" y="284" text-anchor="middle" font-size="11" fill="#6b655c">ใครก็ดาวน์โหลดไปรันซ้ำได้</text>
+
+              <rect x="530" y="223" width="200" height="72" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="630" y="246" text-anchor="middle" font-weight="700">Rollup contract</text>
+              <text x="630" y="266" text-anchor="middle" font-size="12">เก็บ state root</text>
+              <text x="630" y="284" text-anchor="middle" font-size="11" fill="#6b655c">รับ fraud proof หรือตรวจ validity proof</text>
+            </g>
+          </svg>
+          <figcaption>ธุรกรรมหลายพันรายการบน Rollup ขึ้น Layer 1 ในธุรกรรมเดียว Layer 1 ไม่ได้รันธุรกรรมเหล่านั้นเอง แต่เก็บข้อมูลไว้ให้ทุกคนตรวจ และเก็บ state root ไว้ยืนยันยอดเงินเมื่อผู้ใช้ถอนผ่าน bridge</figcaption>
+        </figure>
+
+        <h3>ทำไม Rollup จึงถูกกว่า</h3>
+        <ul>
+          <li><strong>Layer 1 ไม่ต้องรันธุรกรรมของ Rollup:</strong> Layer 1 ทำเพียงเก็บข้อมูลและตรวจหลักฐาน งานคำนวณและการเก็บ state ไปอยู่ที่ Rollup</li>
+          <li><strong>ค่าใช้จ่ายคงที่หารกันทั้งชุด:</strong> ธุรกรรมบน Layer 1 หนึ่งรายการมีค่าใช้จ่ายพื้นฐาน เช่น 21,000 gas เมื่อธุรกรรมหลายพันรายการอยู่ในชุดเดียว แต่ละรายการจ่ายส่วนนี้เพียงเล็กน้อย</li>
+          <li><strong>ข้อมูลบีบอัดได้มาก:</strong> Rollup ใช้ดัชนีสั้น ๆ แทน address 20 ไบต์ได้ และ ZK Rollup ไม่ต้องเก็บลายเซ็นของแต่ละธุรกรรมบนเชน เพราะ proof ยืนยันแทนแล้ว ใน ZK Rollup ที่บีบอัดเต็มที่ การโอนเงินธรรมดาใช้ข้อมูลบน Layer 1 ได้น้อยถึงราวสิบกว่าไบต์ (ค่าประมาณเชิงทฤษฎี) เทียบกับราว 100 ไบต์ขึ้นไปเมื่อโอนบน Layer 1 โดยตรง Optimistic Rollup ยังต้องเก็บลายเซ็น จึงใช้ข้อมูลมากกว่านี้ แต่ยังน้อยกว่าโอนบน Layer 1 มาก</li>
+        </ul>
+
+        <h3>Blob: ที่เก็บข้อมูลราคาถูกสำหรับ Rollup (EIP-4844)</h3>
+        <p>ช่วงแรก Rollup ส่งข้อมูลผ่าน calldata ของธุรกรรม calldata มีราคาแพง เพราะทุกโหนดต้องเก็บไว้ตลอดไป แต่ Rollup ต้องการเพียงให้ทุกคนดาวน์โหลดข้อมูลได้ในช่วงหนึ่ง นานพอให้ผู้ตรวจรันซ้ำได้จนพ้นช่วงโต้แย้ง (challenge period) การอัปเกรด Dencun (มีนาคม 2024) จึงเพิ่ม EIP-4844 หรือ Proto-Danksharding เข้ามา หลังอัปเกรด ธุรกรรมแนบข้อมูลก้อนใหม่ที่เรียกว่า <strong>blob</strong> ได้</p>
+        <ul>
+          <li>blob หนึ่งก้อนมีขนาดประมาณ 128 KB</li>
+          <li>เครือข่ายเก็บ blob ไว้ราว 18 วันแล้วลบทิ้ง ตั้งแต่อัปเกรด Fusaka (ธันวาคม 2025) แต่ละโหนดเก็บเพียงบางส่วนของ blob และตรวจว่าข้อมูลครบด้วยการสุ่มตัวอย่าง (PeerDAS)</li>
+          <li>blob มีตลาดค่าธรรมเนียมของตัวเอง (blob base fee) แยกจาก gas ปกติ</li>
+          <li>EVM อ่านเนื้อหาของ blob ไม่ได้ เหตุผลคือเครือข่ายจะลบ blob ทิ้งภายหลัง ถ้า contract อ่านเนื้อหาได้ โหนดที่เข้ามาภายหลังจะรันธุรกรรมเก่าซ้ำไม่ได้ เพราะไม่มี blob ให้อ่านแล้ว contract จึงเห็นเพียงค่าแฮชที่ผูกกับเนื้อหาของ blob (versioned hash) ค่านี้พอให้ตรวจได้ว่าข้อมูลที่ผู้ตรวจดาวน์โหลดมาตรงกับ blob จริง</li>
+        </ul>
+        <p>หลังการอัปเกรดนี้ ค่าธรรมเนียมบน Rollup หลายรายลดลงมาก</p>
+
+        <div class="callout">
+          <span class="h">ทำไมลบ blob ทิ้งหลังราว 18 วันได้</span>
+          โจทย์ของ data availability คือ ข้อมูลต้อง <strong>เปิดให้ทุกคนดาวน์โหลดได้ในช่วงที่ต้องตรวจ</strong> ไม่ได้ต้องเก็บบน Layer 1 ตลอดไป blob อยู่ราว 18 วัน ยาวกว่าช่วงโต้แย้งของ Optimistic Rollup ราว 7 วัน (หัวข้อ 10.5) ผู้ตรวจและโหนดของ Rollup จึงมีเวลาพอดาวน์โหลดข้อมูลไปเก็บและรันซ้ำก่อนข้อมูลจะหายไป เมื่อพ้นช่วงโต้แย้งแล้ว state root บน Layer 1 ก็เป็นที่สิ้นสุด (final) ผู้ใช้ที่เข้ามาภายหลังต้องการเพียง state ปัจจุบันของ Rollup ไม่ต้องย้อนไปดูข้อมูลทุกชุด
+        </div>
+
+        <div class="callout warn">
+          <span class="h">อย่าสับสนกับ Validium</span>
+          ระบบที่ส่ง validity proof ขึ้น Layer 1 แต่เก็บข้อมูลธุรกรรมไว้นอกเชน เรียกว่า Validium และไม่นับเป็น Rollup Validium มีค่าใช้จ่ายถูกกว่า แต่กลับไปมีปัญหา data availability แบบเดียวกับ Plasma ถ้าผู้เก็บข้อมูลไม่เปิดเผยข้อมูล ผู้ใช้อาจพิสูจน์ยอดของตนไม่ได้ แม้ proof จะรับประกันว่า state root ถูกต้องก็ตาม
+        </div>
+      </section>
+
+      <!-- ==================== 10.5 ==================== -->
+      <section id="s5">
+        <h2><span class="no">10.5</span>Optimistic Rollup (Fraud proof, ถอนเงินรอประมาณ 7 วัน) กับ ZK Rollup (Validity proof)</h2>
+
+        <p>หัวข้อ 10.4 เหลือคำถามสำคัญหนึ่งข้อ rollup contract ได้รับข้อความว่า "state root ใหม่คือ X" ถ้า sequencer โกง เช่น ส่ง state root ที่ให้ตัวเองมียอดเท่ากับเงินทั้งหมดใน bridge แล้วถอนออกไป Layer 1 ต้องปฏิเสธให้ได้ แต่ Layer 1 รันธุรกรรมทั้งชุดซ้ำเองไม่ได้ เพราะจะกลับไปมีภาระเท่าเดิม Rollup จึงแบ่งเป็นสองแบบตามคำตอบของคำถามนี้</p>
+
+        <h3>Optimistic Rollup: ถือว่าถูกต้องไว้ก่อน แล้วเปิดให้โต้แย้ง</h3>
+        <p>ผู้เสนอ state root (proposer) ในหลายระบบคือ sequencer เอง ผู้เสนอต้องวางเงินค้ำประกัน (bond) ไว้บน Layer 1 ถ้าเสนอ state root ผิด ผู้เสนอจะเสียเงินก้อนนี้ การโกงจึงมีต้นทุน state root ที่เสนอมายังไม่เป็นที่สิ้นสุดจนกว่าจะพ้น <strong>ช่วงโต้แย้ง (challenge period)</strong> ประมาณ 7 วัน ในช่วงนี้ ใครก็ได้ดาวน์โหลดข้อมูลธุรกรรมจาก Layer 1 ไปรันซ้ำ ถ้าผลไม่ตรงกับ state root ที่เสนอมา ผู้นั้นส่ง <strong>fraud proof</strong> ไปที่ contract บน Layer 1 ได้ บางเครือข่ายเรียกหลักฐานนี้ว่า fault proof</p>
+        <p>Layer 1 ไม่ได้รันทั้งชุดซ้ำเพื่อตัดสิน ในหลายระบบ เช่น Arbitrum ผู้โต้แย้ง (challenger) กับผู้เสนอผลัดกันแบ่งช่วงการคำนวณออกเป็นครึ่ง ๆ (bisection) จนเหลือคำสั่งเดียวที่ทั้งสองฝ่ายเห็นไม่ตรงกัน จากนั้น Layer 1 รันคำสั่งเดียวนั้นเพื่อตัดสิน ถ้าผู้โต้แย้งถูก contract จะยกเลิก state root ที่ผิด ยึดเงินค้ำประกันของผู้เสนอ และแบ่งส่วนหนึ่งให้ผู้โต้แย้งเป็นรางวัล</p>
+        <p>ระบบนี้ปลอดภัยเมื่อมีเงื่อนไขสองข้อ ข้อแรกคือมีผู้ตรวจที่ซื่อสัตย์และออนไลน์อยู่ <strong>อย่างน้อยหนึ่งราย</strong> (1-of-N) ผู้ตรวจไม่ต้องเป็นเสียงส่วนใหญ่ ต่างจากฉันทามติ (consensus) บน Layer 1 ที่ต้องอาศัยเสียงส่วนใหญ่ที่ซื่อสัตย์ ข้อที่สองคือผู้ตรวจรายนั้นส่ง fraud proof ขึ้นเชนได้ทันภายในช่วงโต้แย้ง เงื่อนไขข้อที่สองนี้เป็นเหตุผลที่ช่วงโต้แย้งต้องยาว</p>
+
+        <h3>ทำไมต้องรอประมาณ 7 วัน</h3>
+        <p>ถ้าช่วงโต้แย้งสั้นเกินไป ผู้โจมตีอาจส่ง state root ปลอม แล้วขัดขวางไม่ให้ fraud proof ขึ้นเชนทันเวลา เช่น จ่ายค่าธรรมเนียมสูงเพื่ออัดบล็อกให้เต็ม หรือติดสินบน validator ไม่ให้รวมธุรกรรมของผู้โต้แย้ง (censorship) เหตุผลที่มักอธิบายกันคือ 7 วันยาวพอที่การขัดขวางตลอดช่วงจะแพงและยากเกินไป และยาวพอให้ชุมชนตอบสนองได้ถ้าเกิดเหตุผิดปกติ ตัวเลข 7 วันเป็นค่าที่เลือกใช้กันทั่วไป ไม่ใช่ค่าที่ได้จากการพิสูจน์ทางคณิตศาสตร์</p>
+        <p>ผลคือ ผู้ใช้ที่ถอนเงินจาก Optimistic Rollup กลับ Layer 1 ผ่าน bridge ของ Rollup เองต้องรอประมาณ 7 วัน ถ้าไม่อยากรอ ผู้ใช้ไปใช้บริการของผู้ให้สภาพคล่อง (liquidity provider) ได้ ผู้ให้บริการจ่ายเงินบน Layer 1 ให้ผู้ใช้ก่อนโดยหักค่าธรรมเนียม แล้วรอรับเงินจาก bridge ของ Rollup แทนผู้ใช้เมื่อครบ 7 วัน ผู้ให้บริการกล้ารับความเสี่ยงนี้ เพราะรันธุรกรรมซ้ำเองได้ จึงรู้ว่า state root ที่มีคำสั่งถอนนั้นถูกต้อง ตัวอย่าง Optimistic Rollup ได้แก่ Arbitrum, OP Mainnet (Optimism) และ Base</p>
+
+        <h3>ZK Rollup: แนบหลักฐานทางคณิตศาสตร์ทุกชุด</h3>
+        <p>ZK Rollup ไม่รอให้มีผู้โต้แย้ง ทุก batch ต้องมี <strong>validity proof</strong> แนบมาด้วย proof นี้เป็นหลักฐานทางคณิตศาสตร์ว่า ถ้าเริ่มจาก state root เดิมแล้วรันธุรกรรมทั้งชุดตามกติกา จะได้ state root ใหม่นี้จริง contract บน Layer 1 ที่ทำหน้าที่ตรวจ (verifier) ใช้งานคำนวณน้อยและค่อนข้างคงที่ ไม่ว่า batch จะมีกี่ธุรกรรม ถ้า proof ไม่ผ่าน contract ปฏิเสธทันที state root ที่ผิดจึงเข้าระบบไม่ได้ตั้งแต่แรก</p>
+        <p>proof เหล่านี้สร้างด้วยเทคนิคตระกูล zero-knowledge proof เช่น zk-SNARK และ zk-STARK คำว่า zero-knowledge หมายถึง ผู้พิสูจน์ (prover) ทำให้ผู้ตรวจสอบ proof (verifier) เชื่อได้ว่าข้อความหนึ่งเป็นจริง โดยไม่ต้องเปิดเผยข้อมูลที่ใช้พิสูจน์ แต่ใน Rollup คุณสมบัติที่ใช้จริงคือ proof มีขนาดเล็กและตรวจได้เร็ว (succinct) ข้อมูลธุรกรรมของ ZK Rollup ทั่วไปยังเปิดเผยบน Layer 1 ตามปกติ ไม่ได้เป็นความลับ</p>
+        <p>ZK Rollup บางระบบส่งเพียงส่วนต่างของ state (state diff) คือยอดที่เปลี่ยนไปหลังรันทั้งชุด แทนการส่งธุรกรรมทุกรายการ เพราะ proof ยืนยันความถูกต้องของการเปลี่ยนแปลงแล้ว ข้อมูลที่ขึ้น Layer 1 จึงน้อยลงอีก และทุกคนยังคำนวณ state ปัจจุบันขึ้นใหม่ได้ Optimistic Rollup ทำแบบนี้ไม่ได้ เพราะผู้ตรวจต้องมีธุรกรรมครบทุกรายการจึงจะรันซ้ำและสร้าง fraud proof ได้</p>
+        <ul>
+          <li><strong>ข้อดี:</strong> ถอนเงินกลับ Layer 1 ได้เมื่อ proof ของชุดนั้นผ่านการตรวจ ไม่ต้องรอช่วงโต้แย้ง 7 วัน บางเครือข่ายตั้งช่วงหน่วงเวลา (delay) เพิ่มหลัง proof ผ่าน เมื่อรวมเวลาสร้าง proof แล้ว การถอนใช้เวลาราวหนึ่งถึงหลายชั่วโมง</li>
+          <li><strong>ข้อเสีย:</strong> ต้องคำนวณหนักเพื่อสร้าง proof และการสร้าง proof ให้ครอบคลุมการทำงานทั้งหมดของ EVM (zkEVM) ยากกว่ารัน EVM ธรรมดามาก ZK Rollup รุ่นแรกจึงรองรับเพียงการโอนเงินหรือแลกโทเคน แล้วจึงพัฒนาเป็น zkEVM ในภายหลัง บางระบบ เช่น Starknet เลือกออกแบบภาษาและ VM ของตัวเองชื่อ Cairo แทนการรองรับ EVM โดยตรง</li>
+        </ul>
+        <p>ตัวอย่าง ZK Rollup ได้แก่ zkSync Era, Starknet, Scroll และ Linea</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 270" role="img" aria-label="เส้นเวลาของสอง Rollup Optimistic ส่ง batch แล้วรอช่วงโต้แย้งประมาณ 7 วันก่อนสิ้นสุด ถ้ามี fraud proof จะยกเลิก state root ZK สร้าง proof นอกเชน ส่ง batch พร้อม proof แล้ว Layer 1 ตรวจ proof และสิ้นสุดทันที">
+            <defs>
+              <marker id="arrTl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+              <marker id="arrTlR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c2412d"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <text x="20" y="62" font-weight="700">Optimistic</text>
+              <text x="20" y="80" font-size="12" fill="#6b655c">Rollup</text>
+
+              <rect x="140" y="45" width="130" height="42" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="205" y="64" text-anchor="middle" font-size="12">ส่ง batch</text>
+              <text x="205" y="80" text-anchor="middle" font-size="12">+ state root</text>
+
+              <rect x="280" y="45" width="330" height="42" rx="8" fill="#fdf0e3" stroke="#e2761b" stroke-width="1.5"/>
+              <text x="445" y="63" text-anchor="middle" font-size="12" font-weight="700" fill="#b85a10">challenge period ประมาณ 7 วัน</text>
+              <text x="445" y="80" text-anchor="middle" font-size="11">ใครก็รันซ้ำและส่ง fraud proof ได้</text>
+
+              <rect x="620" y="45" width="120" height="42" rx="8" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="680" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#1f6e5a">สิ้นสุด</text>
+              <text x="680" y="80" text-anchor="middle" font-size="12" fill="#1f6e5a">ถอนได้</text>
+
+              <line x1="445" y1="89" x2="445" y2="108" stroke="#c2412d" stroke-width="1.3" stroke-dasharray="3 3" marker-end="url(#arrTlR)"/>
+              <text x="445" y="124" text-anchor="middle" font-size="12" fill="#c2412d">ถ้า fraud proof ถูกต้อง: ยกเลิก state root และยึดเงินค้ำประกันของผู้เสนอ</text>
+
+              <text x="20" y="172" font-weight="700">ZK Rollup</text>
+
+              <rect x="140" y="155" width="170" height="42" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="225" y="174" text-anchor="middle" font-size="12">รันธุรกรรม</text>
+              <text x="225" y="190" text-anchor="middle" font-size="12">+ สร้าง proof (นอกเชน)</text>
+
+              <rect x="320" y="155" width="180" height="42" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="410" y="174" text-anchor="middle" font-size="12">ส่ง batch + state root</text>
+              <text x="410" y="190" text-anchor="middle" font-size="12">+ validity proof</text>
+
+              <rect x="510" y="155" width="100" height="42" rx="8" fill="#eceefb" stroke="#5a63d8" stroke-width="1.5"/>
+              <text x="560" y="174" text-anchor="middle" font-size="12" font-weight="700" fill="#3d44a8">Layer 1</text>
+              <text x="560" y="190" text-anchor="middle" font-size="12" fill="#3d44a8">ตรวจ proof</text>
+
+              <rect x="620" y="155" width="120" height="42" rx="8" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="680" y="174" text-anchor="middle" font-size="12" font-weight="700" fill="#1f6e5a">สิ้นสุด</text>
+              <text x="680" y="190" text-anchor="middle" font-size="12" fill="#1f6e5a">ถอนได้</text>
+
+              <line x1="560" y1="199" x2="560" y2="214" stroke="#c2412d" stroke-width="1.3" stroke-dasharray="3 3" marker-end="url(#arrTlR)"/>
+              <text x="560" y="230" text-anchor="middle" font-size="12" fill="#c2412d">proof ไม่ผ่าน: contract ปฏิเสธทันที</text>
+
+              <line x1="140" y1="255" x2="735" y2="255" stroke="#6b655c" stroke-width="1.2" marker-end="url(#arrTl)"/>
+              <text x="130" y="259" text-anchor="end" font-size="12" fill="#6b655c">เวลา</text>
+            </g>
+          </svg>
+          <figcaption>Optimistic Rollup ถือว่า state root ถูกต้องไว้ก่อน แล้วรอให้พ้นช่วงโต้แย้ง ZK Rollup ใช้เวลาไปกับการสร้าง proof แต่เมื่อ proof ผ่านการตรวจบน Layer 1 แล้ว state root ก็เป็นที่สิ้นสุดทันที ความยาวของกล่องไม่ได้แสดงสัดส่วนของเวลาจริง</figcaption>
+        </figure>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>หัวข้อ</th><th>Optimistic Rollup</th><th>ZK Rollup</th></tr>
+            <tr><td>สมมติฐานตั้งต้น</td><td>ถือว่าถูกต้อง จนกว่าจะมีผู้พิสูจน์ว่าผิด</td><td>ยังไม่ยอมรับ จนกว่าจะมี proof ว่าถูกต้อง</td></tr>
+            <tr><td>หลักฐาน</td><td>Fraud proof ส่งเฉพาะเมื่อพบการโกง</td><td>Validity proof แนบมากับทุก batch</td></tr>
+            <tr><td>เงื่อนไขความปลอดภัย</td><td>มีผู้ตรวจที่ซื่อสัตย์อย่างน้อยหนึ่งราย และ fraud proof ขึ้นเชนได้ทันภายในช่วงโต้แย้ง</td><td>คณิตศาสตร์ของ proof system และโค้ดของ verifier ถูกต้อง</td></tr>
+            <tr><td>ถอนกลับ Layer 1 ผ่าน bridge ของ Rollup</td><td>ประมาณ 7 วัน</td><td>หลัง proof ของชุดนั้นผ่านการตรวจ และบางเครือข่ายรอช่วงหน่วงเวลา (delay) เพิ่ม รวมแล้วราวหนึ่งถึงหลายชั่วโมง ยังเร็วกว่า 7 วันมาก</td></tr>
+            <tr><td>งานคำนวณ</td><td>เบาในกรณีปกติ เพราะไม่ต้องสร้าง proof</td><td>สร้าง proof ใช้การคำนวณหนัก</td></tr>
+            <tr><td>รองรับ EVM</td><td>ง่าย ใช้ EVM เดิมได้เกือบทั้งหมด</td><td>ยากกว่า ต้องใช้ zkEVM หรือ VM ของตัวเอง (เช่น Cairo ของ Starknet)</td></tr>
+            <tr><td>ตัวอย่าง</td><td>Arbitrum, OP Mainnet, Base</td><td>zkSync Era, Starknet, Scroll, Linea</td></tr>
+          </table>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          Optimistic รอให้มีคนพิสูจน์ว่าผิด ZK ต้องพิสูจน์ว่าถูกก่อน คำถามที่พบบ่อยคือ ทำไม Optimistic Rollup ถอนเงินช้า คำตอบคือต้องรอให้พ้นช่วงโต้แย้ง เพื่อเปิดโอกาสให้ส่ง fraud proof ไม่ใช่เพราะต้องรอ confirmation ของบล็อก หรือรอสร้าง proof ส่วน ZK Rollup ถอนได้เร็วกว่า แต่ต้องจ่ายค่าสร้าง proof
+        </div>
+
+        <div class="callout warn">
+          <span class="h">Rollup ส่วนใหญ่ยังอาศัยความปลอดภัยของ Layer 1 ได้ไม่เต็มที่</span>
+          Rollup ออกแบบมาให้อาศัยความปลอดภัยของ Layer 1 ได้เต็มที่ แต่ในทางปฏิบัติ Rollup ส่วนใหญ่ยังมี sequencer เพียงรายเดียว sequencer รายนี้อาจหยุดทำงานหรือไม่รับธุรกรรมของบางคนได้ Rollup จึงมักเปิดทางให้ผู้ใช้ส่งธุรกรรมผ่าน Layer 1 โดยตรง (forced inclusion) เพื่อให้ sequencer ปิดกั้นผู้ใช้ไม่ได้ นอกจากนี้ กลุ่มผู้ดูแล (security council) ของหลาย Rollup ยังอัปเกรด contract ได้ ถ้ากลุ่มนี้ร่วมมือกันโกงหรือถูกขโมยกุญแจ (key) ก็เปลี่ยน bridge contract ให้ถอนเงินของผู้ใช้ออกไปได้ โดยไม่ต้องผ่าน fraud proof หรือ validity proof บาง Optimistic Rollup เพิ่งเปิดให้ทุกคนส่ง fraud proof ได้หลังเปิดเครือข่ายไปหลายปี ก่อนใช้ Rollup ใดควรตรวจสถานะเหล่านี้ เช่น จากเว็บ L2BEAT
+        </div>
+      </section>
+
+      <!-- ==================== 10.6 ==================== -->
+      <section id="s6">
+        <h2><span class="no">10.6</span>ตารางเปรียบเทียบ Lightning, Optimistic Rollup, ZK Rollup และ Sidechain</h2>
+
+        <p>เวลาเลือกใช้หรือเปรียบเทียบระบบขยายตัว ต้องถามสองข้อ ข้อแรกคือระบบนั้นทำอะไรได้ ข้อที่สองคือถ้าผู้ให้บริการโกง ใครป้องกันเงินของผู้ใช้ ก่อนดูตาราง ต้องรู้จักทางเลือกที่สี่ คือ sidechain</p>
+
+        <h3>Sidechain ต่างจาก Layer 2 อย่างไร</h3>
+        <p>Sidechain คือ blockchain แยกที่มีกลไกฉันทามติและ validator ของตัวเอง sidechain เชื่อมกับ chain หลักด้วย bridge แบบสองทาง (two-way peg) ผู้ใช้ล็อกเหรียญไว้ใน bridge บน chain หลัก แล้วได้เหรียญตัวแทนบน sidechain ข้อต่างสำคัญคือ chain หลักไม่ได้ตรวจว่า sidechain ทำงานถูกต้องหรือไม่ ถ้า validator ส่วนใหญ่ของ sidechain หรือผู้ถือกุญแจ (key) ของ bridge ร่วมมือกันโกง ก็ถอนเงินที่ล็อกไว้ออกไปได้ทั้งหมด ตัวอย่าง sidechain ได้แก่ Liquid ของ Bitcoin และ Polygon PoS ของ Ethereum</p>
+
+        <div class="callout warn">
+          <span class="h">กรณีศึกษา: Ronin bridge (มีนาคม 2022)</span>
+          ในปี 2022 Ronin เป็น sidechain ของเกม Axie Infinity bridge ของ Ronin ถอนเงินได้เมื่อมีลายเซ็นของ validator 5 จาก 9 ราย ผู้โจมตีได้ private key ของ validator ครบ 5 ราย แล้วถอนเงินที่ล็อกไว้ออกไปมูลค่าราว 620 ล้านดอลลาร์ เมื่อลายเซ็นครบเกณฑ์ Ethereum ก็ไม่มีกลไกใดห้ามการถอนนี้ได้ เพราะ Ethereum ไม่ได้ตรวจว่าธุรกรรมบน Ronin ถูกต้องหรือไม่ ถ้าเป็น Rollup การถอนที่ไม่มีธุรกรรมรองรับจะไม่ผ่าน fraud proof หรือ validity proof
+          <br><br>ต่อมาในเดือนพฤษภาคม 2026 Ronin ทำ hard fork ย้ายไปใช้ OP Stack และส่ง state root ขึ้น Ethereum แต่ยังเก็บข้อมูลธุรกรรมไว้นอก Ethereum (EigenDA) ระบบแบบนี้เรียกว่า Optimium และไม่นับเป็น Rollup ด้วยเหตุผลเดียวกับ Validium ในหัวข้อ 10.4
+        </div>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>หัวข้อ</th><th>Lightning Network</th><th>Optimistic Rollup</th><th>ZK Rollup</th><th>Sidechain</th></tr>
+            <tr><td>ใช้กับ</td><td>Bitcoin</td><td>Ethereum</td><td>Ethereum</td><td>ได้ทั้งสองเครือข่าย เช่น Liquid, Polygon PoS</td></tr>
+            <tr><td>สิ่งที่ทำนอกเชน</td><td>การจ่ายเงินในช่องและการส่งต่อผ่านหลายช่อง</td><td>รันธุรกรรมและ smart contract ทั่วไป</td><td>รันธุรกรรมและ smart contract ทั่วไป</td><td>ทุกอย่าง เพราะเป็น chain แยก</td></tr>
+            <tr><td>ข้อมูลที่ขึ้น Layer 1</td><td>เฉพาะธุรกรรมเปิดและปิดช่อง</td><td>ข้อมูลธุรกรรมทุกชุดและ state root</td><td>ข้อมูลธุรกรรม หรือส่วนต่างของ state (state diff), state root และ proof</td><td>เฉพาะธุรกรรมฝากและถอนที่ bridge</td></tr>
+            <tr><td>วิธีกันการโกง</td><td>revocation secret + timelock (penalty transaction)</td><td>fraud proof ในช่วงโต้แย้ง</td><td>validity proof ทุกชุด</td><td>Layer 1 ไม่ได้ตรวจ ต้องเชื่อ validator ของ sidechain</td></tr>
+            <tr><td>ความปลอดภัยมาจาก</td><td>Layer 1 และผู้ใช้ต้องเฝ้าดูช่องเอง (หรือจ้าง watchtower)</td><td>Layer 1 และผู้ตรวจที่ซื่อสัตย์อย่างน้อยหนึ่งราย</td><td>Layer 1 และความถูกต้องของ proof system</td><td>validator หรือกลุ่มผู้ถือกุญแจของ sidechain</td></tr>
+            <tr><td>ถอนกลับ Layer 1</td><td>ปิดแบบตกลงกันได้เมื่อธุรกรรมเข้าบล็อก ปิดฝ่ายเดียวต้องรอ timelock</td><td>ประมาณ 7 วัน</td><td>หลัง proof ผ่านการตรวจ ราวหนึ่งถึงหลายชั่วโมง</td><td>ตามกติกาของ bridge</td></tr>
+            <tr><td>รองรับ smart contract</td><td>ไม่รองรับ เน้นการชำระเงิน</td><td>รองรับ EVM</td><td>รองรับผ่าน zkEVM หรือ VM ของตัวเอง</td><td>รองรับ</td></tr>
+            <tr><td>ข้อจำกัดหลัก</td><td>ต้องล็อกเงินล่วงหน้า ต้องมี liquidity ตามเส้นทาง ต้องออนไลน์</td><td>ถอนช้า</td><td>สร้าง proof แพงและซับซ้อน</td><td>ต้องเชื่อ validator กลุ่มเล็ก</td></tr>
+            <tr><td>นับเป็น Layer 2 หรือไม่</td><td>ใช่</td><td>ใช่</td><td>ใช่</td><td>ไม่ใช่</td></tr>
+          </table>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ: แยกประเภทจากโจทย์</span>
+          ให้ดูสองอย่าง อย่างแรกคือข้อมูลธุรกรรมอยู่ที่ใด อย่างที่สองคือใครตรวจว่าผลถูกต้อง ถ้าข้อมูลอยู่บน Layer 1 และ Layer 1 ตัดสินด้วย fraud proof แสดงว่าเป็น Optimistic Rollup ถ้า Layer 1 ตรวจ validity proof แสดงว่าเป็น ZK Rollup ถ้าคนสองคนล็อกเงินใน multisig แล้วแลกธุรกรรมที่ลงลายเซ็นกันเอง แสดงว่าเป็น payment channel ถ้าระบบมี validator ของตัวเองและ Layer 1 ไม่ได้ตรวจอะไรเลย แสดงว่าเป็น sidechain
+        </div>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li><strong>โจทย์:</strong> ทุกโหนดของ Layer 1 ทำงานชิ้นเดียวกันซ้ำ เครือข่ายจึงรับธุรกรรมได้เท่ากับโหนดหนึ่งเครื่อง Bitcoin ได้ราว 3–7 TPS เมื่อมีผู้ใช้มากขึ้น ค่าธรรมเนียมก็แพงขึ้น</li>
+          <li><strong>10.1:</strong> trilemma คือข้อสังเกตว่าระบบแบบเรียบง่ายได้เพียงสองข้อจากสามข้อ คือ การกระจายศูนย์ ความปลอดภัย และการขยายตัว Bitcoin และ Ethereum Layer 1 เลือกสองข้อแรก</li>
+          <li><strong>10.2:</strong> การขยายบน Layer 1 เช่น เพิ่มขนาดบล็อก (Bitcoin Cash) หรือ Sharding แลกมากับการรวมศูนย์หรือความปลอดภัยต่อ shard ที่ลดลง Layer 2 ย้ายธุรกรรมไปทำนอกเชน แต่ผู้ใช้ต้องถอนกลับ Layer 1 ได้เองเสมอ</li>
+          <li><strong>10.3:</strong> Lightning เปิดช่องด้วย 2-of-2 multisig แล้วจ่ายกันด้วย commitment transaction นอกเชน ทั้งสองฝ่ายเพิกถอน state เก่าด้วย revocation secret ร่วมกับ timelock ผู้ที่ส่ง state เก่าขึ้นเชนเสี่ยงเสียเงินทั้งช่อง การจ่ายผ่านหลายช่องใช้ HTLC (hashlock + timelock) ผู้ส่งต่อจึงขโมยเงินไม่ได้</li>
+          <li><strong>10.4:</strong> Rollup รันธุรกรรมนอกเชน แล้วส่งข้อมูลธุรกรรมที่บีบอัดพร้อม state root ขึ้น Layer 1 ข้อมูลต้องอยู่บน Layer 1 เพื่อแก้ data availability problem ที่ Plasma เคยเจอ EIP-4844 เพิ่ม blob ซึ่งถูกกว่า calldata และเครือข่ายเก็บไว้เพียงราว 18 วัน</li>
+          <li><strong>10.5:</strong> Optimistic Rollup ถือว่าถูกไว้ก่อนและเปิดช่วงโต้แย้งราว 7 วันสำหรับ fraud proof การถอนจึงช้า ZK Rollup แนบ validity proof ทุกชุด การถอนจึงเร็วกว่า แต่การสร้าง proof หนักกว่า</li>
+          <li><strong>10.6:</strong> Sidechain มี validator ของตัวเองและ Layer 1 ไม่ได้ตรวจความถูกต้อง จึงไม่นับเป็น Layer 2 ดังที่เห็นในกรณี Ronin bridge</li>
+        </ul>
+
+        <h3>คำศัพท์ที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำศัพท์</th><th>ความหมาย</th></tr>
+            <tr><td>Blockchain trilemma</td><td>ข้อสังเกตว่าการกระจายศูนย์ ความปลอดภัย และการขยายตัว ได้ครบพร้อมกันยาก</td></tr>
+            <tr><td>Layer 1 / Layer 2</td><td>chain หลักที่ทุกโหนดตรวจ / ระบบที่ทำธุรกรรมนอกเชนแต่ใช้ Layer 1 รับประกันเงิน</td></tr>
+            <tr><td>Sharding</td><td>แบ่งเครือข่ายเป็นหลายส่วน แต่ละส่วนประมวลผลธุรกรรมเพียงบางส่วน</td></tr>
+            <tr><td>Payment channel</td><td>ช่องจ่ายเงินระหว่างสองฝ่ายที่ล็อกเงินใน 2-of-2 multisig แล้วอัปเดตยอดกันนอกเชน</td></tr>
+            <tr><td>Commitment transaction</td><td>ธุรกรรมที่แสดงยอดล่าสุดของช่องและมีลายเซ็นครบแล้ว แต่ละฝ่ายเก็บไว้โดยไม่ประกาศ</td></tr>
+            <tr><td>Revocation secret / penalty transaction</td><td>ความลับที่ใช้เพิกถอน state เก่า / ธุรกรรมที่ยึดเงินทั้งช่องเมื่ออีกฝ่ายประกาศ state เก่า</td></tr>
+            <tr><td>Watchtower</td><td>บริการที่เฝ้าดูเชนแทนผู้ใช้ที่ออฟไลน์ และส่ง penalty transaction ให้เมื่อพบการโกง</td></tr>
+            <tr><td>HTLC</td><td>Hash Time-Locked Contract: ได้เงินเมื่อแสดง preimage ของค่าแฮชภายในเวลาที่กำหนด</td></tr>
+            <tr><td>Sequencer</td><td>ผู้เรียงลำดับและรันธุรกรรมบน Rollup แล้วส่ง batch ขึ้น Layer 1</td></tr>
+            <tr><td>Data availability</td><td>ข้อมูลธุรกรรมเปิดให้ทุกคนดาวน์โหลดไปตรวจได้</td></tr>
+            <tr><td>Fraud proof</td><td>หลักฐานว่า state root ที่ส่งมาผิด ใช้ใน Optimistic Rollup</td></tr>
+            <tr><td>Validity proof</td><td>หลักฐานทางคณิตศาสตร์ว่า state root ถูกต้อง ใช้ใน ZK Rollup</td></tr>
+            <tr><td>Challenge period</td><td>ช่วงเวลาที่เปิดให้ส่ง fraud proof ประมาณ 7 วัน</td></tr>
+            <tr><td>Blob</td><td>ข้อมูลก้อนที่แนบกับธุรกรรมตาม EIP-4844 ราคาถูก และเก็บไว้ชั่วคราว</td></tr>
+            <tr><td>Sidechain</td><td>chain แยกที่มี validator ของตัวเอง เชื่อมกับ chain หลักด้วย bridge</td></tr>
+          </table>
+        </div>
+
+        <h3>ตัวเลขที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>รายการ</th><th>ค่า</th></tr>
+            <tr><td>TPS ของ Bitcoin</td><td>ราว 3–7</td></tr>
+            <tr><td>TPS ของ Ethereum Layer 1</td><td>ราว 15–30</td></tr>
+            <tr><td>ธุรกรรมบนเชนต่อ payment channel (กรณีปกติ)</td><td>2 รายการ (เปิดและปิด)</td></tr>
+            <tr><td>ช่วงโต้แย้งของ Optimistic Rollup</td><td>ประมาณ 7 วัน</td></tr>
+            <tr><td>ขนาด blob / ระยะเวลาที่เครือข่ายเก็บ blob</td><td>ประมาณ 128 KB / ราว 18 วัน</td></tr>
+            <tr><td>EIP-4844 (Dencun)</td><td>มีนาคม 2024</td></tr>
+            <tr><td>Lightning Network: เอกสาร / เริ่มใช้บน mainnet</td><td>2016 / 2018</td></tr>
+            <tr><td>Bitcoin Cash แยกสาย</td><td>สิงหาคม 2017 บล็อก 8 MB</td></tr>
+            <tr><td>Ronin bridge ถูกโจมตี</td><td>มีนาคม 2022 ใช้ key ครบ 5 จาก 9 ราย ความเสียหายราว 620 ล้านดอลลาร์</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. เพื่อนเสนอว่า ถ้าชวนคนมารัน full node ของ Bitcoin เพิ่มอีก 10,000 เครื่อง เครือข่ายจะรับธุรกรรมได้มากขึ้น ข้อเสนอนี้ถูกหรือไม่ เพราะอะไร</p>
+          <details><summary>ดูเฉลย</summary><div><strong>ไม่ถูก</strong> full node ทุกเครื่องตรวจทุกธุรกรรมซ้ำกัน ไม่ได้แบ่งงานกันทำ จำนวนธุรกรรมที่เครือข่ายรับได้ขึ้นกับขนาดบล็อกและเวลาต่อบล็อก โหนดที่เพิ่มขึ้นทำให้เครือข่ายกระจายศูนย์และตรวจสอบกันได้มากขึ้น แต่ไม่ได้เพิ่ม TPS</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. สมมุติ blockchain หนึ่งมีบล็อกขนาด 2 MB ทุก 10 นาที และธุรกรรมเฉลี่ยมีขนาด 400 ไบต์ เครือข่ายนี้รับได้ประมาณกี่ TPS</p>
+          <details><summary>ดูเฉลย</summary><div>บล็อกหนึ่งมีธุรกรรม 2,000,000 ÷ 400 = 5,000 รายการ บล็อกเกิดทุก 600 วินาที TPS ≈ 5,000 ÷ 600 ≈ <strong>8.3</strong></div></details>
+        </div>
+
+        <div class="q">
+          <p>3. Alice กับ Bob มี payment channel ขนาด 100,000 sat ยอดล่าสุดคือ Alice 70,000 และ Bob 30,000 Alice นำ commitment ฉบับแรก (state 0: Alice 100,000 / Bob 0) ขึ้นเชน จะเกิดอะไรขึ้นถ้า Bob ออนไลน์อยู่ และถ้า Bob ออฟไลน์ไปสองสัปดาห์โดยไม่มี watchtower</p>
+          <details><summary>ดูเฉลย</summary><div>ใน commitment ที่ Alice ประกาศ เงินส่วนของ Alice ติด timelock ถ้า Bob ออนไลน์ Bob จะเห็นธุรกรรมนี้ แล้วใช้ revocation secret ของ state 0 (ที่ Alice ให้ไว้ตอนอัปเดต) ส่ง penalty transaction เอาเงินส่วนนั้นไป <strong>Bob ได้ทั้ง 100,000 sat</strong> ถ้า Bob ออฟไลน์นานกว่าช่วงหน่วงเวลา Alice จะเอาเงิน 100,000 sat ไปได้ Bob เสีย 30,000 sat กลไกนี้จึงต้องมีคนเฝ้าดูเชน ไม่ว่าจะเป็น Bob เองหรือ watchtower</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. Alice จ่าย Carol ผ่าน Bob ด้วย HTLC ข้อใดกล่าวถูกต้องเกี่ยวกับเวลาหมดอายุของ HTLC</p>
+          <ol><li>ก. ทุกทอดต้องหมดเวลาพร้อมกัน</li><li>ข. ทอดระหว่าง Alice กับ Bob ต้องหมดเวลาช้ากว่าทอดระหว่าง Bob กับ Carol</li><li>ค. ทอดระหว่าง Bob กับ Carol ต้องหมดเวลาช้ากว่าทอดระหว่าง Alice กับ Bob</li><li>ง. HTLC ไม่มีเวลาหมดอายุ</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> ถ้าทอดระหว่าง Alice กับ Bob หมดเวลาก่อน Carol อาจเปิดเผย R ช้าจน Bob ต้องจ่าย Carol แต่เรียกเงินจาก Alice ไม่ได้แล้ว ทอดที่อยู่ใกล้ผู้จ่ายจึงต้องหมดเวลาช้ากว่า เพื่อให้ Bob มีเวลาใช้ R หลังรู้ค่า ข้อ ง ผิด เพราะ timelock คือส่วนที่คืนเงินเมื่อการจ่ายไม่สำเร็จ</div></details>
+        </div>
+
+        <div class="q">
+          <p>5. ในการจ่ายผ่าน HTLC ใครรู้ค่า R เป็นคนแรก และทำไม Bob ซึ่งเป็นผู้ส่งต่อตรงกลางจึงขโมยเงินของ Alice ไม่ได้</p>
+          <details><summary>ดูเฉลย</summary><div><strong>Carol</strong> ผู้รับปลายทางรู้ R ก่อน เพราะเป็นผู้สุ่ม R แล้วส่งเพียง H = SHA-256(R) ให้ Alice เงินที่ Alice ล็อกไว้ให้ Bob ปลดได้ด้วย R เท่านั้น Bob จะรู้ R ก็ต่อเมื่อ Carol เปิดเผย R เพื่อรับเงินจาก Bob Bob จึงเอาเงินของ Alice ไปโดยไม่จ่าย Carol ไม่ได้ ถ้าไม่มีใครเปิดเผย R ทุก HTLC จะหมดเวลาและเงินคืนผู้จ่าย</div></details>
+        </div>
+
+        <div class="q">
+          <p>6. ทำไม Rollup ต้องส่งข้อมูลธุรกรรมขึ้น Layer 1 ทั้งที่ส่ง state root เพียงค่าเดียวก็ประหยัดกว่า</p>
+          <details><summary>ดูเฉลย</summary><div>ถ้ามีเพียง state root ผู้ใช้และผู้ตรวจจะรู้ไม่ได้ว่า state ของ Rollup ตอนนี้เป็นอย่างไร ถ้าผู้ดำเนินการหายไปหรือปิดบังข้อมูล ผู้ใช้จะพิสูจน์ยอดของตนเพื่อถอนเงินไม่ได้ และใน Optimistic Rollup ก็ไม่มีใครรันซ้ำเพื่อสร้าง fraud proof ได้ ปัญหานี้คือ data availability problem ที่ Plasma เคยเจอ เมื่อข้อมูลอยู่บน Layer 1 ใครก็คำนวณ state ขึ้นใหม่ได้เอง</div></details>
+        </div>
+
+        <div class="q">
+          <p>7. ทำไมการถอนเงินจาก Optimistic Rollup กลับ Layer 1 ผ่าน bridge ของ Rollup จึงต้องรอประมาณ 7 วัน</p>
+          <ol><li>ก. ต้องรอสร้าง validity proof</li><li>ข. ต้องเปิดช่วงให้ผู้ตรวจส่ง fraud proof ได้ทันก่อน state root สิ้นสุด</li><li>ค. ต้องรอ confirmation ของบล็อกบน Ethereum ครบ 7 วัน</li><li>ง. sequencer ส่ง batch ขึ้น Layer 1 สัปดาห์ละครั้ง</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> Optimistic Rollup ถือว่า state root ถูกต้องไว้ก่อน จึงต้องเปิดช่วงโต้แย้งให้นานพอที่ fraud proof จะขึ้นเชนได้ แม้ผู้โจมตีพยายามขัดขวาง ข้อ ก เป็นเรื่องของ ZK Rollup ข้อ ค ผิดเพราะ Ethereum ถึง finality ภายในราว 13 นาที ข้อ ง ผิดเพราะ sequencer ส่ง batch ถี่กว่านั้นมาก</div></details>
+        </div>
+
+        <div class="q">
+          <p>8. เพื่อนเข้าใจว่า ZK Rollup ซ่อนข้อมูลธุรกรรมทุกรายการไว้ เพราะชื่อมีคำว่า zero-knowledge ความเข้าใจนี้ถูกหรือไม่</p>
+          <details><summary>ดูเฉลย</summary><div><strong>ไม่ถูก</strong> ZK Rollup ทั่วไปยังส่งข้อมูลธุรกรรม หรือส่วนต่างของ state (state diff) ขึ้น Layer 1 ให้ทุกคนเห็น เพื่อแก้ปัญหา data availability คุณสมบัติที่ Rollup ใช้จริงคือ proof มีขนาดเล็กและตรวจได้เร็ว (succinct) Layer 1 จึงยืนยันได้ว่า state root ถูกต้องโดยไม่ต้องรันธุรกรรมซ้ำ</div></details>
+        </div>
+
+        <div class="q">
+          <p>9. bridge ของระบบหนึ่งถอนเงินได้เมื่อมีลายเซ็น 5 จาก 9 ราย ผู้โจมตีได้ key ครบ 5 ราย แล้วถอนเงินทั้งหมดออกไป ระบบนี้เป็น Rollup หรือ sidechain และถ้าเป็น Rollup ผลจะต่างออกไปอย่างไร</p>
+          <details><summary>ดูเฉลย</summary><div>เป็น <strong>sidechain</strong> (กรณี Ronin ในปี 2022) Layer 1 เชื่อลายเซ็นของ validator กลุ่มนี้อย่างเดียว ไม่ได้ตรวจว่าการถอนมีธุรกรรมรองรับหรือไม่ ถ้าเป็น Rollup การถอนต้องอ้างถึง state root ที่ผ่านการตรวจ ใน Optimistic Rollup ผู้ตรวจจะส่ง fraud proof ล้ม state root ปลอมได้ภายในช่วงโต้แย้ง ส่วนใน ZK Rollup ผู้โจมตีสร้าง validity proof ของ state ปลอมไม่ได้ตั้งแต่แรก</div></details>
+        </div>
+
+        <div class="q">
+          <p>10. EIP-4844 ให้เครือข่ายลบ blob ทิ้งหลังราว 18 วัน ทำไม Rollup จึงยังปลอดภัย ทั้งที่ข้อมูลธุรกรรมหายไปจาก Layer 1</p>
+          <details><summary>ดูเฉลย</summary><div>data availability ต้องการเพียงให้ข้อมูลเปิดให้ทุกคนดาวน์โหลดได้ในช่วงที่ต้องตรวจ ในช่วงนั้นผู้ตรวจและโหนดของ Rollup ดาวน์โหลดข้อมูลไปรันซ้ำ และส่ง fraud proof ได้ถ้าพบการโกง ช่วงราว 18 วันยาวกว่าช่วงโต้แย้งราว 7 วัน เมื่อ state root เป็นที่สิ้นสุดแล้ว ผู้ใช้ต้องการเพียง state ปัจจุบัน ไม่ต้องย้อนดูข้อมูลทุกชุด ใครต้องการเก็บข้อมูลเก่าไว้ก็เก็บเองได้</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+  <script>
+    // จำลอง payment channel: จ่ายเงินนอกเชน ปิดช่อง และลองส่ง state เก่า
+    (function () {
+      const CAP = 100000;
+      const $ = (id) => document.getElementById(id);
+      const fmt = (n) => n.toLocaleString("en-US");
+      let states, closed, onchain, log, final;
+
+      function reset() {
+        states = [{ a: CAP, b: 0 }];
+        closed = false;
+        final = null;
+        onchain = 1;
+        log = ["เปิดช่อง: Alice ฝาก 100,000 sat เข้า 2-of-2 multisig (บนเชน 1 ธุรกรรม) และได้ commitment ฉบับแรก (state 0) ที่ Bob ลงลายเซ็นไว้แล้ว"];
+        render();
+      }
+
+      const cur = () => states[states.length - 1];
+
+      function pay(from, amt) {
+        if (closed) return;
+        const c = cur();
+        const n = { a: c.a, b: c.b };
+        if (from === "a") {
+          if (n.a < amt) { log.push(`ยอดฝั่ง Alice เหลือ ${fmt(n.a)} sat ไม่พอจ่าย ${fmt(amt)} sat`); render(); return; }
+          n.a -= amt; n.b += amt;
+        } else {
+          if (n.b < amt) { log.push(`ยอดฝั่ง Bob เหลือ ${fmt(n.b)} sat ไม่พอจ่าย ${fmt(amt)} sat`); render(); return; }
+          n.b -= amt; n.a += amt;
+        }
+        states.push(n);
+        const k = states.length - 1;
+        log.push(`state ${k}: ลงลายเซ็น commitment ใหม่ Alice ${fmt(n.a)} / Bob ${fmt(n.b)} และแลก revocation secret ของ state ${k - 1} (นอกเชน)`);
+        render();
+      }
+
+      function coop() {
+        if (closed) return;
+        const c = cur();
+        closed = true;
+        final = { a: c.a, b: c.b };
+        onchain += 1;
+        log.push(`ปิดช่องแบบตกลงกันตาม state ${states.length - 1}: Alice ได้ ${fmt(c.a)} sat และ Bob ได้ ${fmt(c.b)} sat (บนเชน 1 ธุรกรรม)`);
+        render();
+      }
+
+      function cheat() {
+        if (closed) return;
+        const c = cur();
+        let best = -1;
+        for (let i = 0; i < states.length - 1; i++) {
+          if (states[i].a > c.a && (best < 0 || states[i].a > states[best].a)) best = i;
+        }
+        if (best < 0) {
+          log.push("ยังไม่มี state เก่าที่ Alice ได้เงินมากกว่ายอดล่าสุด ลองให้ Alice จ่าย Bob ก่อน");
+          render();
+          return;
+        }
+        const old = states[best];
+        closed = true;
+        onchain += 1;
+        if ($("bobOff").checked) {
+          final = { a: old.a, b: old.b };
+          log.push(`Alice ประกาศ state ${best} (Alice ${fmt(old.a)} / Bob ${fmt(old.b)}) Bob ไม่เห็นธุรกรรมนี้ก่อนพ้นช่วงหน่วงเวลา Alice จึงได้ ${fmt(old.a)} sat มากกว่ายอดจริง ${fmt(old.a - c.a)} sat`);
+        } else {
+          final = { a: 0, b: CAP };
+          onchain += 1;
+          log.push(`Alice ประกาศ state ${best} (Alice ${fmt(old.a)} / Bob ${fmt(old.b)}) เงินส่วนของ Alice ยังติด timelock Bob เห็นธุรกรรมนี้ จึงใช้ revocation secret ของ state ${best} ส่ง penalty transaction ผล: Bob ได้ทั้งช่อง ${fmt(CAP)} sat และ Alice ไม่ได้อะไรเลย`);
+        }
+        render();
+      }
+
+      function render() {
+        const c = final || cur();
+        $("chState").innerHTML =
+          (final
+            ? `ยอดที่แต่ละฝ่ายได้จริงหลังปิดช่อง · Alice <strong>${fmt(c.a)}</strong> sat · Bob <strong>${fmt(c.b)}</strong> sat`
+            : `state ล่าสุด <strong>${states.length - 1}</strong> · Alice <strong>${fmt(c.a)}</strong> sat · Bob <strong>${fmt(c.b)}</strong> sat`) +
+          `<br>ธุรกรรมบนเชน <strong>${onchain}</strong> รายการ · อัปเดตนอกเชน <strong>${states.length - 1}</strong> ครั้ง` +
+          (closed ? " · <strong>ช่องปิดแล้ว</strong> กดเริ่มใหม่เพื่อลองอีกครั้ง" : "");
+        $("barA").style.width = (c.a / CAP * 100) + "%";
+        $("barB").style.width = (c.b / CAP * 100) + "%";
+        ["payAB", "payBA", "coop", "cheat"].forEach((id) => { $(id).disabled = closed; });
+        $("chLog").innerHTML = log.slice(-6).map((t) => `<div style="padding:3px 0;border-top:1px solid var(--line)">${t}</div>`).join("");
+      }
+
+      $("payAB").addEventListener("click", () => pay("a", 5000));
+      $("payBA").addEventListener("click", () => pay("b", 2000));
+      $("coop").addEventListener("click", coop);
+      $("cheat").addEventListener("click", cheat);
+      $("chReset").addEventListener("click", reset);
+      reset();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 0 ความรู้พื้นฐาน</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p1" data-chapter="ch00">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 1 Bitcoin</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 0 · พื้นฐาน</div>
+      <h1>ความรู้พื้นฐานก่อนอ่าน Whitepaper</h1>
+      <p class="lead">Bitcoin Whitepaper ไม่ได้อธิบายเครื่องมือด้าน cryptography ที่ใช้ เพราะผู้เขียนถือว่าผู้อ่านรู้อยู่แล้ว บทนี้จึงปูพื้นสี่เรื่องที่ต้องเข้าใจก่อน ได้แก่ ฟังก์ชันแฮช (hash function) ลายเซ็นดิจิทัล (digital signature) การเชื่อมบล็อกด้วยค่าแฮช และปัญหาการใช้จ่ายซ้ำ (double-spending) เรื่องสุดท้ายนี้คือโจทย์ที่ Bitcoin ตั้งใจแก้</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: ถ้าไม่มีธนาคาร ต้องตอบคำถามอะไรบ้าง</a></li>
+        <li><a href="#s1">ฟังก์ชันแฮชและคุณสมบัติของ SHA-256</a></li>
+        <li><a href="#s2">กุญแจสาธารณะ กุญแจส่วนตัว และลายเซ็นดิจิทัล</a></li>
+        <li><a href="#s3">เชื่อมบล็อกเป็นสายโซ่ด้วยค่าแฮช (Hash chain)</a></li>
+        <li><a href="#s4">ปัญหาการใช้จ่ายซ้ำ (Double-spending)</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: ถ้าไม่มีธนาคาร ต้องตอบคำถามอะไรบ้าง</h2>
+        <p>เมื่อโอนเงินผ่านธนาคาร เราไม่ต้องคิดเรื่องความปลอดภัยเอง ธนาคารตรวจตัวตนของผู้โอน ตรวจยอดเงิน เก็บประวัติบัญชี และป้องกันไม่ให้ใครแก้ตัวเลขย้อนหลัง Bitcoin ต้องการสร้างเงินดิจิทัลที่ <strong>ไม่ต้องมีธนาคาร</strong> จึงต้องใช้สิ่งที่ทุกคนตรวจเองได้ด้วยคณิตศาสตร์มาทำหน้าที่แทนธนาคารทุกข้อ</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำถามที่ต้องตอบได้เมื่อไม่มีธนาคาร</th><th>เครื่องมือ</th><th>หัวข้อ</th></tr>
+            <tr><td>ข้อมูลที่แต่ละเครื่องเก็บไว้ตรงกันหรือไม่ และมีใครแก้ข้อมูลหรือไม่</td><td>ฟังก์ชันแฮช</td><td>0.1</td></tr>
+            <tr><td>ใครเป็นเจ้าของเหรียญ และเจ้าของอนุญาตให้โอนจริงหรือไม่</td><td>กุญแจคู่ (key pair) และลายเซ็นดิจิทัล</td><td>0.2</td></tr>
+            <tr><td>มีใครแอบแก้ประวัติธุรกรรม (transaction) ย้อนหลังหรือไม่</td><td>การเชื่อมบล็อกด้วยค่าแฮช</td><td>0.3</td></tr>
+            <tr><td>มีใครใช้เหรียญเดียวกันสองครั้งหรือไม่</td><td>เครื่องมือในบทนี้ยังแก้ไม่ได้ ต้องรอบทที่ 1 และ 2</td><td>0.4</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 0.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">0.1</span>ฟังก์ชันแฮชและคุณสมบัติของ SHA-256</h2>
+
+        <h3>ทำไมต้องมีฟังก์ชันแฮช</h3>
+        <p>ในเครือข่าย Bitcoin คอมพิวเตอร์หลายหมื่นเครื่องเก็บข้อมูลชุดเดียวกัน และต้องคอยตรวจว่าข้อมูลของแต่ละเครื่องตรงกัน ไม่มีใครแอบแก้ ข้อมูลทั้งหมดมีขนาดหลายร้อยกิกะไบต์ จึงส่งทั้งก้อนมาเทียบกันทุกครั้งไม่ได้ สิ่งที่ต้องการคือ <strong>ค่าสั้น ๆ ที่ใช้แทนข้อมูลทั้งก้อน</strong> ค่านี้ต้องเทียบกันได้ทันที และต้องเปลี่ยนไปเมื่อข้อมูลเปลี่ยนแม้เพียงตัวอักษรเดียว ฟังก์ชันแฮชทำหน้าที่นี้</p>
+
+        <h3>นิยาม</h3>
+
+        <p><strong>ฟังก์ชันแฮช (Hash function)</strong> คือฟังก์ชันที่รับข้อมูลขนาดเท่าใดก็ได้ แล้วให้ผลลัพธ์ที่มีความยาวคงที่เสมอ ผลลัพธ์นี้เรียกว่า <strong>ค่าแฮช (hash)</strong> หรือ digest และใช้เป็นลายนิ้วมือ (fingerprint) ของข้อมูลได้ ข้อมูลชุดเดิมให้ค่าแฮชเดิมทุกครั้ง แต่ถ้าข้อมูลเปลี่ยนแม้เพียงเล็กน้อย ค่าแฮชจะเปลี่ยนไปจนดูไม่ออกเลยว่ามาจากข้อมูลที่ใกล้เคียงกัน (บิตเปลี่ยนไปราวครึ่งหนึ่ง ดู Avalanche effect ในตารางด้านล่าง)</p>
+
+        <p>Bitcoin ใช้ฟังก์ชัน <strong>SHA-256</strong> ผลลัพธ์ยาว 256 บิต เขียนเป็นเลขฐานสิบหก (hexadecimal) ได้ 64 ตัวอักษร (1 ตัวอักษรฐานสิบหกแทน 4 บิต)</p>
+
+<pre><code>SHA-256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+SHA-256("Hello") = 185f8db32271fe25f561a6fc938b2e264306ec304eda518007d1764826381969
+SHA-256("")      = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</code></pre>
+
+        <p>ข้อความ "hello" กับ "Hello" ต่างกันเพียงตัวอักษรตัวแรก แต่ค่าแฮชไม่มีส่วนใดคล้ายกันเลย ส่วนข้อความว่างก็ยังได้ค่าแฮชยาว 64 ตัวอักษรเท่าเดิม</p>
+
+        <h3>คุณสมบัติที่ต้องจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คุณสมบัติ</th><th>ความหมาย</th><th>Bitcoin ใช้ประโยชน์อย่างไร</th></tr>
+            <tr><td>Deterministic</td><td>ข้อมูลเดิมให้ค่าแฮชเดิมเสมอ</td><td>ทุกโหนด (node) คำนวณแล้วได้ผลตรงกัน จึงตรวจสอบกันได้</td></tr>
+            <tr><td>Efficient (คำนวณได้เร็ว)</td><td>หาค่าแฮชจากข้อมูลใช้เวลาน้อย</td><td>ตรวจบล็อกที่ได้รับได้ทันที</td></tr>
+            <tr><td>Pre-image resistance (one-way)</td><td>รู้ค่าแฮชแล้วหาข้อมูลต้นทางไม่ได้ นอกจากเดาสุ่มไปเรื่อย ๆ</td><td>ใกล้กับหลักของ Proof-of-Work ผู้ขุด (miner) ต้องหาค่าแฮชที่ต่ำกว่าเป้าหมาย (target) และไม่มีทางคำนวณย้อนจากเป้าหมายกลับมาหา nonce จึงต้องลองค่า nonce ทีละค่า (บทที่ 2) คุณสมบัติที่ PoW ใช้จริงจึงกว้างกว่านิยามนี้เล็กน้อย บางตำราเรียกว่า puzzle friendliness</td></tr>
+            <tr><td>Second pre-image resistance</td><td>มีข้อมูลชุดหนึ่งแล้ว หาข้อมูลชุดอื่นที่ให้ค่าแฮชเดียวกันไม่ได้</td><td>ปลอมธุรกรรมให้มีค่าแฮชเท่าของจริงไม่ได้</td></tr>
+            <tr><td>Collision resistance</td><td>Collision (ข้อมูลสองชุดให้ค่าแฮชเดียวกัน) มีอยู่จริง เพราะข้อมูลนำเข้ามีได้ไม่จำกัด แต่ค่าแฮชมีเพียง 2<sup>256</sup> แบบ ถึงอย่างนั้นก็ไม่มีใครหา collision ของ SHA-256 เจอได้ในทางปฏิบัติ เพราะต้องลองประมาณ 2<sup>128</sup> ครั้ง</td><td>ค่าแฮชใช้เป็นรหัสประจำตัวที่ไม่ซ้ำกันได้ เช่น txid และ block hash</td></tr>
+            <tr><td>Avalanche effect</td><td>ข้อมูลเปลี่ยนหนึ่งบิต ค่าแฮชเปลี่ยนประมาณครึ่งหนึ่งของบิตทั้งหมด</td><td>แก้ข้อมูลเพียงเล็กน้อยก็ตรวจพบได้ทันที</td></tr>
+          </table>
+        </div>
+
+        <h3>ลองคำนวณเอง</h3>
+        <p>พิมพ์ข้อความลงในสองช่องด้านล่าง หน้านี้จะคำนวณ SHA-256 ของทั้งสองข้อความ แล้วนับว่าต่างกันกี่บิตจากทั้งหมด 256 บิต ลองเปลี่ยนตัวอักษรเพียงตัวเดียวแล้วสังเกตผล ตัวอักษรฐานสิบหกที่ไม่ตรงกันจะแสดงเป็นสีแดง</p>
+
+        <div class="hash-demo">
+          <label for="ha">ข้อความ A</label>
+          <input id="ha" value="hello" autocomplete="off">
+          <output id="oa"></output>
+          <label for="hb">ข้อความ B</label>
+          <input id="hb" value="Hello" autocomplete="off">
+          <output id="ob"></output>
+          <div class="diff" id="hdiff"></div>
+        </div>
+
+        <div class="callout">
+          <span class="h">Bitcoin ใช้แฮชที่ไหนบ้าง</span>
+          Block hash และ txid ใช้ SHA-256 สองรอบซ้อนกัน เรียกว่า SHA-256d หรือ double SHA-256 ส่วน address แบบดั้งเดิม (legacy) ได้จากการแฮช public key ด้วย SHA-256 แล้วแฮชผลอีกรอบด้วย RIPEMD-160 (เรียกรวมว่า HASH160) Merkle root (บทที่ 3) ได้จากการนำค่าแฮชของธุรกรรมมาจับคู่แล้วแฮชซ้ำทีละชั้น ส่วน Proof-of-Work (บทที่ 2) คือการหาค่าแฮชของ header ที่ต่ำกว่าเป้าหมาย
+        </div>
+
+        <div class="callout warn">
+          <span class="h">จุดที่มักสับสน</span>
+          การแฮช (hashing) ไม่ใช่การเข้ารหัส (encryption) การเข้ารหัสต้องใช้กุญแจ และผู้ถือกุญแจถอดกลับเป็นข้อมูลเดิมได้ ส่วนการแฮชไม่ใช้กุญแจเลย และไม่มีวิธีคำนวณย้อนจากค่าแฮชกลับเป็นข้อมูลเดิม ทำได้เพียงเดาข้อมูลแล้วแฮชเทียบ ถ้าข้อมูลต้นทางสั้นหรือเดาง่าย เช่น "hello" ก็เดาเจอได้เร็ว
+        </div>
+      </section>
+
+      <!-- ==================== 0.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">0.2</span>กุญแจสาธารณะ กุญแจส่วนตัว และลายเซ็นดิจิทัล</h2>
+
+        <h3>ทำไมต้องมีกุญแจและลายเซ็น</h3>
+        <p>เมื่อถอนเงินที่ธนาคาร เราพิสูจน์ตัวตนด้วยบัตรประชาชนหรือรหัสผ่าน และธนาคารเป็นผู้ตรวจ แต่ใน Bitcoin ไม่มีใครคอยตรวจบัตร และไม่มีฐานข้อมูลกลางที่บอกว่าเหรียญไหนเป็นของใคร เจ้าของจึงต้องพิสูจน์ตัวด้วย <strong>สิ่งที่เจ้าของเท่านั้นสร้างได้ แต่ทุกคนตรวจสอบได้</strong> สิ่งนั้นคือลายเซ็นดิจิทัล ลายเซ็นนี้สร้างได้ด้วย private key เท่านั้น ใครถือ private key จึงเท่ากับเป็นเจ้าของเหรียญ ถ้า private key หาย เหรียญก็หายไปด้วย เพราะไม่มีธนาคารให้ขอรหัสใหม่</p>
+
+        <h3>กุญแจคู่ (Key pair)</h3>
+        <p>Bitcoin ใช้ <strong>กุญแจคู่ (key pair)</strong> จากวิทยาการที่เรียกว่า public-key cryptography ผู้ใช้แต่ละคนมีกุญแจสองดอกที่สัมพันธ์กันทางคณิตศาสตร์ Bitcoin ใช้กุญแจคู่นี้เพื่อลงนามเท่านั้น ไม่ได้ใช้เข้ารหัสข้อมูล</p>
+        <ul>
+          <li><strong>Private key (กุญแจส่วนตัว)</strong> คือเลขสุ่มขนาด 256 บิต ต้องเก็บเป็นความลับ ผู้ที่ถือ private key คือผู้มีสิทธิ์ใช้เหรียญ ค่านี้ต้องมากกว่า 0 และน้อยกว่า order ของเส้นโค้ง secp256k1 ค่า order นี้ต่ำกว่า 2<sup>256</sup> เล็กน้อย เลข 256 บิตเกือบทุกค่าจึงใช้เป็น private key ได้</li>
+          <li><strong>Public key (กุญแจสาธารณะ)</strong> คำนวณจาก private key บนเส้นโค้งวงรี (elliptic curve) ชื่อ <code>secp256k1</code> โดยนำจุดตั้งต้นบนเส้นโค้ง (generator point) มาคูณด้วย private key (scalar multiplication) การคำนวณทางนี้ทำได้เร็ว แต่ยังไม่มีวิธีใดย้อนจาก public key กลับไปหา private key ได้ทันในทางปฏิบัติ Public key จึงเปิดเผยให้ผู้อื่นรู้ได้</li>
+          <li><strong>Address</strong> ใช้เหมือนเลขบัญชีสำหรับรับเงิน Address แบบดั้งเดิม (P2PKH ขึ้นต้นด้วย 1…) และแบบ SegWit (P2WPKH ขึ้นต้นด้วย bc1q…) ได้จากการแฮช public key ด้วย SHA-256 แล้วตามด้วย RIPEMD-160 (HASH160) ได้ค่า 20 ไบต์ เหตุผลที่มักยกกันว่าทำไมไม่ใช้ public key เป็นเลขบัญชีตรง ๆ คือ address สั้นกว่า และเจ้าของไม่ต้องเปิดเผย public key จนกว่าจะใช้เหรียญ ส่วน address แบบอื่น เช่น P2SH (3…) และ Taproot (bc1p…) สร้างต่างออกไป บทที่ 4 หัวข้อ 4.6 อธิบายครบทุกแบบ</li>
+        </ul>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 170" role="img" aria-label="Private key แปลงเป็น Public key ด้วย secp256k1 แล้วแปลงเป็น Address ด้วย SHA-256 และ RIPEMD-160 ทุกขั้นย้อนกลับไม่ได้">
+            <defs>
+              <marker id="arrK" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+            <g font-size="14" text-anchor="middle">
+              <rect x="10" y="40" width="160" height="64" rx="10" fill="#fdf0e4" stroke="#e2761b" stroke-width="2"/>
+              <text x="90" y="68" font-weight="700" fill="#b85a0e">Private key</text>
+              <text x="90" y="90" font-size="12" fill="currentColor">เลขสุ่ม 256 บิต</text>
+              <text x="90" y="130" font-size="12" fill="#b85a0e">เก็บเป็นความลับ</text>
+
+              <rect x="300" y="40" width="160" height="64" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="380" y="68" font-weight="700" fill="currentColor">Public key</text>
+              <text x="380" y="90" font-size="12" fill="currentColor">33 ไบต์ (แบบบีบอัด)</text>
+              <text x="380" y="130" font-size="12" fill="#6b655c">เปิดเผยได้</text>
+
+              <rect x="590" y="40" width="160" height="64" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="670" y="68" font-weight="700" fill="currentColor">Address</text>
+              <text x="670" y="90" font-size="12" fill="currentColor">แฮช 20 ไบต์ (P2PKH)</text>
+              <text x="670" y="130" font-size="12" fill="#6b655c">ให้ผู้อื่นใช้โอนเงินเข้า</text>
+
+              <line x1="172" y1="72" x2="296" y2="72" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrK)"/>
+              <text x="234" y="42" font-size="12" fill="currentColor">Elliptic curve</text>
+              <text x="234" y="60" font-size="12" fill="currentColor">secp256k1</text>
+              <text x="234" y="94" font-size="12" fill="#6b655c">ย้อนกลับไม่ได้</text>
+
+              <line x1="462" y1="72" x2="586" y2="72" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrK)"/>
+              <text x="524" y="42" font-size="12" fill="currentColor">SHA-256</text>
+              <text x="524" y="60" font-size="12" fill="currentColor">+ RIPEMD-160</text>
+              <text x="524" y="94" font-size="12" fill="#6b655c">ย้อนกลับไม่ได้</text>
+            </g>
+          </svg>
+          <figcaption>ทุกลูกศรเป็นทางเดียว: จาก private key หา public key และ address ได้ แต่จาก address หรือ public key ย้อนกลับไปหา private key ไม่ได้ จึงเปิดเผย address ได้อย่างปลอดภัย ภาพนี้แสดง address แบบดั้งเดิม (P2PKH) ส่วน Taproot address (bc1p…) ใส่ public key ที่ปรับค่าแล้ว (tweaked public key) ลงใน address โดยไม่แฮช แต่ก็ยังย้อนกลับไปหา private key ไม่ได้เช่นกัน</figcaption>
+        </figure>
+
+        <h3>ลายเซ็นดิจิทัล (Digital signature)</h3>
+        <p>เมื่อต้องการใช้เหรียญ เจ้าของจะสร้างธุรกรรม แล้ว <strong>ลงนาม (sign) ด้วย private key</strong> ของตน จากนั้นแนบลายเซ็นและ public key มากับธุรกรรม สำหรับ address แบบ P2PKH โหนดจะนำ public key นั้นไปแฮช แล้วเทียบกับ address ที่รับเหรียญนั้นมา ถ้าตรงกัน โหนดจึงใช้ public key <strong>ตรวจสอบ (verify)</strong> ว่าลายเซ็นถูกต้อง ทุกขั้นนี้ไม่ต้องรู้ private key เลย</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 820 210" role="img" aria-label="ผู้ส่งนำข้อความและ private key เข้าฟังก์ชัน Sign ได้ลายเซ็น ผู้ตรวจสอบนำข้อความ ลายเซ็น และ public key เข้าฟังก์ชัน Verify ได้ผลว่าผ่านหรือไม่ผ่าน">
+            <defs>
+              <marker id="arrS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+            <g font-size="13" text-anchor="middle">
+              <!-- ฝั่งผู้ส่ง -->
+              <rect x="10" y="22" width="150" height="44" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="85" y="49" fill="currentColor">ข้อความ (ธุรกรรม)</text>
+              <rect x="10" y="122" width="150" height="44" rx="8" fill="#fdf0e4" stroke="#e2761b" stroke-width="2"/>
+              <text x="85" y="149" fill="#b85a0e" font-weight="700">Private key</text>
+
+              <rect x="210" y="72" width="90" height="44" rx="8" fill="#f0ebe1" stroke="currentColor" stroke-width="1.5"/>
+              <text x="255" y="99" font-weight="700" fill="currentColor">Sign</text>
+              <path d="M160,44 L208,86" stroke="currentColor" stroke-width="1.5" fill="none" marker-end="url(#arrS)"/>
+              <path d="M160,144 L208,102" stroke="currentColor" stroke-width="1.5" fill="none" marker-end="url(#arrS)"/>
+
+              <rect x="345" y="72" width="110" height="44" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="400" y="99" fill="currentColor">ลายเซ็น</text>
+              <line x1="300" y1="94" x2="343" y2="94" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrS)"/>
+
+              <!-- เส้นแบ่ง -->
+              <line x1="495" y1="10" x2="495" y2="180" stroke="#b8b0a2" stroke-dasharray="5 5"/>
+              <text x="250" y="200" fill="#6b655c">ฝั่งผู้ส่ง (มี private key)</text>
+              <text x="660" y="200" fill="#6b655c">ฝั่งผู้ตรวจสอบ (ใครก็ได้)</text>
+
+              <!-- ฝั่งผู้ตรวจสอบ -->
+              <line x1="455" y1="94" x2="558" y2="94" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrS)"/>
+              <rect x="535" y="8" width="150" height="36" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="610" y="31" fill="currentColor">ข้อความ (ชุดเดียวกัน)</text>
+              <rect x="535" y="144" width="150" height="36" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="610" y="167" fill="currentColor">Public key</text>
+              <line x1="610" y1="44" x2="610" y2="70" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrS)"/>
+              <line x1="610" y1="144" x2="610" y2="118" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrS)"/>
+
+              <rect x="560" y="72" width="100" height="44" rx="8" fill="#f0ebe1" stroke="currentColor" stroke-width="1.5"/>
+              <text x="610" y="99" font-weight="700" fill="currentColor">Verify</text>
+
+              <rect x="700" y="72" width="110" height="44" rx="8" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="755" y="99" fill="#1f6e5a">ผ่าน / ไม่ผ่าน</text>
+              <line x1="660" y1="94" x2="698" y2="94" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrS)"/>
+            </g>
+          </svg>
+          <figcaption>Private key ใช้เฉพาะตอนลงนาม และเจ้าของไม่ต้องส่ง private key ให้ใคร ฝั่งผู้ตรวจสอบใช้เพียงข้อความ ลายเซ็น และ public key ถ้ามีใครแก้ข้อความแม้เพียงตัวเดียว ผลการตรวจจะเป็น "ไม่ผ่าน"</figcaption>
+        </figure>
+
+        <p>ลายเซ็นดิจิทัลให้คุณสมบัติสามประการ</p>
+        <ul>
+          <li><strong>Authentication:</strong> ยืนยันได้ว่าผู้ลงนามถือ private key ที่คู่กับ public key นั้นจริง</li>
+          <li><strong>Integrity:</strong> ถ้ามีใครแก้ข้อความหลังลงนาม การตรวจสอบจะไม่ผ่าน</li>
+          <li><strong>Non-repudiation:</strong> ถ้าลายเซ็นตรวจผ่าน ผู้ลงนามจะอ้างภายหลังว่าเป็นฝีมือคนอื่นไม่ได้ เพราะลายเซ็นนี้สร้างได้ด้วย private key ของผู้ลงนามเท่านั้น</li>
+        </ul>
+
+        <p>Bitcoin ใช้อัลกอริทึมลงนาม <strong>ECDSA</strong> บนเส้นโค้ง secp256k1 และตั้งแต่อัปเกรด Taproot ในปี 2021 ก็รองรับ <strong>Schnorr signature</strong> เพิ่มด้วย Ethereum ใช้เส้นโค้ง secp256k1 เช่นเดียวกัน แต่สร้าง address ต่างออกไป คือแฮช public key ด้วย Keccak-256 แล้วใช้ 20 ไบต์สุดท้ายของผลลัพธ์</p>
+
+        <div class="callout warn">
+          <span class="h">จุดที่มักสับสน</span>
+          การลงนามไม่ได้ซ่อนเนื้อหาของธุรกรรม ธุรกรรม Bitcoin ทุกรายการเปิดเผยต่อสาธารณะ ลายเซ็นมีไว้พิสูจน์ว่าเจ้าของเหรียญอนุญาตให้โอน ไม่ได้มีไว้ปกปิดข้อมูล
+        </div>
+      </section>
+
+      <!-- ==================== 0.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">0.3</span>เชื่อมบล็อกเป็นสายโซ่ด้วยค่าแฮช (Hash chain)</h2>
+
+        <h3>ทำไมต้องเชื่อมบล็อก</h3>
+        <p>ทุกเครื่องในเครือข่าย Bitcoin เก็บสำเนาบัญชีแยกประเภท (ledger) ไว้เอง ใครที่ถือสำเนาก็แก้ไฟล์ในเครื่องตัวเองได้ เช่น ลบธุรกรรมที่ตนเคยจ่ายเงินออกไป แล้วส่งสำเนาที่แก้แล้วให้ผู้อื่น ระบบจึงต้องเก็บประวัติในรูปแบบที่ <strong>แก้ตรงไหนแล้วผู้อื่นเห็นทันที</strong> วิธีที่ Bitcoin ใช้คือผูกบล็อกเข้าด้วยกันด้วยค่าแฮช</p>
+
+        <h3>โครงสร้างของบล็อก</h3>
+        <p>Blockchain คือรายการบล็อกที่เรียงต่อกัน แต่ละบล็อกประกอบด้วยสองส่วน คือ <strong>Block header</strong> ขนาด 80 ไบต์ และ <strong>รายการธุรกรรม</strong> ค่าแฮชของบล็อกคำนวณจาก header เท่านั้น ส่วนธุรกรรมทั้งหมดสรุปรวมอยู่ใน header ในรูปค่า Merkle root</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ฟิลด์ใน Block header</th><th>ขนาด</th><th>หน้าที่</th></tr>
+            <tr><td>Version</td><td>4 ไบต์</td><td>รุ่นของกติกาที่บล็อกใช้</td></tr>
+            <tr><td><strong>Previous block hash</strong></td><td>32 ไบต์</td><td>ค่าแฮชของบล็อกก่อนหน้า ใช้ผูกบล็อกเข้าเป็นสายโซ่</td></tr>
+            <tr><td>Merkle root</td><td>32 ไบต์</td><td>ค่าแฮชที่สรุปธุรกรรมทุกรายการในบล็อก (บทที่ 3)</td></tr>
+            <tr><td>Timestamp</td><td>4 ไบต์</td><td>เวลาที่สร้างบล็อก</td></tr>
+            <tr><td>Bits (Target)</td><td>4 ไบต์</td><td>ระดับความยากที่ค่าแฮชต้องผ่าน (บทที่ 2)</td></tr>
+            <tr><td>Nonce</td><td>4 ไบต์</td><td>ตัวเลขที่ผู้ขุดปรับไปเรื่อย ๆ เพื่อหาค่าแฮชที่ผ่านเกณฑ์ (บทที่ 2)</td></tr>
+          </table>
+        </div>
+
+        <p>ฟิลด์ที่สำคัญที่สุดในหัวข้อนี้คือ <strong>Previous block hash</strong> ทุกบล็อกเก็บค่าแฮชของบล็อกก่อนหน้าไว้ใน header ของตัวเอง บล็อกจึงผูกต่อกันเป็นสายโซ่ (chain) ย้อนไปจนถึงบล็อกแรก ผลคือค่าแฮชของบล็อกล่าสุดค่าเดียวขึ้นกับข้อมูลทุกบล็อกในประวัติ ถ้าสองเครื่องมีค่าแฮชของบล็อกล่าสุดตรงกัน ประวัติทั้งหมดของทั้งสองเครื่องก็ตรงกัน โดยไม่ต้องส่งข้อมูลทั้งก้อนมาเทียบ</p>
+
+        <p>บล็อกแรกของ Bitcoin เรียกว่า <strong>Genesis block</strong> (บล็อก #0) สร้างเมื่อวันที่ 3 มกราคม 2009 ฟิลด์ Previous block hash ของบล็อกนี้เป็นศูนย์ทั้งหมด เพราะไม่มีบล็อกก่อนหน้า</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 250" role="img" aria-label="บล็อก 100 101 และ 102 เรียงต่อกัน ฟิลด์ Prev hash ของแต่ละบล็อกเก็บค่าแฮชของบล็อกก่อนหน้า">
+            <defs>
+              <marker id="arrC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="#e2761b"/>
+              </marker>
+            </defs>
+            <g font-size="13">
+              <!-- บล็อก 100 -->
+              <rect x="10" y="10" width="220" height="230" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="22" y="32" font-weight="700" fill="currentColor">บล็อก #100</text>
+              <rect x="20" y="42" width="200" height="28" rx="6" fill="#fdf0e4" stroke="#e2761b"/>
+              <text x="30" y="61" font-family="IBM Plex Mono, monospace" font-size="12" fill="#b85a0e">Hash: 00000a3f…</text>
+              <text x="22" y="92" font-size="11" fill="#6b655c">Block header</text>
+              <rect x="20" y="98" width="200" height="26" rx="5" fill="#f0ebe1"/>
+              <text x="30" y="116" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">Prev hash: 00000e8d…</text>
+              <rect x="20" y="128" width="200" height="26" rx="5" fill="#f0ebe1"/>
+              <text x="30" y="146" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">Merkle root: 7c1e…</text>
+              <rect x="20" y="158" width="200" height="26" rx="5" fill="#f0ebe1"/>
+              <text x="30" y="176" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">Timestamp · Nonce</text>
+              <rect x="20" y="196" width="200" height="32" rx="5" fill="none" stroke="#b8b0a2" stroke-dasharray="4 4"/>
+              <text x="120" y="217" text-anchor="middle" fill="#6b655c">รายการธุรกรรม</text>
+
+              <!-- บล็อก 101 -->
+              <rect x="270" y="10" width="220" height="230" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="282" y="32" font-weight="700" fill="currentColor">บล็อก #101</text>
+              <rect x="280" y="42" width="200" height="28" rx="6" fill="#fdf0e4" stroke="#e2761b"/>
+              <text x="290" y="61" font-family="IBM Plex Mono, monospace" font-size="12" fill="#b85a0e">Hash: 00000c91…</text>
+              <text x="282" y="92" font-size="11" fill="#6b655c">Block header</text>
+              <rect x="280" y="98" width="200" height="26" rx="5" fill="#fdf0e4" stroke="#e2761b"/>
+              <text x="290" y="116" font-family="IBM Plex Mono, monospace" font-size="12" fill="#b85a0e">Prev hash: 00000a3f…</text>
+              <rect x="280" y="128" width="200" height="26" rx="5" fill="#f0ebe1"/>
+              <text x="290" y="146" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">Merkle root: 3b07…</text>
+              <rect x="280" y="158" width="200" height="26" rx="5" fill="#f0ebe1"/>
+              <text x="290" y="176" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">Timestamp · Nonce</text>
+              <rect x="280" y="196" width="200" height="32" rx="5" fill="none" stroke="#b8b0a2" stroke-dasharray="4 4"/>
+              <text x="380" y="217" text-anchor="middle" fill="#6b655c">รายการธุรกรรม</text>
+
+              <!-- บล็อก 102 -->
+              <rect x="530" y="10" width="220" height="230" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="542" y="32" font-weight="700" fill="currentColor">บล็อก #102</text>
+              <rect x="540" y="42" width="200" height="28" rx="6" fill="#fdf0e4" stroke="#e2761b"/>
+              <text x="550" y="61" font-family="IBM Plex Mono, monospace" font-size="12" fill="#b85a0e">Hash: 000007e2…</text>
+              <text x="542" y="92" font-size="11" fill="#6b655c">Block header</text>
+              <rect x="540" y="98" width="200" height="26" rx="5" fill="#fdf0e4" stroke="#e2761b"/>
+              <text x="550" y="116" font-family="IBM Plex Mono, monospace" font-size="12" fill="#b85a0e">Prev hash: 00000c91…</text>
+              <rect x="540" y="128" width="200" height="26" rx="5" fill="#f0ebe1"/>
+              <text x="550" y="146" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">Merkle root: d45a…</text>
+              <rect x="540" y="158" width="200" height="26" rx="5" fill="#f0ebe1"/>
+              <text x="550" y="176" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">Timestamp · Nonce</text>
+              <rect x="540" y="196" width="200" height="32" rx="5" fill="none" stroke="#b8b0a2" stroke-dasharray="4 4"/>
+              <text x="640" y="217" text-anchor="middle" fill="#6b655c">รายการธุรกรรม</text>
+
+              <!-- ลูกศรชี้กลับ -->
+              <path d="M280,111 H250 V56 H222" fill="none" stroke="#e2761b" stroke-width="2" marker-end="url(#arrC)"/>
+              <path d="M540,111 H510 V56 H482" fill="none" stroke="#e2761b" stroke-width="2" marker-end="url(#arrC)"/>
+            </g>
+          </svg>
+          <figcaption>ฟิลด์ Prev hash ของบล็อกหนึ่งต้องตรงกับค่าแฮชของบล็อกก่อนหน้าเสมอ ช่อง Hash สีส้มด้านบนของแต่ละบล็อกไม่ใช่ฟิลด์ใน header แต่เป็นค่าที่แต่ละโหนดคำนวณเองจาก header (ค่าแฮชในภาพย่อไว้เพื่อให้อ่านง่าย ค่าจริงยาว 64 ตัวอักษร)</figcaption>
+        </figure>
+
+        <h3>ถ้ามีคนแก้ข้อมูลในบล็อกเก่า</h3>
+        <p>สมมติว่าผู้โจมตี (attacker) แก้ธุรกรรมหนึ่งรายการในบล็อก #100 ผลจะต่อเนื่องกันไปดังนี้</p>
+        <ol>
+          <li>Merkle root ของบล็อก #100 เปลี่ยน เพราะธุรกรรมเปลี่ยน</li>
+          <li>Header ของบล็อก #100 เปลี่ยน ค่าแฮชของบล็อก #100 จึงเปลี่ยนตาม</li>
+          <li>ค่า Prev hash ที่เก็บอยู่ในบล็อก #101 ไม่ตรงกับค่าแฮชใหม่ของบล็อก #100 อีกต่อไป</li>
+          <li>ถ้าผู้โจมตีแก้ Prev hash ในบล็อก #101 ให้ตรง ค่าแฮชของบล็อก #101 ก็เปลี่ยน และไม่ตรงกับ Prev hash ในบล็อก #102 อีก เป็นแบบนี้ต่อไปจนถึงบล็อกล่าสุด</li>
+        </ol>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 170" role="img" aria-label="แก้ธุรกรรมในบล็อก 100 ทำให้ค่าแฮชเปลี่ยน จนไม่ตรงกับ Prev hash ในบล็อก 101 บล็อกถัดไปทั้งหมดต้องคำนวณใหม่">
+            <defs>
+              <marker id="arrT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="#c2412d"/>
+              </marker>
+            </defs>
+            <g font-size="13">
+              <rect x="10" y="20" width="220" height="120" rx="10" fill="#fff" stroke="#c2412d" stroke-width="2"/>
+              <text x="22" y="42" font-weight="700" fill="currentColor">บล็อก #100</text>
+              <rect x="20" y="52" width="200" height="28" rx="6" fill="#fbe9e6" stroke="#c2412d"/>
+              <text x="30" y="71" font-family="IBM Plex Mono, monospace" font-size="12" fill="#c2412d">Hash: 9b2d41c7…</text>
+              <text x="30" y="98" font-size="12" fill="#6b655c">ค่าเดิม 00000a3f…</text>
+              <rect x="20" y="106" width="200" height="26" rx="5" fill="#fbe9e6"/>
+              <text x="30" y="124" font-size="12" fill="#c2412d">แก้ไขธุรกรรมแล้ว</text>
+
+              <rect x="270" y="20" width="220" height="120" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="282" y="42" font-weight="700" fill="currentColor">บล็อก #101</text>
+              <rect x="280" y="52" width="200" height="28" rx="6" fill="#f0ebe1"/>
+              <text x="290" y="71" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">Hash: 00000c91…</text>
+              <rect x="280" y="88" width="200" height="26" rx="5" fill="#fbe9e6" stroke="#c2412d"/>
+              <text x="290" y="106" font-family="IBM Plex Mono, monospace" font-size="12" fill="#c2412d">Prev hash: 00000a3f…</text>
+              <text x="282" y="132" font-size="12" fill="#c2412d">ไม่ตรงกับ 9b2d41c7…</text>
+
+              <rect x="530" y="20" width="220" height="120" rx="10" fill="#fff" stroke="#b8b0a2" stroke-width="1.5" stroke-dasharray="6 4"/>
+              <text x="542" y="42" font-weight="700" fill="#6b655c">บล็อก #102 และถัดไป</text>
+              <text x="542" y="76" font-size="12" fill="#6b655c">ถ้าจะซ่อนการแก้ไข</text>
+              <text x="542" y="96" font-size="12" fill="#6b655c">ต้องคำนวณบล็อกใหม่</text>
+              <text x="542" y="116" font-size="12" fill="#6b655c">ทุกบล็อกจนถึงล่าสุด</text>
+
+              <path d="M280,101 H250 V66 H222" fill="none" stroke="#c2412d" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrT)"/>
+              <text x="250" y="160" text-anchor="middle" font-size="12" fill="#c2412d">สายโซ่ขาด</text>
+              <line x1="490" y1="80" x2="528" y2="80" stroke="#b8b0a2" stroke-width="1.5" stroke-dasharray="5 4"/>
+            </g>
+          </svg>
+          <figcaption>ถ้าแก้บล็อกเก่าเพียงบล็อกเดียวโดยไม่คำนวณบล็อกถัดไปใหม่ สายโซ่ก็ขาดตั้งแต่จุดนั้น โหนดอื่นคำนวณแฮชซ้ำแล้วตรวจพบได้ทันที</figcaption>
+        </figure>
+
+        <div class="callout">
+          <span class="h">เชื่อมไปบทถัดไป</span>
+          การผูกบล็อกด้วยค่าแฮชอย่างเดียวช่วยให้ <strong>ตรวจพบ</strong> การแก้ไขได้ แต่ยังไม่ได้ทำให้ <strong>แก้ได้ยาก</strong> เพราะคำนวณแฮชใหม่ทุกบล็อกได้ในเวลาไม่นาน ถ้าผู้โจมตีคำนวณแฮชใหม่ครบทุกบล็อก สายโซ่ฉบับแก้จะต่อกันสมบูรณ์ โหนดอื่นรู้เพียงว่ามีสองฉบับที่ค่าแฮชของบล็อกล่าสุดไม่ตรงกัน แต่ยังบอกไม่ได้ว่าฉบับไหนจริง Proof-of-Work ในบทที่ 2 แก้ปัญหานี้ โดยกำหนดให้ผู้สร้างทุกบล็อกต้องใช้พลังประมวลผลจำนวนมาก ผู้ที่จะแก้ประวัติจึงต้องจ่ายต้นทุนนี้ใหม่ทุกบล็อกจนไม่คุ้ม สังเกตว่าค่าแฮชใหม่ 9b2d41c7… ในภาพไม่ได้ขึ้นต้นด้วยศูนย์หลายตัวเหมือนค่าเดิม บทที่ 2 จะอธิบายว่าทำไมแฮชแบบนี้จึงทำให้บล็อกไม่ผ่านเกณฑ์ตั้งแต่ต้น
+        </div>
+      </section>
+
+      <!-- ==================== 0.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">0.4</span>ปัญหาการใช้จ่ายซ้ำ (Double-spending)</h2>
+
+        <p>เมื่อจ่ายด้วยธนบัตร เงินจะออกจากมือผู้จ่ายไปอยู่ในมือผู้รับ ผู้จ่ายจึงนำธนบัตรใบเดิมไปจ่ายซ้ำไม่ได้ แต่เงินดิจิทัลเป็นเพียงข้อมูล และข้อมูลคัดลอกได้ไม่จำกัด หากไม่มีกลไกป้องกัน ผู้ถือเหรียญดิจิทัลหนึ่งเหรียญอาจส่งเหรียญเดียวกันให้คนสองคนพร้อมกัน ปัญหานี้เรียกว่า <strong>การใช้จ่ายซ้ำ (Double-spending)</strong></p>
+
+        <p>ลายเซ็นดิจิทัลในหัวข้อ 0.2 แก้ปัญหานี้ไม่ได้ ลายเซ็นพิสูจน์ได้เพียงว่าเจ้าของเหรียญอนุญาตให้โอน แต่ถ้าเจ้าของลงนามสองธุรกรรมที่ใช้เหรียญเดียวกัน ลายเซ็นในสองธุรกรรมนั้นก็ถูกต้องเหมือนกัน การเชื่อมบล็อกในหัวข้อ 0.3 ก็ยังไม่พอ เพราะสายโซ่ช่วยตรวจการแก้ประวัติที่บันทึกไปแล้ว แต่ไม่ได้ตัดสินว่าเมื่อมีสองธุรกรรมขัดกัน ควรบันทึกรายการไหน</p>
+
+        <h3>วิธีแก้แบบดั้งเดิม: ตัวกลาง</h3>
+        <p>ระบบการเงินทั่วไปแก้ปัญหานี้ด้วย <strong>ตัวกลางที่ทุกคนเชื่อถือ (Trusted third party)</strong> เช่น ธนาคาร ธนาคารถือบัญชีแยกประเภทกลาง และตรวจทุกรายการก่อนอนุมัติ วิธีนี้ใช้ได้ผล แต่มีข้อเสีย ได้แก่ ทุกคนต้องเชื่อใจตัวกลาง ต้องเสียค่าธรรมเนียม ตัวกลางยกเลิกหรือย้อนรายการได้ และถ้าตัวกลางล่ม ระบบทั้งหมดก็ใช้งานไม่ได้ (single point of failure) ข้อเสียสามข้อแรกตรงกับที่ Whitepaper ข้อ 1 ยกขึ้นมาเป็นโจทย์ (บทที่ 1) ส่วนข้อสุดท้ายเป็นเหตุผลที่มักยกเพิ่ม แต่ไม่ได้อยู่ใน Whitepaper</p>
+
+        <h3>วิธีของ Bitcoin: ทุกคนเห็นลำดับธุรกรรมเดียวกัน</h3>
+        <p>Bitcoin ไม่ใช้ตัวกลาง แต่ประกาศ (broadcast) ทุกธุรกรรมให้ทั้งเครือข่ายรู้ แล้วให้เครือข่ายตกลงร่วมกัน (consensus) ว่าธุรกรรมใดเกิดก่อน เมื่อธุรกรรมหนึ่งอยู่ในบล็อกแล้ว เครือข่ายจะปฏิเสธธุรกรรมอื่นที่ใช้เหรียญเดียวกัน</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 200" role="img" aria-label="Alice ส่งเหรียญเดียวกันในธุรกรรม A ให้ Bob และธุรกรรม B ให้ Carol เครือข่ายบันทึกธุรกรรม A ลงบล็อก และปฏิเสธธุรกรรม B">
+            <defs>
+              <marker id="arrD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+            <g font-size="13">
+              <rect x="10" y="72" width="130" height="56" rx="10" fill="#fdf0e4" stroke="#e2761b" stroke-width="2"/>
+              <text x="75" y="96" text-anchor="middle" font-weight="700" fill="#b85a0e">Alice</text>
+              <text x="75" y="116" text-anchor="middle" font-size="12" fill="currentColor">มีเหรียญ 1 BTC</text>
+
+              <rect x="210" y="20" width="220" height="50" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="320" y="41" text-anchor="middle" fill="currentColor" font-weight="700">ธุรกรรม A</text>
+              <text x="320" y="60" text-anchor="middle" font-size="12" fill="currentColor">เหรียญนี้ 1 BTC ให้ Bob</text>
+
+              <rect x="210" y="130" width="220" height="50" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.5"/>
+              <text x="320" y="151" text-anchor="middle" fill="currentColor" font-weight="700">ธุรกรรม B</text>
+              <text x="320" y="170" text-anchor="middle" font-size="12" fill="currentColor">เหรียญเดิม 1 BTC ให้ Carol</text>
+
+              <path d="M140,90 L208,48" stroke="currentColor" stroke-width="1.5" fill="none" marker-end="url(#arrD)"/>
+              <path d="M140,110 L208,152" stroke="currentColor" stroke-width="1.5" fill="none" marker-end="url(#arrD)"/>
+              <text x="160" y="104" font-size="11" fill="#6b655c">ลงนามทั้งคู่</text>
+
+              <rect x="510" y="12" width="240" height="66" rx="10" fill="#e8f5ef" stroke="#1f8a70" stroke-width="2"/>
+              <text x="630" y="38" text-anchor="middle" font-weight="700" fill="#1f6e5a">บล็อกถัดไป</text>
+              <text x="630" y="60" text-anchor="middle" font-size="12" fill="#1f6e5a">บันทึกธุรกรรม A</text>
+
+              <rect x="510" y="128" width="240" height="56" rx="10" fill="#fbe9e6" stroke="#c2412d" stroke-width="1.5" stroke-dasharray="6 4"/>
+              <text x="630" y="152" text-anchor="middle" font-weight="700" fill="#c2412d">ปฏิเสธธุรกรรม B</text>
+              <text x="630" y="172" text-anchor="middle" font-size="12" fill="#c2412d">เหรียญนี้ใช้ไปแล้ว</text>
+
+              <line x1="430" y1="45" x2="508" y2="45" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrD)"/>
+              <text x="469" y="36" text-anchor="middle" font-size="11" fill="#6b655c">เข้าบล็อกก่อน</text>
+              <line x1="430" y1="155" x2="508" y2="155" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrD)"/>
+              <text x="469" y="146" text-anchor="middle" font-size="11" fill="#6b655c">ตรวจพบซ้ำ</text>
+            </g>
+          </svg>
+          <figcaption>ธุรกรรมทั้งสองมีลายเซ็นถูกต้อง แต่ใช้เหรียญเดียวกัน เครือข่ายจึงบันทึกได้เพียงรายการเดียวและปฏิเสธอีกรายการ รายการที่นับคือรายการที่ได้อยู่ในบล็อกก่อน ไม่จำเป็นต้องเป็นรายการที่ส่งก่อน เพราะผู้ขุดเลือกเองว่าจะใส่ธุรกรรมใดลงบล็อก คำถามที่ยังเหลือคือ เมื่อไม่มีตัวกลาง เครือข่ายจะตกลงกันอย่างไรว่ารายการใดมาก่อน บทที่ 1 และบทที่ 2 จะตอบคำถามนี้</figcaption>
+        </figure>
+
+        <p>ก่อนธุรกรรมจะอยู่ในบล็อก ผู้จ่ายยังส่งธุรกรรมอีกรายการที่ใช้เหรียญเดียวกันเข้ามาแข่งได้ เช่น จ่ายค่าธรรมเนียมสูงกว่าเพื่อให้ผู้ขุดเลือกรายการใหม่แทน ผู้รับเงินจึงควรรอให้ธุรกรรมอยู่ในบล็อก และรอให้มีบล็อกต่อท้ายอีกหลายบล็อก ก่อนจะถือว่าได้รับเงินแล้ว จำนวนบล็อกนับตั้งแต่บล็อกที่มีธุรกรรมนั้นไปจนถึงบล็อกล่าสุดเรียกว่า <strong>จำนวน Confirmation</strong> ธุรกรรมที่เพิ่งเข้าบล็อกล่าสุดจึงมี 1 confirmation ยิ่งมีบล็อกต่อท้ายมาก ผู้ที่จะย้อนรายการก็ต้องสร้างบล็อกใหม่แทนมากขึ้น (หัวข้อ 0.3 และบทที่ 2) ธรรมเนียมที่ใช้กันคือถือว่า 6 confirmation (ประมาณ 1 ชั่วโมง) ปลอดภัยพอสำหรับยอดเงินขนาดใหญ่</p>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li>ฟังก์ชันแฮชแปลงข้อมูลขนาดใดก็ได้เป็นค่าความยาวคงที่ ไม่มีวิธีคำนวณย้อนกลับเป็นข้อมูลเดิม และถ้าข้อมูลเปลี่ยนเพียงเล็กน้อย ค่าแฮชจะเปลี่ยนไปจนดูไม่ออก (บิตเปลี่ยนราวครึ่งหนึ่ง) Collision มีอยู่จริง แต่ไม่มีใครหาเจอได้ในทางปฏิบัติ</li>
+          <li>Private key ใช้ลงนาม Public key ใช้ตรวจสอบ ส่วน address แบบดั้งเดิม (P2PKH) ได้จากการแฮช public key ทุกขั้นเป็นทางเดียว</li>
+          <li>ลายเซ็นดิจิทัลพิสูจน์ความเป็นเจ้าของ และทำให้ตรวจพบได้เมื่อมีใครแก้ข้อความ แต่ไม่ได้ซ่อนข้อมูล และไม่ได้ป้องกันการใช้จ่ายซ้ำ</li>
+          <li>บล็อกแต่ละบล็อกเก็บค่าแฮชของบล็อกก่อนหน้า ค่าแฮชของบล็อกล่าสุดจึงขึ้นกับประวัติทั้งหมด การแก้บล็อกเก่าทำให้สายโซ่ขาดและตรวจพบได้ แต่ต้องมี Proof-of-Work (บทที่ 2) จึงจะแก้ได้ยาก</li>
+          <li>Double-spending คือการใช้เหรียญดิจิทัลเดียวกันมากกว่าหนึ่งครั้ง Bitcoin แก้โดยให้ทั้งเครือข่ายตกลงลำดับธุรกรรมร่วมกัน (consensus) แทนการพึ่งตัวกลาง ธุรกรรมที่นับคือธุรกรรมที่ได้อยู่ในบล็อกก่อน</li>
+        </ul>
+
+        <h3>ตัวเลขที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>รายการ</th><th>ค่า</th></tr>
+            <tr><td>ความยาวผลลัพธ์ SHA-256</td><td>256 บิต = 32 ไบต์ = 64 ตัวอักษรฐานสิบหก</td></tr>
+            <tr><td>ขนาด Private key</td><td>256 บิต (มากกว่า 0 และน้อยกว่า order ของ secp256k1)</td></tr>
+            <tr><td>ขนาด Public key แบบบีบอัด</td><td>33 ไบต์</td></tr>
+            <tr><td>ขนาดค่าแฮชใน address แบบ P2PKH และ P2WPKH (HASH160)</td><td>20 ไบต์</td></tr>
+            <tr><td>ขนาด Block header</td><td>80 ไบต์</td></tr>
+            <tr><td>เส้นโค้งที่ Bitcoin และ Ethereum ใช้</td><td>secp256k1</td></tr>
+            <tr><td>Genesis block</td><td>3 มกราคม 2009</td></tr>
+            <tr><td>Confirmation ที่นิยมถือว่าปลอดภัย</td><td>6 บล็อก (ประมาณ 1 ชั่วโมง)</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. ผลลัพธ์ของ SHA-256 เมื่อเขียนเป็นเลขฐานสิบหกยาวกี่ตัวอักษร</p>
+          <ol><li>ก. 32</li><li>ข. 64</li><li>ค. 128</li><li>ง. ขึ้นกับความยาวของข้อมูลนำเข้า</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข. 64</strong> ผลลัพธ์ยาว 256 บิตเสมอ และ 1 ตัวอักษรฐานสิบหกแทน 4 บิต จึงได้ 256 ÷ 4 = 64 ตัวอักษร ข้อ ง ผิด เพราะความยาวผลลัพธ์คงที่ไม่ว่าข้อมูลนำเข้าจะยาวเท่าใด</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. คุณสมบัติใดของฟังก์ชันแฮชทำให้ผู้ขุดใน Proof-of-Work ต้องเดาค่า nonce ไปทีละค่า</p>
+          <ol><li>ก. Deterministic</li><li>ข. Collision resistance</li><li>ค. Pre-image resistance</li><li>ง. คำนวณได้เร็ว</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค. Pre-image resistance</strong> เมื่อกำหนดเป้าหมายของค่าแฮชไว้ ไม่มีวิธีคำนวณย้อนกลับว่าข้อมูลต้องเป็นอะไร ผู้ขุดจึงต้องลองค่า nonce ไปเรื่อย ๆ จนกว่าจะพบค่าที่ผ่าน ข้อนี้เป็นการขยายความจากนิยาม เพราะ Pre-image resistance พูดถึงการหาข้อมูลจากค่าแฮชค่าเดียว แต่ Proof-of-Work ต้องการค่าแฮชใดก็ได้ที่ต่ำกว่าเป้าหมาย บางตำราเรียกคุณสมบัติที่ไม่มีทางลัดในการหาข้อมูลแบบนี้ว่า puzzle friendliness ในตัวเลือกที่ให้มา ข้อ ค จึงใกล้ที่สุด</div></details>
+        </div>
+
+        <div class="q">
+          <p>3. ข้อใดกล่าวถึงลายเซ็นดิจิทัลได้ถูกต้อง</p>
+          <ol><li>ก. ลายเซ็นทำให้คนอื่นอ่านเนื้อหาธุรกรรมไม่ได้</li><li>ข. ผู้ตรวจสอบต้องรู้ private key ของผู้ลงนาม</li><li>ค. ผู้ตรวจสอบใช้ public key ยืนยันว่าลายเซ็นสร้างจาก private key ที่คู่กัน</li><li>ง. ลายเซ็นป้องกันการใช้จ่ายซ้ำได้ด้วยตัวเอง</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> ข้อ ก ผิด เพราะการลงนามไม่ได้เข้ารหัสข้อมูล ข้อ ข ผิด เพราะการตรวจสอบใช้เพียง public key ข้อ ง ผิด เพราะเจ้าของเหรียญลงนามสองธุรกรรมที่ใช้เหรียญเดียวกันได้ และลายเซ็นทั้งสองก็ถูกต้อง</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. ถ้ามีผู้แก้ไขธุรกรรมในบล็อก #100 จะเกิดอะไรขึ้นกับบล็อก #101</p>
+          <details><summary>ดูเฉลย</summary><div>เมื่อธุรกรรมเปลี่ยน Merkle root และค่าแฮชของบล็อก #100 ก็เปลี่ยนตาม ค่า Previous block hash ที่บล็อก #101 เก็บไว้จึงไม่ตรงกับค่าแฮชใหม่ สายโซ่ขาดตั้งแต่จุดนั้น โหนดอื่นจะปฏิเสธข้อมูลชุดนี้ หากผู้แก้ต้องการให้สายโซ่กลับมาต่อกันได้ ต้องสร้างบล็อก #100 ที่แก้แล้ว รวมทั้งบล็อก #101 และทุกบล็อกหลังจากนั้นใหม่ทั้งหมด (บทที่ 2 จะอธิบายว่างานนี้ใช้พลังประมวลผลมากเพียงใด)</div></details>
+        </div>
+
+        <div class="q">
+          <p>5. Double-spending คืออะไร และเหตุใดธนบัตรจึงไม่มีปัญหานี้</p>
+          <details><summary>ดูเฉลย</summary><div>Double-spending คือการใช้เงินดิจิทัลหน่วยเดียวกันมากกว่าหนึ่งครั้ง เกิดขึ้นได้เพราะข้อมูลดิจิทัลคัดลอกได้ ธนบัตรไม่มีปัญหานี้เพราะเป็นวัตถุ เมื่อจ่ายแล้วธนบัตรย้ายไปอยู่กับผู้รับ ผู้จ่ายจึงไม่มีธนบัตรใบนั้นเหลือไว้จ่ายซ้ำ</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+  <script>
+    // ทดลอง SHA-256
+    (function () {
+      const ha = document.getElementById("ha"), hb = document.getElementById("hb");
+      const oa = document.getElementById("oa"), ob = document.getElementById("ob");
+      const diff = document.getElementById("hdiff");
+      if (!window.crypto || !crypto.subtle) {
+        diff.textContent = "เบราว์เซอร์นี้คำนวณ SHA-256 ไม่ได้ ให้เปิดหน้านี้ผ่าน http://localhost";
+        return;
+      }
+      const sha256 = async (s) => {
+        const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+        return [...new Uint8Array(buf)];
+      };
+      const hex = (bytes) => bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
+      const mark = (h, other) => [...h].map((ch, i) => ch === other[i] ? ch : `<b>${ch}</b>`).join("");
+      async function update() {
+        const [a, b] = await Promise.all([sha256(ha.value), sha256(hb.value)]);
+        const xa = hex(a), xb = hex(b);
+        oa.innerHTML = mark(xa, xb);
+        ob.innerHTML = mark(xb, xa);
+        let bits = 0;
+        a.forEach((byte, i) => { let x = byte ^ b[i]; while (x) { bits += x & 1; x >>= 1; } });
+        diff.innerHTML = ha.value === hb.value
+          ? "ข้อความเหมือนกัน ค่าแฮชจึงเหมือนกันทุกบิต"
+          : `บิตที่ต่างกัน: <strong>${bits}</strong> จาก 256 บิต (${Math.round(bits / 2.56)}%)`;
+      }
+      ha.addEventListener("input", update);
+      hb.addEventListener("input", update);
+      update();
+    })();
+  </script>
+</body>
+</html>

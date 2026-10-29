@@ -1,0 +1,1028 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 8 Proof of Stake</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p2" data-chapter="ch08">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 2 Ethereum และ Smart Contract</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 8 · กลไกฉันทามติ</div>
+      <h1>Proof of Stake</h1>
+      <p class="lead">บทที่ 2 แสดงว่า Bitcoin ตัดสินว่าใครได้เขียนบล็อกถัดไปด้วยพลังประมวลผล (computing power) Ethereum เลิกใช้วิธีนั้นตั้งแต่ The Merge ในเดือนกันยายน 2022 และหันมาใช้เงินค้ำประกัน (stake) แทน บทนี้ตอบคำถามห้าข้อ ข้อแรก ทำไม Ethereum ต้องเปลี่ยน ข้อสอง stake ทำหน้าที่แทนพลังประมวลผลได้อย่างไร ข้อสาม validator ทำงานอะไรในแต่ละ slot ข้อสี่ เครือข่ายเลือกสาย (fork choice) อย่างไร และทำให้บล็อกย้อนไม่ได้อย่างไร ข้อห้า slashing แก้ปัญหา nothing-at-stake อย่างไร ปัญหานี้เกิดใน PoS แต่ไม่เกิดใน PoW</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: ถ้าไม่ใช้พลังประมวลผล จะตัดสินอย่างไรว่าใครได้เขียนบล็อก</a></li>
+        <li><a href="#s1">ข้อจำกัดของ PoW: การใช้พลังงานและการรวมศูนย์ (centralization) ที่ mining pool</a></li>
+        <li><a href="#s2">แนวคิดของ PoS: วางเงินค้ำประกันแทนการใช้พลังประมวลผล</a></li>
+        <li><a href="#s3">Validator, การวาง 32 ETH, การเลือก proposer และ attestation</a></li>
+        <li><a href="#s4">Slot, Epoch, Fork choice (LMD-GHOST) และ Finality (Casper FFG)</a></li>
+        <li><a href="#s5">Slashing และปัญหา Nothing-at-stake</a></li>
+        <li><a href="#s6">The Merge (กันยายน 2022) และการเปรียบเทียบ PoW กับ PoS</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: ถ้าไม่ใช้พลังประมวลผล จะตัดสินอย่างไรว่าใครได้เขียนบล็อก</h2>
+
+        <p>บทที่ 2 เริ่มจากคำถามว่าใครได้เขียนบล็อกถัดไป ทุกคนอยากเป็นผู้เขียน เพราะผู้เขียนได้รางวัลบล็อก (block reward) และเลือกได้ว่าธุรกรรมใดเข้าบล็อก เครือข่ายจึงต้องมีวิธีเลือกที่ผู้โกงปลอมไม่ได้ วิธีที่นับตามจำนวนโหนดหรือจำนวน IP ใช้ไม่ได้ เพราะผู้โจมตีสร้างตัวตนปลอมได้ไม่จำกัด (Sybil attack) Bitcoin แก้ปัญหานี้ด้วย Proof-of-Work คือให้น้ำหนักตามพลังประมวลผลที่ลงไปจริง พลังประมวลผลปลอมไม่ได้ เพราะต้องจ่ายค่าไฟและค่าเครื่องจริง</p>
+        <p>PoW ใช้งานได้จริงมาตั้งแต่ปี 2009 แต่ต้นทุนที่ทำให้ระบบปลอดภัยก็มีผลข้างเคียง ผู้ขุด (miner) ทั่วโลกใช้ไฟฟ้าปริมาณมหาศาล พลังขุด (hash power) ไปรวมอยู่ที่ pool ไม่กี่ราย และเมื่อผู้โจมตีทำสำเร็จ เครือข่ายก็ยึดเครื่องขุดของผู้โจมตีไม่ได้ ผู้ออกแบบ Ethereum จึงถามต่อว่า มีทรัพยากรอื่นที่ทำหน้าที่แทนพลังประมวลผลได้หรือไม่</p>
+
+        <h3>ทรัพยากรที่ใช้แทนได้ต้องมีคุณสมบัติสามข้อ</h3>
+        <ol>
+          <li><strong>มีจำกัดและสร้างเพิ่มฟรีไม่ได้:</strong> ผู้ที่แบ่งทรัพยากรไปไว้หลายบัญชีต้องไม่ได้น้ำหนักเพิ่ม จึงจะกัน Sybil attack ได้</li>
+          <li><strong>ตรวจได้จากข้อมูลบน chain:</strong> ทุกโหนดต้องตรวจเองได้ โดยไม่ต้องเชื่อข้อมูลจากโลกภายนอก</li>
+          <li><strong>ยึดคืนได้:</strong> เมื่อพิสูจน์ได้ว่าเจ้าของโกง เครือข่ายต้องยึดทรัพยากรนั้นเป็นการลงโทษได้</li>
+        </ol>
+        <p>พลังประมวลผลผ่านสองข้อแรก แต่ไม่ผ่านข้อที่สาม เพราะเครื่องขุดอยู่นอก chain ทรัพยากรที่ผ่านครบทั้งสามข้อคือตัวเหรียญเอง ถ้าโปรโตคอลกำหนดให้ผู้ที่ต้องการสร้างบล็อกนำ ETH มาล็อกไว้เป็นเงินค้ำประกัน (stake) และให้น้ำหนักตามจำนวนที่ล็อก ผู้ที่โกงก็จะเสียเงินก้อนนั้น แนวคิดนี้เรียกว่า Proof of Stake (PoS) เมื่อเปลี่ยนมาใช้ stake ก็มีคำถามตามมาอีกหลายข้อ</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำถามที่ตามมา</th><th>คำตอบของ Ethereum</th><th>หัวข้อ</th></tr>
+            <tr><td>PoW มีปัญหาอะไรจนต้องหาวิธีใหม่</td><td>การใช้พลังงาน การรวมศูนย์ที่ pool และผู้โจมตีไม่เสียเครื่องมือ</td><td>8.1</td></tr>
+            <tr><td>อะไรทำหน้าที่แทนพลังประมวลผล และกันการโกงได้อย่างไร</td><td>stake ที่ให้น้ำหนักและยึดคืนได้</td><td>8.2</td></tr>
+            <tr><td>ใครมีสิทธิ์ ใครได้เสนอบล็อกในแต่ละรอบ และคนอื่นแสดงความเห็นอย่างไร</td><td>validator, 32 ETH, การสุ่ม proposer และ attestation</td><td>8.3</td></tr>
+            <tr><td>เมื่อเกิด fork โหนดเลือกสายใด และธุรกรรมย้อนไม่ได้เมื่อใด</td><td>LMD-GHOST และ Casper FFG</td><td>8.4</td></tr>
+            <tr><td>ถ้าการลงคะแนนไม่มีต้นทุน อะไรห้ามไม่ให้ validator ลงคะแนนทุกสาย</td><td>slashing</td><td>8.5</td></tr>
+            <tr><td>เปลี่ยนกลไกของเครือข่ายที่ใช้งานอยู่โดยไม่หยุดระบบได้อย่างไร และได้อะไรมา</td><td>The Merge</td><td>8.6</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 8.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">8.1</span>ข้อจำกัดของ PoW: การใช้พลังงานและการรวมศูนย์ (centralization) ที่ mining pool</h2>
+
+        <p>ก่อนดูข้อจำกัด ต้องแยกให้ชัดว่าต้นทุนของ PoW ไม่ใช่ข้อบกพร่อง หัวข้อ 2.3 แสดงว่าผู้ที่จะแก้บล็อกเก่าต้องทำ PoW ใหม่ทั้งหมด ประวัติของ Bitcoin แก้ได้ยากก็เพราะต้นทุนนี้ ปัญหาจึงอยู่ที่ผลข้างเคียงสามข้อ ข้อแรก เงินค่าไฟไหลออกนอกระบบ ข้อสอง ต้นทุนนี้ผลักให้ผู้ขุดไปรวมกลุ่มกันที่ pool ข้อสาม เมื่อโจมตีสำเร็จ ผู้โจมตีก็ยังมีเครื่องขุดอยู่ครบ</p>
+
+        <h3>1. การใช้พลังงาน</h3>
+        <p>ผู้ขุดจะขุดต่อตราบที่รายได้จากรางวัลบล็อกและค่าธรรมเนียม (transaction fee) ยังสูงกว่าค่าไฟและค่าเครื่อง เมื่อการขุดมีกำไร ผู้ขุดรายใหม่ก็เข้ามาเพิ่ม จนกำไรส่วนเกินเหลือน้อย ปริมาณไฟฟ้าที่เครือข่ายใช้จึงขึ้นกับมูลค่าของรางวัล ไม่ได้ขึ้นกับจำนวนธุรกรรม ถ้าราคาเหรียญเพิ่มเป็นสองเท่า ผู้ขุดก็ยอมจ่ายค่าไฟเพิ่มได้อีกเกือบสองเท่า แม้จำนวนธุรกรรมจะเท่าเดิม</p>
+        <p>แหล่งประมาณการ เช่น Cambridge Bitcoin Electricity Consumption Index ให้ตัวเลขการใช้ไฟของ Bitcoin อยู่ในระดับหลักร้อย TWh ต่อปี ใกล้เคียงกับการใช้ไฟของบางประเทศ ตัวเลขนี้ขึ้นลงตามราคาเหรียญและประสิทธิภาพของเครื่องขุด จึงควรจำเป็นลำดับขนาด (order of magnitude) มากกว่าตัวเลขเจาะจง เงินค่าไฟทั้งหมดนี้จ่ายออกนอกระบบ และไม่มีส่วนใดกลับมาเป็นหลักประกันที่เครือข่ายยึดคืนได้ ผู้ขุดยังต้องขายเหรียญที่ได้มาอย่างต่อเนื่องเพื่อจ่ายค่าไฟ หัวข้อ 8.2 จะแสดงว่า PoS เก็บต้นทุนไว้ในระบบแทน</p>
+
+        <h3>2. การรวมศูนย์ที่ mining pool</h3>
+        <p>การขุดได้เปรียบตามขนาด (economies of scale) ผู้ขุดรายใหญ่ซื้อเครื่องขุดเฉพาะทาง (ASIC) ได้ราคาต่ำกว่า ตั้งฟาร์มในพื้นที่ที่ไฟฟ้าราคาถูก และได้ต้นทุนต่อแฮชต่ำกว่ารายเล็ก นอกจากนี้ รายได้ของผู้ขุดรายเล็กยังแกว่งมาก (high variance)</p>
+
+        <div class="callout">
+          <span class="h">ตัวอย่าง: ทำไมผู้ขุดรายเล็กต้องเข้า pool</span>
+          ผู้ขุดที่มีพลังขุด 0.001% ของทั้งเครือข่ายจะได้บล็อกเฉลี่ยหนึ่งบล็อกต่อ 100,000 บล็อก Bitcoin มีบล็อกใหม่ราวทุก 10 นาที ระยะรอเฉลี่ยจึงเท่ากับ 1,000,000 นาที หรือราว 1.9 ปี ถ้าโชคไม่ดีก็อาจรอนานกว่านั้นหลายปี ระหว่างนั้นต้องจ่ายค่าไฟทุกเดือน ถ้าเข้า pool ผู้ขุดรายนี้ได้ส่วนแบ่งตามสัดส่วนงานที่ส่งให้ pool ทุกครั้งที่ pool ได้บล็อก รายได้เฉลี่ยระยะยาวเท่าเดิม (หักค่าธรรมเนียมของ pool) แต่ได้รับสม่ำเสมอ
+        </div>
+
+        <p>ผู้ขุดส่วนใหญ่จึงเข้าร่วม pool ปัญหาคือผู้ขุดใน pool ไม่ได้เลือกธุรกรรมเอง ผู้ดำเนินการ pool (pool operator) เป็นผู้สร้างแม่แบบบล็อก (block template) กำหนดว่าธุรกรรมใดเข้าบล็อกและขุดต่อจากบล็อกใด แล้วส่งให้ผู้ขุดทุกรายหา nonce ในหลายช่วงที่ผ่านมา pool ที่ใหญ่ที่สุดไม่กี่รายรวมกันมีพลังขุดเกินครึ่งของเครือข่าย Bitcoin ถ้าผู้ดำเนินการ pool เหล่านี้ร่วมมือกัน ก็โจมตีแบบ 51% (หัวข้อ 2.7) ได้โดยไม่ต้องซื้อเครื่องขุดเพิ่มเลย</p>
+
+        <div class="callout warn">
+          <span class="h">จุดที่มักสับสน</span>
+          pool ไม่ได้เป็นเจ้าของพลังขุด เครื่องขุดเป็นของผู้ขุดแต่ละราย และผู้ขุดย้ายไป pool อื่นได้ทันทีถ้า pool ทำตัวผิดปกติ แรงกดดันนี้ช่วยถ่วงดุลในระยะยาว แต่ในระยะสั้น คนไม่กี่รายยังเป็นผู้ตัดสินว่าบล็อกมีธุรกรรมใดบ้าง
+        </div>
+
+        <h3>3. ผู้โจมตีไม่เสียเครื่องมือ</h3>
+        <p>ถ้าผู้โจมตี PoW ทำสำเร็จ เครือข่ายทำได้เพียงรอให้ผู้โจมตีหยุด โปรโตคอลยึดเครื่องขุดของผู้โจมตีไม่ได้ เพราะเครื่องอยู่นอก chain ผู้โจมตีจึงโจมตีซ้ำได้ด้วยเครื่องชุดเดิม ทางแก้ที่เหลืออยู่คือเปลี่ยนอัลกอริทึมของ PoW ด้วย hard fork (บทที่ 9) แต่วิธีนี้ทำให้เครื่องขุดของผู้ขุดสุจริตใช้ไม่ได้ไปด้วย chain ขนาดเล็กที่ใช้ PoW ยิ่งเสี่ยง เพราะผู้โจมตีเช่าพลังขุดมาใช้ชั่วคราวได้ เช่น Ethereum Classic เคยโดนโจมตีแบบ 51% หลายครั้งในปี 2019 และ 2020</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ข้อจำกัดของ PoW</th><th>ผลที่ตามมา</th><th>สิ่งที่ PoS ต้องการแก้</th></tr>
+            <tr><td>ใช้พลังงานสูง</td><td>ใช้ไฟตามมูลค่ารางวัล และเงินค่าไฟไหลออกนอกระบบ</td><td>ใช้ต้นทุนที่ไม่ต้องใช้ไฟฟ้าปริมาณมาก</td></tr>
+            <tr><td>ได้เปรียบตามขนาดและรวมศูนย์ที่ pool</td><td>คนไม่กี่รายกำหนดเนื้อหาของบล็อก</td><td>ลดความได้เปรียบจากฮาร์ดแวร์และค่าไฟ (แต่ PoS ก็รวมศูนย์ได้ในรูปแบบอื่น ดูหัวข้อ 8.6)</td></tr>
+            <tr><td>ยึดเครื่องมือของผู้โจมตีไม่ได้</td><td>ผู้โจมตีโจมตีซ้ำได้</td><td>ทำให้ผู้โจมตีเสียทุนที่ใช้โจมตี</td></tr>
+          </table>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          "Bitcoin ใช้ไฟมากเพราะมีธุรกรรมมาก" เป็นข้อความที่ <strong>ผิด</strong> ปริมาณไฟฟ้าขึ้นกับมูลค่าของรางวัลที่ผู้ขุดแข่งกันชิง บล็อกที่มีธุรกรรมเดียวกับบล็อกที่เต็มต้องใช้งาน PoW เท่ากัน
+        </div>
+      </section>
+
+      <!-- ==================== 8.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">8.2</span>แนวคิดของ PoS: วางเงินค้ำประกันแทนการใช้พลังประมวลผล</h2>
+
+        <p>โจทย์จากหัวข้อ 8.1 คือ ต้องการต้นทุนที่ทำให้การโจมตีแพง แต่ไม่ต้องใช้ไฟฟ้าปริมาณมาก และยึดคืนจากผู้โกงได้ PoS ตอบโจทย์นี้โดยย้ายต้นทุนจากนอก chain เข้ามาไว้ใน chain ผู้ที่ต้องการสิทธิ์สร้างและรับรองบล็อกต้องล็อก ETH ไว้กับโปรโตคอล ผู้ที่ล็อกเรียกว่า <strong>validator</strong> และเงินที่ล็อกเรียกว่า <strong>stake</strong></p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 285" role="img" aria-label="เปรียบเทียบ PoW กับ PoS ใน PoW ผู้ขุดใช้ไฟฟ้าและเครื่องขุดเพื่อสร้าง hash power ซึ่งกำหนดโอกาสได้สร้างบล็อก ต้นทุนจ่ายออกนอกระบบและผู้โกงยังเก็บเครื่องไว้ได้ ใน PoS validator ล็อก ETH เป็น stake ซึ่งกำหนดน้ำหนักและโอกาสเสนอบล็อก ต้นทุนอยู่ในระบบและโปรโตคอลยึด stake ของผู้โกงได้">
+            <defs>
+              <marker id="arrC8a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <!-- แถว PoW -->
+              <text x="16" y="44" font-weight="700" fill="#b85a10">PoW</text>
+              <text x="16" y="62" font-size="11" fill="#6b655c">Bitcoin และ</text>
+              <text x="16" y="76" font-size="11" fill="#6b655c">Ethereum ก่อน 2022</text>
+              <rect x="150" y="24" width="170" height="52" rx="8" fill="#fdf0e3" stroke="#e2761b"/>
+              <text x="235" y="46" text-anchor="middle">ไฟฟ้า + เครื่องขุด ASIC</text>
+              <text x="235" y="64" text-anchor="middle" font-size="11" fill="#6b655c">ซื้อจากโลกภายนอก</text>
+              <rect x="358" y="24" width="170" height="52" rx="8" fill="#fdf0e3" stroke="#e2761b"/>
+              <text x="443" y="46" text-anchor="middle">hash power</text>
+              <text x="443" y="64" text-anchor="middle" font-size="11" fill="#6b655c">ลองแฮชให้ได้มากที่สุด</text>
+              <rect x="566" y="24" width="178" height="52" rx="8" fill="#fdf0e3" stroke="#e2761b"/>
+              <text x="655" y="46" text-anchor="middle">โอกาสได้สร้างบล็อก</text>
+              <text x="655" y="64" text-anchor="middle" font-size="11" fill="#6b655c">ตามสัดส่วน hash power</text>
+              <g stroke="#6b655c" stroke-width="1.3" fill="none">
+                <line x1="321" y1="50" x2="355" y2="50" marker-end="url(#arrC8a)"/>
+                <line x1="529" y1="50" x2="563" y2="50" marker-end="url(#arrC8a)"/>
+              </g>
+              <text x="150" y="102" font-size="12">ต้นทุน: ค่าไฟที่จ่ายออกนอกระบบตลอดเวลา</text>
+              <text x="150" y="122" font-size="12" fill="#c2412d">ถ้าโกง: เสียค่าไฟรอบนั้น แต่เครื่องขุดยังอยู่ ผู้โจมตีใช้โจมตีซ้ำได้</text>
+
+              <line x1="16" y1="142" x2="744" y2="142" stroke="#e4ddd0"/>
+
+              <!-- แถว PoS -->
+              <text x="16" y="184" font-weight="700" fill="#4a52c0">PoS</text>
+              <text x="16" y="202" font-size="11" fill="#6b655c">Ethereum ตั้งแต่</text>
+              <text x="16" y="216" font-size="11" fill="#6b655c">กันยายน 2022</text>
+              <rect x="150" y="164" width="170" height="52" rx="8" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="235" y="186" text-anchor="middle">ETH ที่ล็อกไว้ (stake)</text>
+              <text x="235" y="204" text-anchor="middle" font-size="11" fill="#6b655c">ฝากใน deposit contract</text>
+              <rect x="358" y="164" width="170" height="52" rx="8" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="443" y="186" text-anchor="middle">น้ำหนักของ validator</text>
+              <text x="443" y="204" text-anchor="middle" font-size="11" fill="#6b655c">ตาม effective balance</text>
+              <rect x="566" y="164" width="178" height="52" rx="8" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="655" y="186" text-anchor="middle">โอกาสได้เสนอบล็อก</text>
+              <text x="655" y="204" text-anchor="middle" font-size="11" fill="#6b655c">และน้ำหนักคะแนนตาม stake</text>
+              <g stroke="#6b655c" stroke-width="1.3" fill="none">
+                <line x1="321" y1="190" x2="355" y2="190" marker-end="url(#arrC8a)"/>
+                <line x1="529" y1="190" x2="563" y2="190" marker-end="url(#arrC8a)"/>
+              </g>
+              <text x="150" y="242" font-size="12">ต้นทุน: ค่าเสียโอกาสของ ETH ที่ล็อกไว้ เงินยังอยู่ในระบบ</text>
+              <text x="150" y="262" font-size="12" fill="#c2412d">ถ้าโกง: โปรโตคอลยึด stake (slashing) ถ้าจะโจมตีอีกต้องซื้อ ETH ใหม่</text>
+            </g>
+          </svg>
+          <figcaption>PoW ใช้ทรัพยากรนอก chain เป็นน้ำหนัก ส่วน PoS ใช้ ETH ที่ล็อกไว้ใน chain ความต่างที่สำคัญที่สุดอยู่ในบรรทัดสีแดง PoS ลงโทษผู้โกงได้ด้วยการยึดทุนที่ใช้โจมตี แต่ PoW ทำไม่ได้</figcaption>
+        </figure>
+
+        <h3>สามกลไกที่ทำให้ stake ใช้แทนพลังประมวลผลได้</h3>
+        <ul>
+          <li><strong>น้ำหนักตามจำนวน stake:</strong> โอกาสได้เสนอบล็อกและน้ำหนักของคะแนนเพิ่มตามจำนวน ETH ที่ล็อก ไม่ได้เพิ่มตามจำนวนบัญชี ผู้ที่แบ่ง 64 ETH เป็น validator สองรายได้น้ำหนักรวมเท่าเดิม การสร้างตัวตนปลอมจึงไม่ได้ประโยชน์ หลักนี้ตรงกับ one-CPU-one-vote ในหัวข้อ 2.2 เพียงแต่เปลี่ยนจาก CPU เป็น ETH</li>
+          <li><strong>รางวัลสำหรับผู้ทำหน้าที่:</strong> validator ที่ออนไลน์และลงคะแนนตรงเวลาจะได้ ETH ที่โปรโตคอลออกใหม่ ผู้เสนอบล็อกได้ priority fee ด้วย (หัวข้อ 5.5) แรงจูงใจนี้ทำหน้าที่เดียวกับรางวัลบล็อกใน PoW</li>
+          <li><strong>โทษสำหรับผู้โกง:</strong> ถ้า validator ลงลายเซ็นข้อความที่ขัดกันเอง ใครก็นำลายเซ็นสองชุดนั้นมาเป็นหลักฐานได้ และโปรโตคอลจะยึด stake บางส่วนหรือทั้งหมด กลไกนี้เรียกว่า slashing (หัวข้อ 8.5) และ PoW ไม่มีกลไกที่เทียบเท่า</li>
+        </ul>
+
+        <h3>ต้นทุนของผู้โจมตีเปลี่ยนไปอย่างไร</h3>
+        <p>ใน PoW ผู้โจมตีต้องมีพลังขุดเกินครึ่ง ใน PoS ผู้โจมตีต้องถือ stake อย่างน้อยหนึ่งในสามของทั้งระบบเพื่อหยุด finality หรือเกินครึ่งเพื่อคุมว่าบล็อกใดเป็น head (รายละเอียดอยู่ในตารางหัวข้อ 8.6) ผู้โจมตีจึงต้องซื้อ ETH จำนวนมากจากตลาด และการซื้อปริมาณมากก็ดันราคาให้สูงขึ้นอีก ที่สำคัญกว่านั้น ถ้าการโจมตีต้องลงคะแนนขัดกันเอง ผู้โจมตีจะเสีย stake ที่ใช้โจมตี และต้องซื้อใหม่ถ้าจะโจมตีอีกครั้ง ต่างจาก PoW ที่ผู้โจมตีเก็บเครื่องขุดไว้ใช้ต่อได้</p>
+        <p>validator ที่สุจริตมีต้นทุนสองส่วน ส่วนแรกคือค่าเสียโอกาส (opportunity cost) เพราะนำ ETH ที่ล็อกไว้ไปใช้ทำอย่างอื่นไม่ได้ ส่วนที่สองคือค่าเครื่องและค่าไฟของคอมพิวเตอร์ทั่วไปหนึ่งเครื่อง ต้นทุนรวมจึงต่ำกว่าค่าไฟของฟาร์มขุดหลายลำดับขนาด</p>
+
+        <div class="callout warn">
+          <span class="h">จุดที่มักสับสน</span>
+          "PoS ให้ผู้ที่รวยที่สุดสร้างทุกบล็อก" ไม่ถูกต้อง โปรโตคอลสุ่มผู้เสนอบล็อก โดยให้โอกาสตามสัดส่วน stake ผู้ที่ถือ stake 1% ของทั้งระบบจะได้เสนอบล็อกราว 1% ของ slot ทั้งหมด ผลตอบแทนคาดหวังต่อ ETH ของ effective balance (หัวข้อ 8.3) จึงเท่ากันไม่ว่าจะถือมากหรือน้อย แต่รายได้จริงในระยะสั้นแกว่งตามโชค และผู้ที่มีไม่ถึง 32 ETH เปิด validator เองไม่ได้ หลักนี้เหมือน PoW ที่ผู้มีพลังขุด 1% ได้บล็อกราว 1%
+        </div>
+      </section>
+
+      <!-- ==================== 8.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">8.3</span>Validator, การวาง 32 ETH, การเลือก proposer และ attestation</h2>
+
+        <p>หัวข้อ 8.2 บอกเพียงว่าน้ำหนักมาจาก stake แต่ยังไม่ตอบว่าใครสร้างบล็อกในแต่ละรอบ PoW ไม่ต้องตอบคำถามนี้ เพราะการหา nonce เป็นการจับสลากอยู่แล้ว ผู้ที่หาเจอก่อนได้สร้างบล็อก และความยากทำให้บล็อกเกิดห่างกันพอสมควร ใน PoS การสร้างบล็อกไม่มีต้นทุน ถ้าเปิดให้ทุก validator สร้างบล็อกได้ตลอดเวลา ก็จะมีบล็อกแข่งกันหลายพันบล็อกพร้อมกัน PoS จึงต้องกำหนดตารางเวลาและผู้มีสิทธิ์ให้ชัด Ethereum แบ่งเวลาเป็น slot ละ 12 วินาที สุ่มผู้เสนอบล็อก (proposer) หนึ่งรายต่อ slot และให้ validator ที่เหลือแสดงความเห็นด้วยคะแนนรับรอง (attestation)</p>
+
+        <h3>ขั้นตอนการเป็น validator</h3>
+        <ol>
+          <li>ฝาก 32 ETH เข้า <strong>deposit contract</strong> บน Ethereum พร้อม public key ของ validator และปลายทางสำหรับถอนเงิน (withdrawal credentials)</li>
+          <li>รอในคิว (activation queue) โปรโตคอลจำกัดปริมาณ stake ที่เข้าและออกได้ในแต่ละ epoch (churn limit) หลัง Pectra ขีดจำกัดนี้นับเป็นจำนวน ETH ไม่ใช่จำนวน validator เพราะ validator หนึ่งรายมี balance ได้ถึง 2,048 ETH นอกจากนี้ validator ที่ออกจากระบบแล้วยังต้องรออีกราว 256 epoch (ราว 27 ชั่วโมง) ก่อนถอนเงินได้ ถ้าปล่อยให้เข้าออกและถอนได้ทันที จะเกิดปัญหาสองข้อ ข้อแรก ผู้โจมตีจะถอน stake ออกก่อนที่ใครจะส่งหลักฐานการโกงได้ ข้อสอง ชุด validator ที่ลงคะแนน finality จะเปลี่ยนไปมากในเวลาสั้น ๆ จนหลักประกันในหัวข้อ 8.4 ใช้ไม่ได้ หลักประกันนั้นบอกว่า ถ้าจะย้อน finality ต้องมี validator อย่างน้อยหนึ่งในสามที่ลงคะแนนขัดกันและยังมี stake ให้ยึด</li>
+          <li>รันซอฟต์แวร์สามส่วนตลอดเวลา ได้แก่ execution client (เช่น Geth) ที่รัน EVM และเก็บ state, consensus client (เช่น Lighthouse หรือ Prysm) ที่ติดตาม Beacon Chain หรือ chain ฝั่ง PoS ที่เก็บข้อมูล validator และคะแนน (ดูหัวข้อ 8.6) และ validator client ที่ถือ key และลงลายเซ็น</li>
+        </ol>
+
+        <h3>ทำไมต้อง 32 ETH</h3>
+        <p>ตัวเลขนี้เป็นการชั่งน้ำหนัก (trade-off) ระหว่างสองเป้าหมาย คือ ให้คนทั่วไปเข้าร่วมได้ และให้จำนวนลายเซ็นที่ทุกโหนดต้องตรวจไม่มากเกินไป เหตุผลต่อไปนี้เป็นคำอธิบายที่ใช้กันทั่วไป ไม่ได้มาจากสูตรตายตัว ถ้าขั้นต่ำต่ำมาก จะมี validator จำนวนมหาศาล และทุกโหนดต้องรับและตรวจลายเซ็นของทุกรายในทุก epoch ถ้าขั้นต่ำสูงมาก คนทั่วไปเข้าร่วมไม่ได้ และ validator จะกระจุกอยู่กับผู้ถือรายใหญ่ ผู้ออกแบบเลือก 32 ETH เพราะทั้งสองด้านยังรับได้ นอกจากนี้ Ethereum ใช้ลายเซ็นแบบ <strong>BLS</strong> ที่รวมลายเซ็นหลายพันรายการเป็นลายเซ็นเดียว (signature aggregation) ได้ เครือข่ายจึงรองรับ validator จำนวนมากได้</p>
+        <p>น้ำหนักที่โปรโตคอลใช้คิดรางวัลและคะแนนเรียกว่า <strong>effective balance</strong> ค่านี้ปัดจากยอดเงินจริงเป็นจำนวนเต็ม ETH และจะเปลี่ยนเมื่อยอดเงินจริงขยับเกินช่วงที่กำหนดเท่านั้น โปรโตคอลจึงไม่ต้องคำนวณน้ำหนักใหม่ทุกครั้งที่ validator ได้รางวัลเล็กน้อย effective balance เดิมมีเพดานที่ 32 ETH ผู้ที่มี 320 ETH จึงต้องเปิด validator 10 ราย การอัปเกรด Pectra (พฤษภาคม 2025) ขยายเพดานเป็น 2,048 ETH สำหรับ validator ที่เลือกใช้ withdrawal credentials แบบใหม่ ผู้ถือรายใหญ่จึงรวมหลาย validator เป็นรายเดียวได้ และเครือข่ายมีลายเซ็นต้องตรวจน้อยลง ขั้นต่ำสำหรับเปิด validator ยังเป็น 32 ETH เท่าเดิม</p>
+
+        <h3>หน้าที่ของ validator</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>หน้าที่</th><th>ความถี่</th><th>สิ่งที่ทำ</th><th>สิ่งที่ได้</th></tr>
+            <tr><td>เสนอบล็อก (proposer)</td><td>นาน ๆ ครั้ง ตามผลการสุ่ม</td><td>เลือกธุรกรรม สร้างบล็อก และลงลายเซ็น</td><td>รางวัลจากโปรโตคอล, priority fee และรายได้เพิ่มจากการเลือกและจัดลำดับธุรกรรม (MEV, maximal extractable value)</td></tr>
+            <tr><td>รับรองบล็อก (attester)</td><td>1 ครั้งต่อ epoch</td><td>ลงคะแนนให้ head ของสาย และให้ checkpoint</td><td>รางวัล attestation ซึ่งเป็นรายได้หลัก</td></tr>
+            <tr><td>sync committee</td><td>สุ่ม 512 รายต่อรอบ รอบละราว 27 ชั่วโมง</td><td>ลงลายเซ็น header ทุก slot ให้ light client ใช้ตรวจ</td><td>รางวัลเพิ่มระหว่างอยู่ในรอบ</td></tr>
+          </table>
+        </div>
+
+        <h3>การสุ่ม proposer</h3>
+        <p>โปรโตคอลต้องสุ่ม proposer ให้คาดเดาล่วงหน้าได้ยาก และต้องไม่ให้ใครเลือกตัวเองได้ ถ้ารู้รายชื่อล่วงหน้านาน ผู้โจมตีจะส่งข้อมูลขยะจำนวนมากใส่ proposer ของ slot ที่กำลังจะมาถึงจนออฟไลน์ (denial of service, DoS) ถ้าเลือกตัวเองได้ ผู้โจมตีก็จะได้สร้างบล็อกติดกันหลายบล็อก</p>
+        <p>Ethereum ใช้ค่าสุ่มชื่อ <strong>RANDAO</strong> proposer ทุกรายต้องใส่ค่า <code>randao_reveal</code> ลงในบล็อก proposer สร้างค่านี้โดยนำเลข epoch ปัจจุบันมาลงลายเซ็น BLS ด้วย key ของตน ถ้าใช้ key เดียวกันลงลายเซ็นให้ข้อความเดียวกัน ลายเซ็น BLS จะออกมาเป็นค่าเดียวเสมอ (deterministic) proposer จึงลองลงลายเซ็นหลายครั้งเพื่อเลือกค่าที่ตนชอบไม่ได้ ทางเดียวที่ proposer ใช้บิดค่าสุ่มได้คือไม่เสนอบล็อกเลย และต้องยอมเสียรางวัลของ slot นั้น โปรโตคอลนำค่าจากทุกบล็อกมารวมเป็นค่าสุ่มสะสม (RANDAO mix) แล้วใช้ค่าสุ่มสะสมกำหนด proposer และ committee ของ epoch ข้างหน้า โอกาสที่ validator รายหนึ่งจะได้เป็น proposer ของ slot หนึ่งเท่ากับ effective balance ของรายนั้นหารด้วย effective balance รวมทั้งระบบ</p>
+        <p>สมมติว่ามี validator 1,000,000 ราย และทุกรายมี effective balance เท่ากัน แต่ละรายจะได้เสนอบล็อกเฉลี่ยหนึ่งครั้งต่อ 1,000,000 slot หรือราว 139 วัน รายได้หลักของ validator ทั่วไปจึงมาจาก attestation ที่ทำทุก epoch ไม่ได้มาจากการเสนอบล็อก</p>
+        <p>ถ้า proposer ของ slot ใดออฟไลน์ slot นั้นจะไม่มีบล็อก (missed slot) และ slot ถัดไปเริ่มตามเวลาเดิม เลข slot กับเลขบล็อกจึงไม่เท่ากัน</p>
+
+        <h3>Attestation: คะแนนรับรองจาก validator ที่เหลือ</h3>
+        <p>บล็อกที่ proposer เสนอยังไม่มีน้ำหนักในตัวเอง น้ำหนักมาจาก validator อื่นที่ตรวจบล็อกแล้วลงคะแนนรับรอง ถ้าให้ validator ทุกรายลงคะแนนทุก slot เครือข่ายจะมีข้อความมากเกินไป ในแต่ละ epoch โปรโตคอลจึงสุ่มแบ่ง validator ทั้งหมดเป็น 32 กลุ่ม กลุ่มละหนึ่ง slot แต่ละกลุ่มแบ่งย่อยเป็น <strong>committee</strong> โดยตั้งเป้าให้แต่ละ committee มีอย่างน้อย 128 ราย committee ที่ใหญ่พอทำให้ผู้โจมตีที่ถือ stake ส่วนน้อยมีโอกาสต่ำมากที่จะสุ่มได้เสียงข้างมากใน committee ใด committee หนึ่ง validator แต่ละรายจึงลงคะแนนหนึ่งครั้งต่อ epoch และทุกรายได้ลงคะแนนครบภายในหนึ่ง epoch</p>
+        <p>attestation หนึ่งชุดมีคะแนนสองแบบ คือ คะแนน head (<code>beacon_block_root</code>) ที่ใช้กับ LMD-GHOST และคะแนน source → target ที่ใช้กับ Casper FFG ทั้งสองกลไกอธิบายในหัวข้อ 8.4 คำที่ควรรู้ก่อนมีสองคำ head คือบล็อกปลายสุดของสายที่โหนดถือว่าถูกต้อง ส่วน checkpoint คือบล็อกแรกของแต่ละ epoch ตารางนี้แสดงทุกช่องของ attestation</p>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ส่วนของ attestation</th><th>ความหมาย</th><th>ใช้กับ</th></tr>
+            <tr><td><code>slot</code> และ <code>index</code></td><td>ระบุ slot และ committee ของผู้ลงคะแนน (หลัง Pectra ฟิลด์ <code>index</code> เป็น 0 เสมอ และระบุ committee ด้วย <code>committee_bits</code> แทน)</td><td>ตรวจว่ามีสิทธิ์ลงคะแนนใน slot นี้</td></tr>
+            <tr><td><code>beacon_block_root</code></td><td>บล็อกที่ validator เห็นว่าเป็น head ของสาย</td><td>LMD-GHOST</td></tr>
+            <tr><td><code>source</code></td><td>checkpoint ที่ justified ล่าสุดเท่าที่ validator รู้</td><td>Casper FFG</td></tr>
+            <tr><td><code>target</code></td><td>checkpoint ของ epoch ปัจจุบัน</td><td>Casper FFG</td></tr>
+            <tr><td>ลายเซ็น BLS</td><td>รวมกับลายเซ็นของคนอื่นใน committee เดียวกันได้</td><td>ตรวจผู้ลงคะแนนและลดขนาดข้อมูล</td></tr>
+          </table>
+        </div>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 325" role="img" aria-label="หนึ่ง epoch มี 32 slot slot ละ 12 วินาที บล็อกแรกของ epoch เป็น checkpoint slot ที่ proposer ออฟไลน์จะว่าง ภายในหนึ่ง slot proposer เผยแพร่บล็อกที่วินาทีที่ 0 committee ส่ง attestation ราววินาทีที่ 4 aggregator รวมลายเซ็นราววินาทีที่ 8 และ slot ถัดไปเริ่มที่วินาทีที่ 12">
+            <g font-size="13" fill="currentColor">
+              <text x="16" y="22" font-weight="700">หนึ่ง epoch = 32 slot × 12 วินาที = 6.4 นาที</text>
+              <text x="721" y="31" text-anchor="middle" font-size="11" fill="#4a52c0">N+1</text>
+              <g stroke-width="1.2">
+                <rect x="30" y="36" width="19" height="30" rx="3" fill="#eceefb" stroke="#5a63d8" stroke-width="2.2"/>
+                <rect x="51" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="72" y="36" width="19" height="30" rx="3" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.8"/>
+                <rect x="93" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="114" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="135" y="36" width="19" height="30" rx="3" fill="none" stroke="#b9b1a3" stroke-dasharray="3 3"/>
+                <rect x="156" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="177" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="198" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="219" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="240" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="261" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="282" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="303" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="324" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="345" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="366" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="387" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="408" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="429" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="450" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="471" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="492" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="513" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="534" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="555" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="576" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="597" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="618" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="639" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="660" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="681" y="36" width="19" height="30" rx="3" fill="#fff" stroke="#b9b1a3"/>
+                <rect x="712" y="36" width="19" height="30" rx="3" fill="#eceefb" stroke="#5a63d8" stroke-width="2.2"/>
+              </g>
+              <text x="39.5" y="82" text-anchor="middle" font-size="11" fill="#6b655c">slot 0</text>
+              <text x="690.5" y="82" text-anchor="middle" font-size="11" fill="#6b655c">slot 31</text>
+              <text x="30" y="100" font-size="11" fill="#4a52c0">กรอบสีน้ำเงิน: checkpoint = บล็อกแรกของ epoch</text>
+              <line x1="144.5" y1="68" x2="144.5" y2="106" stroke="#b9b1a3"/>
+              <text x="150" y="118" font-size="11" fill="#6b655c">slot 5 ว่าง: proposer ออฟไลน์ (missed slot) slot ถัดไปเริ่มตามเวลาเดิม</text>
+              <text x="16" y="140" font-size="12">validator ทั้งหมดสุ่มแบ่งเป็น 32 กลุ่มต่อ epoch กลุ่มละหนึ่ง slot ทุกรายลงคะแนน (attest) หนึ่งครั้งต่อ epoch</text>
+
+              <line x1="16" y1="156" x2="744" y2="156" stroke="#e4ddd0"/>
+
+              <text x="16" y="182" font-weight="700" fill="#1f6e5a">ภายใน slot หนึ่ง (เช่น slot 2 ที่ไฮไลต์สีเขียว) ยาว 12 วินาที</text>
+              <line x1="60" y1="240" x2="700" y2="240" stroke="currentColor" stroke-width="1.3"/>
+              <g stroke="currentColor" stroke-width="1.3">
+                <line x1="60" y1="234" x2="60" y2="246"/>
+                <line x1="273" y1="234" x2="273" y2="246"/>
+                <line x1="487" y1="234" x2="487" y2="246"/>
+                <line x1="700" y1="234" x2="700" y2="246"/>
+              </g>
+              <circle cx="60" cy="240" r="5" fill="#1f8a70"/>
+              <circle cx="273" cy="240" r="5" fill="#5a63d8"/>
+              <circle cx="487" cy="240" r="5" fill="#5a63d8"/>
+              <text x="60" y="210" font-size="12">proposer เผยแพร่บล็อก</text>
+              <text x="60" y="226" font-size="11" fill="#6b655c">ที่รวมธุรกรรมแล้ว</text>
+              <text x="273" y="210" text-anchor="middle" font-size="12">committee ของ slot นี้</text>
+              <text x="273" y="226" text-anchor="middle" font-size="11" fill="#6b655c">ส่ง attestation</text>
+              <text x="487" y="210" text-anchor="middle" font-size="12">aggregator รวมลายเซ็น</text>
+              <text x="487" y="226" text-anchor="middle" font-size="11" fill="#6b655c">เป็นชุดเดียวต่อ committee</text>
+              <text x="700" y="210" text-anchor="end" font-size="12">slot ถัดไปเริ่ม</text>
+              <text x="700" y="226" text-anchor="end" font-size="11" fill="#6b655c">proposer รายใหม่</text>
+              <text x="60" y="262" text-anchor="middle" font-size="11" fill="#6b655c">0 วินาที</text>
+              <text x="273" y="262" text-anchor="middle" font-size="11" fill="#6b655c">ราว 4</text>
+              <text x="487" y="262" text-anchor="middle" font-size="11" fill="#6b655c">ราว 8</text>
+              <text x="700" y="262" text-anchor="middle" font-size="11" fill="#6b655c">12</text>
+              <text x="16" y="292" font-size="12">attestation หนึ่งชุด = คะแนน head (ใช้กับ LMD-GHOST) + คะแนน source → target (ใช้กับ Casper FFG) + ลายเซ็น BLS</text>
+              <text x="16" y="312" font-size="11" fill="#6b655c">เหตุที่รอถึงราววินาทีที่ 4: ให้บล็อกกระจายไปถึงโหนดส่วนใหญ่ก่อน validator จะได้ลงคะแนนให้บล็อกที่ตนเห็นแล้ว</text>
+            </g>
+          </svg>
+          <figcaption>หนึ่ง epoch มี 32 slot และ validator ทุกรายลงคะแนนครบหนึ่งรอบภายใน epoch นั้น slot ที่ proposer ออฟไลน์จะว่างไป แต่เวลาของ slot ถัดไปไม่เลื่อน ภายในแต่ละ slot มีลำดับงานตายตัว คือ เสนอบล็อก ลงคะแนน แล้วรวมลายเซ็น</figcaption>
+        </figure>
+      </section>
+
+      <!-- ==================== 8.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">8.4</span>Slot, Epoch, Fork choice (LMD-GHOST) และ Finality (Casper FFG)</h2>
+
+        <p>เมื่อมี attestation แล้ว ยังเหลือคำถามสองข้อที่ต้องการคำตอบต่างกัน ข้อแรก ตอนนี้ head ของสาย หรือบล็อกปลายสุดของสายที่โหนดถือว่าถูกต้อง คือบล็อกใด โหนดต้องตอบได้ทุก 12 วินาที แม้เครือข่ายจะช้าหรือ validator บางส่วนออฟไลน์ ถ้าตอบไม่ได้ chain จะหยุดเดิน คุณสมบัตินี้เรียกว่า <strong>liveness</strong> ข้อสอง ธุรกรรมที่เห็นแล้วจะย้อนไม่ได้เมื่อใด exchange หรือผู้รับเงินก้อนใหญ่ต้องการคำตอบที่แน่นอนจริง ไม่ใช่แค่รู้ว่าโอกาสย้อนต่ำ คุณสมบัตินี้เรียกว่า <strong>safety</strong></p>
+        <p>Bitcoin ใช้กฎเดียวตอบทั้งสองข้อ จึงได้เพียงความแน่นอนเชิงความน่าจะเป็น (probabilistic finality) Ethereum แยกงานเป็นสองกลไก LMD-GHOST เลือก head ได้ทุก slot ส่วน Casper FFG ทำให้ checkpoint ย้อนไม่ได้ ชื่อรวมของสองกลไกนี้คือ <strong>Gasper</strong></p>
+
+        <h3>Slot และ epoch</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>หน่วยเวลา</th><th>ความยาว</th><th>เกิดอะไรขึ้น</th></tr>
+            <tr><td>slot</td><td>12 วินาที</td><td>proposer หนึ่งราย มีบล็อกได้ไม่เกินหนึ่งบล็อก</td></tr>
+            <tr><td>epoch</td><td>32 slot = 384 วินาที = 6.4 นาที</td><td>validator ทุกรายลงคะแนนครบหนึ่งรอบ บล็อกแรกของ epoch เป็น checkpoint</td></tr>
+            <tr><td>finality ในสภาพปกติ</td><td>ราว 2 epoch = 12.8 นาที</td><td>checkpoint finalized และย้อนไม่ได้อีก</td></tr>
+          </table>
+        </div>
+        <p>กลไก finality (Casper FFG ด้านล่าง) ต้องการคะแนนจาก stake อย่างน้อยสองในสามของทั้งระบบ ถ้าให้ทุกรายลงคะแนนแบบนี้ทุก slot เครือข่ายจะมีข้อความมากเกินไป Ethereum จึงรวม 32 slot เป็นหนึ่ง epoch แต่ละรายลงคะแนนครั้งเดียวต่อ epoch และทุกรายลงคะแนนให้จุดอ้างอิงเดียวกัน คือบล็อกแรกของ epoch จุดนี้คือ checkpoint ที่เห็นในหัวข้อ 8.3 ถ้า slot แรกของ epoch ว่าง checkpoint คือบล็อกล่าสุดก่อนหน้านั้น</p>
+
+        <h3>LMD-GHOST: เลือก head จากน้ำหนักคะแนน</h3>
+        <p>หัวข้อ 5.4 อธิบายไว้แล้วว่า PoS ใช้ความยาวของสายตัดสินไม่ได้ เพราะการสร้างบล็อกไม่มีต้นทุน ผู้โจมตีจะสร้างสายยาวเท่าใดก็ได้ LMD-GHOST จึงนับคะแนนจาก validator แทน ชื่อของกฎนี้มีสองส่วน</p>
+        <ul>
+          <li><strong>LMD (Latest Message Driven):</strong> นับเฉพาะ attestation ล่าสุดของ validator แต่ละราย ถ้านับทุกคะแนนที่เคยลง validator ที่เปลี่ยนใจหลายครั้งจะมีน้ำหนักหลายเท่า</li>
+          <li><strong>GHOST (Greedy Heaviest Observed SubTree):</strong> เริ่มจาก checkpoint ที่ justified ล่าสุด (ความหมายของ justified อยู่ในหัวข้อย่อย Casper FFG ด้านล่าง) เมื่อเจอจุดแยก ให้รวมคะแนนของทุกบล็อกในแต่ละกิ่ง (subtree) แล้วเลือกกิ่งที่หนักกว่า ทำแบบนี้ไปทีละจุดแยกจนถึงบล็อกที่ไม่มีบล็อกลูก คำว่า greedy หมายถึงการตัดสินที่จุดแยกทีละจุดแบบนี้ โดยไม่ย้อนกลับไปพิจารณาจุดเดิมอีก น้ำหนักของกิ่งคือผลรวมของ stake ที่ลงคะแนนให้บล็อกใดก็ได้ในกิ่งนั้น เหตุผลคือ validator ที่ลงคะแนนให้บล็อกลูกก็ยอมรับบล็อกทุกบล็อกที่อยู่ก่อนหน้าบล็อกลูกนั้นไปด้วย</li>
+        </ul>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 330" role="img" aria-label="ตัวอย่าง LMD-GHOST จากบล็อก A แยกเป็นกิ่ง B น้ำหนักรวม 60 เปอร์เซ็นต์ และกิ่ง C น้ำหนักรวม 40 เปอร์เซ็นต์ กิ่ง C ยาวกว่าคือ C D E แต่ GHOST เลือก B แล้วเลือก F ซึ่งได้ 30 เปอร์เซ็นต์มากกว่า G ที่ได้ 20 เปอร์เซ็นต์ head จึงเป็น F">
+            <defs>
+              <marker id="arrC8g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+              <marker id="arrC8gG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f8a70"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <!-- เส้นเชื่อม -->
+              <g fill="none">
+                <line x1="116" y1="150" x2="187" y2="84" stroke="#1f8a70" stroke-width="2" marker-end="url(#arrC8gG)"/>
+                <line x1="116" y1="150" x2="187" y2="216" stroke="#6b655c" stroke-width="1.2" marker-end="url(#arrC8g)"/>
+                <line x1="286" y1="82" x2="367" y2="44" stroke="#1f8a70" stroke-width="2" marker-end="url(#arrC8gG)"/>
+                <line x1="286" y1="82" x2="367" y2="120" stroke="#6b655c" stroke-width="1.2" marker-end="url(#arrC8g)"/>
+                <line x1="286" y1="218" x2="367" y2="218" stroke="#6b655c" stroke-width="1.2" marker-end="url(#arrC8g)"/>
+                <line x1="466" y1="218" x2="547" y2="218" stroke="#6b655c" stroke-width="1.2" marker-end="url(#arrC8g)"/>
+              </g>
+              <!-- บล็อก -->
+              <rect x="20" y="128" width="96" height="44" rx="6" fill="#eceefb" stroke="#5a63d8" stroke-width="1.8"/>
+              <text x="68" y="146" text-anchor="middle" font-weight="700">A</text>
+              <text x="68" y="163" text-anchor="middle" font-size="11" fill="#4a52c0">justified ล่าสุด</text>
+
+              <rect x="190" y="60" width="96" height="44" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.8"/>
+              <text x="238" y="78" text-anchor="middle" font-weight="700">B</text>
+              <text x="238" y="95" text-anchor="middle" font-size="11">คะแนน 10%</text>
+              <text x="238" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#1f6e5a">กิ่ง B รวม 60%</text>
+
+              <rect x="190" y="196" width="96" height="44" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="238" y="214" text-anchor="middle" font-weight="700">C</text>
+              <text x="238" y="231" text-anchor="middle" font-size="11">คะแนน 5%</text>
+              <text x="238" y="256" text-anchor="middle" font-size="12" font-weight="700" fill="#6b655c">กิ่ง C รวม 40%</text>
+
+              <rect x="370" y="20" width="96" height="44" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.8"/>
+              <text x="418" y="38" text-anchor="middle" font-weight="700">F</text>
+              <text x="418" y="55" text-anchor="middle" font-size="11">คะแนน 30%</text>
+              <text x="418" y="13" text-anchor="middle" font-size="11" font-weight="700" fill="#1f6e5a">head ที่เลือก</text>
+              <text x="474" y="46" font-size="11" fill="#1f6e5a">รวม 30%</text>
+
+              <rect x="370" y="100" width="96" height="44" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="418" y="118" text-anchor="middle" font-weight="700">G</text>
+              <text x="418" y="135" text-anchor="middle" font-size="11">คะแนน 20%</text>
+              <text x="474" y="126" font-size="11" fill="#6b655c">รวม 20%</text>
+
+              <rect x="370" y="196" width="96" height="44" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="418" y="214" text-anchor="middle" font-weight="700">D</text>
+              <text x="418" y="231" text-anchor="middle" font-size="11">คะแนน 15%</text>
+
+              <rect x="550" y="196" width="96" height="44" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="598" y="214" text-anchor="middle" font-weight="700">E</text>
+              <text x="598" y="231" text-anchor="middle" font-size="11">คะแนน 20%</text>
+
+              <!-- สายที่ยาวที่สุด -->
+              <line x1="190" y1="272" x2="646" y2="272" stroke="#e2761b" stroke-width="1.5" stroke-dasharray="6 4"/>
+              <text x="418" y="290" text-anchor="middle" font-size="12" fill="#b85a0e">สายที่ยาวที่สุดคือ A–C–D–E (3 บล็อกต่อจาก A) แต่มีน้ำหนักรวมเพียง 40%</text>
+
+              <!-- ขั้นตอน -->
+              <text x="560" y="40" font-size="12" font-weight="700">ขั้นตอนของ GHOST</text>
+              <text x="560" y="62" font-size="12">1. ที่ A เลือก B (60% &gt; 40%)</text>
+              <text x="560" y="84" font-size="12">2. ที่ B เลือก F (30% &gt; 20%)</text>
+              <text x="560" y="106" font-size="12">3. F ไม่มีบล็อกลูก</text>
+              <text x="574" y="124" font-size="12">head จึงเป็น F</text>
+
+              <text x="16" y="318" font-size="11" fill="#6b655c">คะแนน = stake ของ validator ที่ attestation ล่าสุดชี้มาที่บล็อกนั้น  น้ำหนักกิ่ง = คะแนนของบล็อกนั้นรวมกับบล็อกลูกหลานทั้งหมด</text>
+            </g>
+          </svg>
+          <figcaption>LMD-GHOST ไม่สนใจว่ากิ่งใดยาวกว่า กิ่ง C มีบล็อกมากกว่าแต่มี stake สนับสนุนรวมเพียง 40% กิ่ง B มีบล็อกน้อยกว่าแต่ได้ 60% GHOST จึงเลือก B แล้วเลือก F ภายในกิ่ง B ผู้โจมตีที่สร้างบล็อกเพิ่มจำนวนมากโดยไม่มีคะแนนรองรับจึงแซงไม่ได้</figcaption>
+        </figure>
+
+        <h3>Casper FFG: ทำให้ checkpoint ย้อนไม่ได้</h3>
+        <p>LMD-GHOST ให้คำตอบเร็ว แต่คำตอบเปลี่ยนได้ทุกครั้งที่คะแนนเปลี่ยน ผู้รับเงินจึงยังไม่แน่ใจว่าธุรกรรมจะอยู่ตลอดไป Casper FFG (Friendly Finality Gadget) เพิ่มจุดที่โหนดจะไม่ย้อนกลับไปอีก โดยทำงานเป็นสองขั้น</p>
+        <ol>
+          <li><strong>Justified:</strong> attestation ทุกชุดมีคู่ source → target เงื่อนไขมีสองข้อ ข้อแรก source ต้องเป็น checkpoint ที่ justified อยู่แล้ว ข้อสอง validator ที่ถือ stake รวมกันอย่างน้อยสองในสามของทั้งระบบต้องลงคะแนนคู่ source → target เดียวกัน เมื่อครบทั้งสองข้อ checkpoint ที่เป็น target จะ justified</li>
+          <li><strong>Finalized:</strong> ให้ checkpoint A justified แล้ว ถ้า checkpoint ของ epoch ถัดจาก A ทันที justified ด้วยคะแนนที่ใช้ A เป็น source ตัว A จะ finalized</li>
+        </ol>
+        <p>เหตุที่ต้องมีสองขั้นคือ ขั้น justified บอกได้แค่ว่า stake สองในสามเห็นด้วยกับ A แต่ยังไม่บอกว่า validator เหล่านั้นรู้แล้วว่า A justified เมื่อ stake สองในสามลงคะแนนรอบถัดไปโดยใช้ A เป็น source ก็แปลว่า validator กลุ่มนี้รับรู้และผูกตัวเองไว้กับ A แล้ว หลังจากนี้ ถ้าจะไปลงคะแนนให้สายที่ไม่มี A ก็ต้องทำ double vote หรือ surround vote ซึ่งโดน slashing (หัวข้อ 8.5)</p>
+        <p>ในสภาพปกติ checkpoint ของ epoch N จะ justified ระหว่าง epoch N และจะ finalized เมื่อ checkpoint ของ epoch N+1 justified จึงใช้เวลาราว 2 epoch หรือ 12.8 นาที หลังจากนั้น LMD-GHOST จะเริ่มนับจากจุดที่ finalized เสมอ และโหนดจะไม่ย้อนไปก่อนจุดนั้นอีก</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 290" role="img" aria-label="Casper FFG สองขั้น ขั้นแรก stake อย่างน้อยสองในสามลงคะแนน source N ลบ 1 ไป target N ทำให้ N justified ขั้นที่สอง stake อย่างน้อยสองในสามลงคะแนน source N ไป target N บวก 1 ทำให้ N บวก 1 justified และ N finalized ด้านขวาแสดงว่าถ้ามีสองกลุ่มที่แต่ละกลุ่มถือ stake อย่างน้อยสองในสาม สองกลุ่มต้องซ้อนกันอย่างน้อยหนึ่งในสาม">
+            <defs>
+              <marker id="arrC8f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4a52c0"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <!-- ขั้น 1 -->
+              <text x="16" y="18" font-size="12" font-weight="700">1. ระหว่าง epoch N: stake ≥ 2/3 ลงคะแนน source N−1 → target N</text>
+              <path d="M75,56 Q155,24 233,54" fill="none" stroke="#4a52c0" stroke-width="1.5" marker-end="url(#arrC8f)"/>
+              <text x="155" y="36" text-anchor="middle" font-size="11" fill="#4a52c0">≥ 2/3</text>
+              <rect x="20" y="56" width="110" height="40" rx="6" fill="#5a63d8" stroke="#5a63d8"/>
+              <text x="75" y="73" text-anchor="middle" font-size="12" fill="#fff">epoch N−1</text>
+              <text x="75" y="89" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">finalized</text>
+              <rect x="180" y="56" width="110" height="40" rx="6" fill="#eceefb" stroke="#5a63d8" stroke-width="1.8"/>
+              <text x="235" y="73" text-anchor="middle" font-size="12">epoch N</text>
+              <text x="235" y="89" text-anchor="middle" font-size="11" font-weight="700" fill="#4a52c0">justified</text>
+              <rect x="340" y="56" width="110" height="40" rx="6" fill="none" stroke="#b9b1a3" stroke-dasharray="4 4"/>
+              <text x="395" y="73" text-anchor="middle" font-size="12" fill="#a39a8b">epoch N+1</text>
+              <text x="395" y="89" text-anchor="middle" font-size="11" fill="#a39a8b">ยังไม่มีคะแนน</text>
+
+              <!-- ขั้น 2 -->
+              <text x="16" y="130" font-size="12" font-weight="700">2. ระหว่าง epoch N+1: stake ≥ 2/3 ลงคะแนน source N → target N+1</text>
+              <path d="M235,168 Q315,136 393,166" fill="none" stroke="#4a52c0" stroke-width="1.5" marker-end="url(#arrC8f)"/>
+              <text x="315" y="148" text-anchor="middle" font-size="11" fill="#4a52c0">≥ 2/3</text>
+              <rect x="20" y="168" width="110" height="40" rx="6" fill="#5a63d8" stroke="#5a63d8"/>
+              <text x="75" y="185" text-anchor="middle" font-size="12" fill="#fff">epoch N−1</text>
+              <text x="75" y="201" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">finalized</text>
+              <rect x="180" y="168" width="110" height="40" rx="6" fill="#5a63d8" stroke="#5a63d8"/>
+              <text x="235" y="185" text-anchor="middle" font-size="12" fill="#fff">epoch N</text>
+              <text x="235" y="201" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">finalized</text>
+              <rect x="340" y="168" width="110" height="40" rx="6" fill="#eceefb" stroke="#5a63d8" stroke-width="1.8"/>
+              <text x="395" y="185" text-anchor="middle" font-size="12">epoch N+1</text>
+              <text x="395" y="201" text-anchor="middle" font-size="11" font-weight="700" fill="#4a52c0">justified</text>
+
+              <text x="16" y="240" font-size="12">N finalized เมื่อ checkpoint ถัดไปโดยตรง justified โดยใช้ N เป็น source</text>
+              <text x="16" y="260" font-size="12">ปกติใช้ราว 2 epoch (≈ 12.8 นาที) หลังจากนั้นโหนดไม่ย้อนไปก่อน N อีก</text>
+
+              <line x1="486" y1="8" x2="486" y2="280" stroke="#e4ddd0"/>
+
+              <!-- ทำไมต้อง 2/3 -->
+              <text x="500" y="22" font-weight="700">ทำไมต้องสองในสาม</text>
+              <text x="500" y="42" font-size="11" fill="#6b655c">สมมติ checkpoint สองจุดที่อยู่คนละสาย</text>
+              <text x="500" y="57" font-size="11" fill="#6b655c">finalized ทั้งคู่</text>
+              <line x1="585" y1="86" x2="585" y2="250" stroke="#e4ddd0" stroke-dasharray="3 3"/>
+              <line x1="660" y1="86" x2="660" y2="250" stroke="#e4ddd0" stroke-dasharray="3 3"/>
+              <text x="510" y="80" font-size="11">กลุ่ม X (≥ 2/3) ลงคะแนนให้สาย 1</text>
+              <rect x="510" y="86" width="150" height="16" rx="3" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="510" y="124" font-size="11">กลุ่ม Y (≥ 2/3) ลงคะแนนให้สาย 2</text>
+              <rect x="585" y="130" width="149" height="16" rx="3" fill="#e8f5ef" stroke="#1f8a70"/>
+              <rect x="585" y="164" width="75" height="16" rx="3" fill="#fbe9e6" stroke="#c2412d"/>
+              <text x="510" y="200" font-size="11" fill="#c2412d">ส่วนซ้อน ≥ 1/3 ลงคะแนนให้ทั้งสองสาย</text>
+              <text x="510" y="216" font-size="11" fill="#c2412d">ลายเซ็นที่ขัดกันเป็นหลักฐาน</text>
+              <text x="510" y="232" font-size="11" fill="#c2412d">กลุ่มนี้โดน slashing ทั้งหมด</text>
+              <line x1="510" y1="250" x2="734" y2="250" stroke="#6b655c"/>
+              <g stroke="#6b655c">
+                <line x1="510" y1="246" x2="510" y2="254"/>
+                <line x1="585" y1="246" x2="585" y2="254"/>
+                <line x1="660" y1="246" x2="660" y2="254"/>
+                <line x1="734" y1="246" x2="734" y2="254"/>
+              </g>
+              <text x="510" y="268" text-anchor="middle" font-size="10" fill="#6b655c">0</text>
+              <text x="585" y="268" text-anchor="middle" font-size="10" fill="#6b655c">1/3</text>
+              <text x="660" y="268" text-anchor="middle" font-size="10" fill="#6b655c">2/3</text>
+              <text x="734" y="268" text-anchor="middle" font-size="10" fill="#6b655c">1</text>
+              <text x="622" y="284" text-anchor="middle" font-size="10" fill="#6b655c">สัดส่วนของ stake ทั้งระบบ</text>
+            </g>
+          </svg>
+          <figcaption>ด้านซ้าย: checkpoint N จะ finalized เมื่อ checkpoint N+1 justified ด้วยคะแนนที่ใช้ N เป็น source ด้านขวา: ถ้าสองสายที่ขัดกัน finalized ทั้งคู่ กลุ่มที่ลงคะแนนให้แต่ละสายต้องซ้อนกันอย่างน้อยหนึ่งในสามของ stake และทุกรายในส่วนที่ซ้อนกันได้ลงลายเซ็นขัดกันเอง</figcaption>
+        </figure>
+
+        <h3>ทำไมต้องสองในสาม</h3>
+        <p>สมมติว่ามี checkpoint สองจุดที่อยู่คนละสายและ finalized ทั้งคู่ แต่ละจุดต้องมี stake อย่างน้อยสองในสามลงคะแนนให้ สองกลุ่มนี้รวมกันได้อย่างน้อยสี่ในสาม แต่ stake ทั้งระบบมีเพียงสามในสาม ส่วนที่เกินมาอย่างน้อยหนึ่งในสามจึงต้องเป็น stake ที่อยู่ในทั้งสองกลุ่ม validator กลุ่มนี้ลงคะแนนขัดกันเอง ลายเซ็นของพวกเขาเป็นหลักฐาน ทุกคนจึงรู้ว่าใครโกง และโปรโตคอลลงโทษด้วย slashing ได้ คุณสมบัตินี้เรียกว่า <strong>accountable safety</strong> ผู้โจมตีที่จะย้อนบล็อกที่ finalized แล้วจึงต้องเสีย stake อย่างน้อยหนึ่งในสามของทั้งระบบ Ethereum จึงเรียก finality แบบนี้ว่า <strong>economic finality</strong></p>
+        <p>ถ้าใช้เกณฑ์แค่เกินครึ่ง สองกลุ่มอาจซ้อนกันเพียงเล็กน้อย ผู้โจมตีจะย้อน finality ได้โดยเสีย stake เพียงส่วนน้อย เกณฑ์สองในสามจึงเป็นค่าที่ทำให้ส่วนซ้อนใหญ่พอ และยังเหลือช่องให้ validator ออฟไลน์ได้เกือบหนึ่งในสามโดยที่ finality ยังทำงาน</p>
+
+        <h3>เมื่อ validator มากกว่าหนึ่งในสามออฟไลน์</h3>
+        <p>เมื่อ stake ที่ออนไลน์ไม่ถึงสองในสาม จะไม่มี checkpoint ใด justified และ finality ก็หยุด แต่ LMD-GHOST ยังเลือก head ได้ chain จึงยังมีบล็อกใหม่ทุก slot ถ้าปล่อยไว้ กลุ่มที่ออฟไลน์ถาวร เช่น validator ในประเทศที่อินเทอร์เน็ตล่มทั้งประเทศ จะทำให้ finality หยุดตลอดไป โปรโตคอลจึงมี <strong>inactivity leak</strong> เมื่อไม่มี finality นานเกิน 4 epoch validator ที่ไม่ลงคะแนนจะเสียยอดเงินเพิ่มขึ้นเรื่อย ๆ จนสัดส่วน stake ของรายที่ออนไลน์กลับมาถึงสองในสาม แล้ว finality ก็กลับมาทำงาน</p>
+        <p>ตัวอย่างจริง: ในเดือนพฤษภาคม 2023 Ethereum mainnet หยุด finalize สองครั้งในสองวันติดกัน แต่ละครั้งนานไม่เกินราวหนึ่งชั่วโมง สาเหตุคือ consensus client บางตัวทำงานหนักเกินไปเมื่อต้องประมวลผล attestation เก่าจำนวนมาก ระหว่างนั้นผู้ใช้ยังส่งธุรกรรมได้ตามปกติ เพราะ LMD-GHOST ยังทำงาน ส่วน finality กลับมาเองเมื่อ validator ส่วนใหญ่ลงคะแนนได้อีกครั้ง</p>
+
+        <h3>ทดลอง: checkpoint จะ justified และ finalized หรือไม่</h3>
+        <div class="hash-demo" id="ffgdemo">
+          <div class="mtx">
+            <div><label for="fN">stake ที่ลงคะแนนให้ checkpoint ของ epoch N เป็น target (%)</label><input id="fN" type="number" min="0" max="100" step="1" value="80"></div>
+            <div><label for="fN1">stake ที่ลงคะแนน source N → target N+1 (%)</label><input id="fN1" type="number" min="0" max="100" step="1" value="75"></div>
+          </div>
+          <div class="stat" id="fOut"></div>
+        </div>
+        <p>แบบจำลองนี้ใช้เฉพาะกรณีปกติที่ checkpoint ของ epoch N−1 justified อยู่แล้ว และใช้เกณฑ์เดียวกับโปรโตคอล คือ 3 × stake ที่ลงคะแนน ≥ 2 × stake ทั้งหมด (ราว 66.67%)</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>LMD-GHOST</th><th>Casper FFG</th></tr>
+            <tr><td>ตอบคำถาม</td><td>ตอนนี้ head ของสายคือบล็อกใด</td><td>บล็อกใดย้อนไม่ได้แล้ว</td></tr>
+            <tr><td>ทำงานทุก</td><td>slot (12 วินาที)</td><td>epoch (finality ราว 2 epoch)</td></tr>
+            <tr><td>ใช้ส่วนใดของ attestation</td><td><code>beacon_block_root</code></td><td><code>source</code> และ <code>target</code></td></tr>
+            <tr><td>เกณฑ์</td><td>กิ่งที่หนักกว่า (ไม่มีเกณฑ์ขั้นต่ำ)</td><td>stake อย่างน้อยสองในสาม</td></tr>
+            <tr><td>ถ้า validator ออฟไลน์เกินหนึ่งในสาม</td><td>ยังทำงาน</td><td>หยุด จนกว่า inactivity leak จะทำให้กลับมาถึงสองในสาม</td></tr>
+            <tr><td>คุณสมบัติที่ให้</td><td>liveness</td><td>safety (accountable safety)</td></tr>
+          </table>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          บล็อกที่อยู่ในสายที่ LMD-GHOST เลือก และได้ attestation แล้ว <strong>ยังย้อนได้</strong> ถ้าคะแนนย้ายไปอีกกิ่ง (reorg) บล็อกจะย้อนไม่ได้เมื่อ <strong>finalized</strong> แล้วเท่านั้น ลำดับสถานะคือ (1) proposer เสนอบล็อก (2) บล็อกได้ attestation (3) checkpoint ที่อยู่ถัดจากบล็อกนั้น justified (4) checkpoint นั้น finalized เมื่อ checkpoint finalized บล็อกทุกบล็อกก่อนหน้าบน chain เดียวกันก็ finalized ไปด้วย
+        </div>
+      </section>
+
+      <!-- ==================== 8.5 ==================== -->
+      <section id="s5">
+        <h2><span class="no">8.5</span>Slashing และปัญหา Nothing-at-stake</h2>
+
+        <p>หัวข้อ 8.2 และ 8.4 อ้างถึง slashing หลายครั้งในฐานะโทษที่ทำให้ PoS ปลอดภัย หัวข้อนี้เริ่มจากปัญหาที่ทำให้ PoS ต้องมี slashing ตั้งแต่แรก</p>
+
+        <h3>ปัญหา Nothing-at-stake</h3>
+        <p>เมื่อเกิด fork ใน PoW ผู้ขุดต้องเลือกว่าจะขุดต่อสายใด ถ้าแบ่งพลังขุดไปทั้งสองสาย แต่ละสายได้พลังเพียงครึ่งเดียว ค่าไฟเท่าเดิม แต่โอกาสชนะในแต่ละสายลดลง ผู้ขุดที่คิดอย่างมีเหตุผลจึงทุ่มพลังขุดให้สายที่น่าจะชนะเพียงสายเดียว และเครือข่ายก็กลับมาเป็นสายเดียวได้เร็ว</p>
+        <p>ใน PoS แบบพื้นฐาน (naive PoS) ที่ยังไม่มีโทษ การลงลายเซ็นไม่มีต้นทุน validator ลงคะแนนให้ทุกสายพร้อมกันได้ และไม่ว่าสายใดชนะ ก็ได้รางวัลจากสายนั้น validator ไม่มีอะไรต้องเสียจากการสนับสนุนทุกสาย ปัญหานี้เรียกว่า <strong>nothing-at-stake</strong> และมีผลตามมาสามข้อ</p>
+        <ul>
+          <li>fork ไม่ยุติ เพราะทุกกิ่งได้คะแนนพอ ๆ กัน</li>
+          <li>ผู้โจมตีที่สร้างสายใหม่เพื่อใช้จ่ายซ้ำ (double-spend) ได้คะแนนสนับสนุนฟรีจาก validator ที่ลงคะแนนทุกสาย</li>
+          <li>finality ไม่มีความหมาย เพราะ validator ลงคะแนน finalize สองสายที่ขัดกันได้โดยไม่เสียอะไร</li>
+        </ul>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 270" role="img" aria-label="เปรียบเทียบพฤติกรรมเมื่อเกิด fork ใน PoW ผู้ขุดเลือกขุดสายเดียวเพราะแบ่งพลังขุดแล้วเสียเปรียบ ใน PoS ที่ไม่มีโทษ validator ลงลายเซ็นทั้งสองสายได้ฟรี ใน PoS ที่มี slashing ลายเซ็นสองฉบับที่ขัดกันเป็นหลักฐานให้ยึด stake validator จึงลงคะแนนสายเดียว">
+            <defs>
+              <marker id="arrC8n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <line x1="252" y1="10" x2="252" y2="260" stroke="#e4ddd0"/>
+              <line x1="504" y1="10" x2="504" y2="260" stroke="#e4ddd0"/>
+
+              <!-- คอลัมน์ 1: PoW -->
+              <text x="16" y="24" font-weight="700" fill="#b85a10">PoW</text>
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="66" y1="80" x2="114" y2="60" marker-end="url(#arrC8n)"/>
+                <line x1="66" y1="88" x2="114" y2="110" marker-end="url(#arrC8n)"/>
+              </g>
+              <rect x="16" y="70" width="50" height="28" rx="5" fill="#fff" stroke="currentColor"/>
+              <text x="41" y="89" text-anchor="middle" font-size="11">บล็อก</text>
+              <rect x="116" y="44" width="50" height="28" rx="5" fill="#fff" stroke="currentColor"/>
+              <text x="141" y="63" text-anchor="middle" font-size="11">สาย A</text>
+              <rect x="116" y="98" width="50" height="28" rx="5" fill="#fff" stroke="currentColor"/>
+              <text x="141" y="117" text-anchor="middle" font-size="11">สาย B</text>
+              <line x1="204" y1="82" x2="168" y2="60" stroke="#e2761b" stroke-width="2.5"/>
+              <circle cx="219" cy="86" r="15" fill="#fdf0e3" stroke="#e2761b"/>
+              <text x="219" y="122" text-anchor="middle" font-size="11">ผู้ขุด</text>
+              <text x="16" y="158" font-size="12">แบ่งพลังขุดไปสองสาย</text>
+              <text x="16" y="176" font-size="12">แต่ละสายได้พลังครึ่งเดียว</text>
+              <text x="16" y="194" font-size="12">ค่าไฟเท่าเดิม แต่โอกาสชนะลดลง</text>
+              <text x="16" y="232" font-size="12" font-weight="700" fill="#1f6e5a">ขุดสายเดียว fork จึงยุติเร็ว</text>
+
+              <!-- คอลัมน์ 2: PoS ที่ไม่มีโทษ -->
+              <text x="268" y="24" font-weight="700" fill="#4a52c0">PoS ที่ไม่มีโทษ</text>
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="318" y1="80" x2="366" y2="60" marker-end="url(#arrC8n)"/>
+                <line x1="318" y1="88" x2="366" y2="110" marker-end="url(#arrC8n)"/>
+              </g>
+              <rect x="268" y="70" width="50" height="28" rx="5" fill="#fff" stroke="currentColor"/>
+              <text x="293" y="89" text-anchor="middle" font-size="11">บล็อก</text>
+              <rect x="368" y="44" width="50" height="28" rx="5" fill="#fff" stroke="currentColor"/>
+              <text x="393" y="63" text-anchor="middle" font-size="11">สาย A</text>
+              <rect x="368" y="98" width="50" height="28" rx="5" fill="#fff" stroke="currentColor"/>
+              <text x="393" y="117" text-anchor="middle" font-size="11">สาย B</text>
+              <line x1="456" y1="80" x2="420" y2="60" stroke="#5a63d8" stroke-width="2"/>
+              <line x1="456" y1="92" x2="420" y2="112" stroke="#5a63d8" stroke-width="2"/>
+              <circle cx="471" cy="86" r="15" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="471" y="122" text-anchor="middle" font-size="11">validator</text>
+              <text x="268" y="158" font-size="12">ลงลายเซ็นให้ทั้งสองสายได้ฟรี</text>
+              <text x="268" y="176" font-size="12">สายใดชนะก็ได้รางวัลจากสายนั้น</text>
+              <text x="268" y="194" font-size="12">ไม่มีอะไรต้องเสีย</text>
+              <text x="268" y="232" font-size="12" font-weight="700" fill="#c2412d">fork ไม่ยุติ ผู้โจมตีได้คะแนนฟรี</text>
+
+              <!-- คอลัมน์ 3: PoS + slashing -->
+              <text x="520" y="24" font-weight="700" fill="#4a52c0">PoS + slashing</text>
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="570" y1="80" x2="618" y2="60" marker-end="url(#arrC8n)"/>
+                <line x1="570" y1="88" x2="618" y2="110" marker-end="url(#arrC8n)"/>
+              </g>
+              <rect x="520" y="70" width="50" height="28" rx="5" fill="#fff" stroke="currentColor"/>
+              <text x="545" y="89" text-anchor="middle" font-size="11">บล็อก</text>
+              <rect x="620" y="44" width="50" height="28" rx="5" fill="#fff" stroke="currentColor"/>
+              <text x="645" y="63" text-anchor="middle" font-size="11">สาย A</text>
+              <rect x="620" y="98" width="50" height="28" rx="5" fill="#fff" stroke="currentColor"/>
+              <text x="645" y="117" text-anchor="middle" font-size="11">สาย B</text>
+              <line x1="708" y1="80" x2="672" y2="60" stroke="#5a63d8" stroke-width="2"/>
+              <line x1="708" y1="92" x2="672" y2="112" stroke="#c2412d" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <circle cx="723" cy="86" r="15" fill="#eceefb" stroke="#5a63d8"/>
+              <text x="723" y="122" text-anchor="middle" font-size="11">validator</text>
+              <text x="520" y="158" font-size="12">ลายเซ็นสองฉบับที่ขัดกัน</text>
+              <text x="520" y="176" font-size="12">เป็นหลักฐานที่ใครก็ส่งได้</text>
+              <text x="520" y="194" font-size="12">โปรโตคอลยึด stake ของผู้ลงลายเซ็น</text>
+              <text x="520" y="232" font-size="12" font-weight="700" fill="#1f6e5a">ลงคะแนนสายเดียว เหมือน PoW</text>
+            </g>
+          </svg>
+          <figcaption>PoW มีต้นทุนจริงทุกครั้งที่สนับสนุนสายใดสายหนึ่ง ผู้ขุดจึงเลือกสายเดียวเอง PoS ไม่มีต้นทุนแบบนั้น จึงต้องสร้างต้นทุนขึ้นมาแทน slashing ทำให้ validator ที่ลงลายเซ็นให้สองสายที่ขัดกันต้องเสีย stake ที่ล็อกไว้</figcaption>
+        </figure>
+
+        <h3>Slashing: ใช้ลายเซ็นที่ขัดกันเป็นหลักฐาน</h3>
+        <p>วิธีแก้ของ Ethereum อาศัยคุณสมบัติของลายเซ็นดิจิทัล (digital signature) ในบทที่ 0 ข้อความที่ลงลายเซ็นด้วย key ของ validator รายใด ก็พิสูจน์ได้ว่ามาจากรายนั้นจริง ถ้า validator ลงลายเซ็นข้อความสองฉบับที่ขัดกัน ใครก็นำสองฉบับนั้นมาส่งเป็นหลักฐานได้ proposer ใส่หลักฐานลงในบล็อก แล้วโปรโตคอลก็ลงโทษ validator รายนั้นเอง proposer ที่ใส่หลักฐานได้รางวัลเล็กน้อย (whistleblower reward) proposer ทุกรายจึงมีแรงจูงใจให้รับหลักฐานเข้าบล็อก ตามสเปกปัจจุบัน รางวัลนี้ไปที่ proposer ทั้งหมด ผู้ที่ตรวจพบและกระจายหลักฐานไม่ได้รางวัลจากโปรโตคอล ถ้าไม่ได้เป็น proposer เอง</p>
+        <p>ความผิดที่ทำให้โดน slashing มีสามแบบ ทุกแบบพิสูจน์ได้จากลายเซ็นล้วน ๆ ไม่ต้องอาศัยความเห็นของใคร</p>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ความผิด</th><th>ผู้กระทำ</th><th>เงื่อนไข</th><th>ทำไมจึงผิด</th></tr>
+            <tr><td><strong>Double proposal</strong></td><td>proposer</td><td>ลงลายเซ็นบล็อกสองบล็อกที่ต่างกันใน slot เดียวกัน</td><td>สร้าง fork ด้วยตัวเอง</td></tr>
+            <tr><td><strong>Double vote</strong></td><td>attester</td><td>ลงลายเซ็น attestation สองชุดที่ต่างกัน แต่มี target epoch เดียวกัน</td><td>ลงคะแนนให้สองฝั่งของ fork ในรอบเดียวกัน</td></tr>
+            <tr><td><strong>Surround vote</strong></td><td>attester</td><td>attestation ชุดหนึ่งคร่อมอีกชุด คือ source เก่ากว่าและ target ใหม่กว่า</td><td>ใช้ลงคะแนนข้ามจุดที่ตนเคยรับรอง เพื่อย้อน finality</td></tr>
+          </table>
+        </div>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 260" role="img" aria-label="ตัวอย่าง double vote คือ attestation สองชุดที่มี source epoch 3 target epoch 6 เหมือนกันแต่ชี้คนละบล็อก ตัวอย่าง surround vote คือ vote 1 จาก epoch 2 ไป 7 คร่อม vote 2 จาก epoch 3 ไป 6">
+            <defs>
+              <marker id="arrC8s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4a52c0"/></marker>
+              <marker id="arrC8r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c2412d"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <!-- double vote -->
+              <text x="16" y="28" font-weight="700">Double vote</text>
+              <text x="16" y="46" font-size="11" fill="#6b655c">target เดียวกัน</text>
+              <text x="16" y="60" font-size="11" fill="#6b655c">คนละบล็อก</text>
+              <circle cx="260" cy="34" r="4" fill="#4a52c0"/>
+              <line x1="260" y1="34" x2="466" y2="34" stroke="#4a52c0" stroke-width="2" marker-end="url(#arrC8s)"/>
+              <text x="480" y="38" font-size="12">vote 1: source 3 → target 6 (บล็อก X)</text>
+              <circle cx="260" cy="60" r="4" fill="#c2412d"/>
+              <line x1="260" y1="60" x2="466" y2="60" stroke="#c2412d" stroke-width="2" marker-end="url(#arrC8r)"/>
+              <text x="480" y="64" font-size="12">vote 2: source 3 → target 6 (บล็อก Y)</text>
+
+              <line x1="16" y1="86" x2="744" y2="86" stroke="#e4ddd0"/>
+
+              <!-- surround vote -->
+              <rect x="186" y="104" width="358" height="80" rx="6" fill="#fbe9e6" opacity="0.6"/>
+              <text x="16" y="124" font-weight="700">Surround vote</text>
+              <text x="16" y="142" font-size="11" fill="#6b655c">vote 1 คร่อม vote 2</text>
+              <circle cx="190" cy="124" r="4" fill="#4a52c0"/>
+              <line x1="190" y1="124" x2="536" y2="124" stroke="#4a52c0" stroke-width="2" marker-end="url(#arrC8s)"/>
+              <text x="550" y="128" font-size="12">vote 1: source 2 → target 7</text>
+              <circle cx="260" cy="160" r="4" fill="#c2412d"/>
+              <line x1="260" y1="160" x2="466" y2="160" stroke="#c2412d" stroke-width="2" marker-end="url(#arrC8r)"/>
+              <text x="480" y="164" font-size="12">vote 2: source 3 → target 6</text>
+
+              <!-- แกน epoch -->
+              <line x1="110" y1="206" x2="700" y2="206" stroke="#6b655c"/>
+              <g stroke="#6b655c">
+                <line x1="120" y1="201" x2="120" y2="211"/>
+                <line x1="190" y1="201" x2="190" y2="211"/>
+                <line x1="260" y1="201" x2="260" y2="211"/>
+                <line x1="330" y1="201" x2="330" y2="211"/>
+                <line x1="400" y1="201" x2="400" y2="211"/>
+                <line x1="470" y1="201" x2="470" y2="211"/>
+                <line x1="540" y1="201" x2="540" y2="211"/>
+                <line x1="610" y1="201" x2="610" y2="211"/>
+                <line x1="680" y1="201" x2="680" y2="211"/>
+              </g>
+              <g font-size="11" fill="#6b655c" text-anchor="middle">
+                <text x="120" y="226">1</text><text x="190" y="226">2</text><text x="260" y="226">3</text>
+                <text x="330" y="226">4</text><text x="400" y="226">5</text><text x="470" y="226">6</text>
+                <text x="540" y="226">7</text><text x="610" y="226">8</text><text x="680" y="226">9</text>
+              </g>
+              <text x="712" y="210" font-size="11" fill="#6b655c">epoch</text>
+              <text x="16" y="250" font-size="12">surround: source ของ vote 1 เก่ากว่า (2 &lt; 3) และ target ใหม่กว่า (7 &gt; 6) จึงคร่อม vote 2 ทั้งช่วง</text>
+            </g>
+          </svg>
+          <figcaption>แต่ละเส้นคือ attestation หนึ่งชุด จุดเริ่มคือ source และหัวลูกศรคือ target double vote คือลงคะแนน target epoch เดียวกันสองครั้งให้คนละบล็อก ส่วน surround vote คือลงคะแนนช่วงที่กว้างกว่าและครอบช่วงที่ตนเคยลงไว้</figcaption>
+        </figure>
+
+        <p>surround vote อันตรายเพราะเป็นวิธีที่ใช้ย้อน finality โดยไม่ต้องลงคะแนน target เดียวกันซ้ำ สมมติว่า validator เคยลงคะแนน 3 → 6 บนสายเดิม ต่อมาอยากช่วย finalize สายคู่แข่งที่แยกออกไปก่อน epoch 3 สายคู่แข่งไม่มี checkpoint 3 source ที่ใช้ได้บนสายนั้นจึงเก่ากว่า เช่น epoch 2 ส่วน target ต้องอยู่หลัง epoch 6 เพราะ validator ลงคะแนนทุก epoch target ของ epoch ที่ผ่านมาจึงใช้ไปแล้ว ถ้าลงซ้ำก็เป็น double vote คะแนน 2 → 7 จึงคร่อมคะแนน 3 → 6 เดิมพอดี จากกติกาของ Casper FFG พิสูจน์ได้ว่า ถ้าจะทำให้สองสายที่ขัดกัน finalized ทั้งคู่ validator อย่างน้อยหนึ่งในสามต้องทำ double vote หรือ surround vote อย่างใดอย่างหนึ่ง เมื่อโปรโตคอลลงโทษทั้งสองแบบ ผู้ที่ย้อน finality จึงต้องเสีย stake อย่างน้อยหนึ่งในสามของทั้งระบบเสมอ</p>
+
+        <h3>โทษของ slashing</h3>
+        <ol>
+          <li><strong>โทษทันที (initial penalty):</strong> หัก stake จำนวนหนึ่ง และบังคับให้ออกจากการเป็น validator (forced exit) ตามสเปกเดิม โทษนี้เท่ากับ 1/32 ของ effective balance หรือ 1 ETH สำหรับ validator ที่มี 32 ETH การอัปเกรด Pectra ลดโทษส่วนนี้เหลือ 1/4096 ของ effective balance (ราว 0.008 ETH สำหรับ 32 ETH) เพื่อให้ validator ที่มี effective balance สูงไม่เสียมากเกินไปจากความผิดพลาดครั้งเดียว</li>
+          <li><strong>ล็อกไว้ราว 36 วัน (8,192 epoch)</strong> ก่อนถอนได้ ระหว่างนั้นยังเสียค่าปรับ (penalty) เหมือน validator ที่ออฟไลน์ ช่วงล็อกที่ยาวทำให้โปรโตคอลมีเวลารวบรวมหลักฐานของผู้โกงรายอื่นในช่วงเดียวกัน</li>
+          <li><strong>Correlation penalty:</strong> ราวกลางช่วงล็อก (ประมาณวันที่ 18) โปรโตคอลหักเพิ่มตามสัดส่วนของ stake ทั้งระบบที่โดน slashing ในช่วงเวลาใกล้กัน ค่าโทษโดยประมาณเท่ากับ effective balance × min(3 × สัดส่วนที่โดน slashing, 1)</li>
+        </ol>
+        <p>ข้อ 3 แยกความผิดพลาดออกจากการโจมตี validator ที่พลาดเพียงรายเดียว เช่น ตั้งค่าเครื่องผิด จะเสียเงินไม่มาก แต่ถ้า stake หนึ่งในสามโดน slashing พร้อมกัน ทุกรายจะเสีย stake ทั้งหมด หนึ่งในสามคือขนาดที่ต้องใช้ย้อน finality (หัวข้อ 8.4)</p>
+
+        <h3>ทดลอง: correlation penalty</h3>
+        <div class="hash-demo" id="slashdemo">
+          <div class="mtx">
+            <div><label for="sEB">effective balance ของ validator (ETH)</label><input id="sEB" type="number" min="1" max="2048" step="1" value="32"></div>
+            <div><label for="sPct">stake ทั้งระบบที่โดน slashing ในช่วงใกล้กัน (%)</label><input id="sPct" type="number" min="0" max="100" step="0.1" value="1"></div>
+          </div>
+          <div class="stat" id="sOut"></div>
+        </div>
+
+        <h3>Slashing ต่างจากค่าปรับเมื่อออฟไลน์</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>ออฟไลน์หรือลงคะแนนช้า</th><th>Slashing</th></tr>
+            <tr><td>สาเหตุ</td><td>ไฟดับ อินเทอร์เน็ตหลุด เครื่องค้าง</td><td>ลงลายเซ็นข้อความที่ขัดกัน</td></tr>
+            <tr><td>โทษ</td><td>เสียราวเท่ากับรางวัลที่ควรได้ในช่วงนั้น</td><td>โทษทันที บังคับออก ล็อกราว 36 วัน และ correlation penalty</td></tr>
+            <tr><td>เป็น validator ต่อได้หรือไม่</td><td>ได้ เมื่อกลับมาออนไลน์</td><td>ไม่ได้</td></tr>
+            <tr><td>เมื่อ finality หยุดเกิน 4 epoch</td><td>inactivity leak ทำให้ค่าปรับเพิ่มขึ้นเรื่อย ๆ</td><td>ไม่เกี่ยวข้อง</td></tr>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <span class="h">slashing ส่วนใหญ่มาจากการตั้งค่าเครื่อง</span>
+          slashing ที่เกิดขึ้นจริงส่วนใหญ่ไม่ได้มาจากการโจมตี แต่มาจากผู้ดูแลที่รัน validator key เดียวกันบนสองเครื่อง เช่น ตั้งเครื่องสำรองไว้ให้ทำงานพร้อมกับเครื่องหลัก เมื่อทั้งสองเครื่องลงลายเซ็นใน slot เดียวกันแต่เห็นข้อมูลต่างกันเล็กน้อย ก็เกิด double vote ทันที ซอฟต์แวร์ validator จึงมีฐานข้อมูลกัน slashing (slashing protection) ที่จำว่าเคยลงลายเซ็นอะไรไปแล้ว ส่วนผู้ดูแลก็ไม่ควรรัน key เดียวกันมากกว่าหนึ่งเครื่อง
+        </div>
+
+        <h3>สิ่งที่ slashing แก้ไม่ได้: long-range attack</h3>
+        <p>slashing ลงโทษได้เฉพาะ validator ที่ยังมี stake อยู่ในระบบ validator ที่ถอน stake ออกไปแล้วไม่มีอะไรให้ยึด เจ้าของ key เก่าเหล่านี้ไม่มีอะไรต้องเสียแล้ว จึงอาจยอมขาย key ให้ผู้โจมตี ถ้าผู้โจมตีรวบรวม key ที่ในอดีตเคยถือ stake ส่วนใหญ่ของระบบได้ ก็ใช้ key ชุดนี้ลงลายเซ็นสร้างประวัติทางเลือก (alternative history) ที่แยกออกไปตั้งแต่ช่วงนั้นได้ และลายเซ็นทุกฉบับก็ผ่านการตรวจตามกติกา โหนดใหม่ที่เพิ่งเข้าร่วมจะแยกไม่ออกว่าประวัติใดเป็นของจริง เพราะ PoS ไม่มีงานสะสม (cumulative work) ให้เทียบแบบ PoW</p>
+        <p>Ethereum แก้ด้วยหลัก <strong>weak subjectivity</strong> โหนดที่ออนไลน์อยู่จะไม่ย้อนไปก่อน checkpoint ที่ finalized แล้ว ส่วนโหนดใหม่หรือโหนดที่ออฟไลน์นานเกินช่วงที่กำหนด ต้องเริ่มจาก checkpoint ล่าสุดที่ได้จากแหล่งที่เชื่อถือ เช่น เพื่อนที่รันโหนด หรือผู้ให้บริการหลายรายมาเทียบกัน (checkpoint sync) ข้อนี้เป็นสมมติฐานที่ PoW ไม่ต้องใช้ ใน PoW โหนดใหม่เลือกสายที่มีงานสะสมมากที่สุดได้เองโดยไม่ต้องเชื่อใคร</p>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          อย่าสับสนสองปัญหานี้ <strong>Nothing-at-stake</strong> คือ validator ที่ยังมี stake ลงคะแนนทุกสายเพราะไม่มีต้นทุน แก้ด้วย slashing ส่วน <strong>long-range attack</strong> ใช้ key ของ validator ที่ถอน stake ไปแล้ว ซึ่ง slashing ทำอะไรไม่ได้ แก้ด้วย weak subjectivity และ checkpoint sync
+        </div>
+      </section>
+
+      <!-- ==================== 8.6 ==================== -->
+      <section id="s6">
+        <h2><span class="no">8.6</span>The Merge (กันยายน 2022) และการเปรียบเทียบ PoW กับ PoS</h2>
+
+        <p>Ethereum วางแผนเปลี่ยนเป็น PoS มาตั้งแต่ช่วงแรก แต่เครือข่ายนี้มีผู้ใช้และเงินจำนวนมาก การเปลี่ยนกลไกฉันทามติ (consensus mechanism) จึงมีความเสี่ยงสูง Ethereum ตั้งเป้าไว้สามข้อ ข้อแรก เครือข่ายต้องไม่หยุด ข้อสอง บัญชี ยอดเงิน contract และประวัติธุรกรรมต้องอยู่ครบ ข้อสาม ผู้ใช้และเจ้าของ contract ไม่ต้องแก้อะไรเลย ถ้าเปลี่ยนทีเดียวด้วยระบบที่ยังไม่เคยใช้งานจริง ข้อบกพร่องเพียงจุดเดียวก็อาจทำให้ทั้งเครือข่ายหยุด Ethereum จึงเปลี่ยนเป็นขั้น ๆ</p>
+
+        <h3>ขั้นตอนการเปลี่ยน</h3>
+        <ol>
+          <li><strong>1 ธันวาคม 2020:</strong> เปิด <strong>Beacon Chain</strong> เป็น chain PoS แยกต่างหาก validator ฝาก ETH จริงและลงคะแนนจริง แต่บล็อกยังไม่มีธุรกรรมของผู้ใช้ PoS จึงได้ทดสอบกับ stake จริงเกือบสองปีโดยไม่กระทบผู้ใช้</li>
+          <li><strong>กลางปี 2022:</strong> ซ้อม Merge บน testnet ก่อน ได้แก่ Ropsten, Sepolia และ Goerli</li>
+          <li><strong>15 กันยายน 2022 (The Merge):</strong> เมื่อ chain PoW มีความยากสะสมถึงค่าที่กำหนดไว้ล่วงหน้า (Terminal Total Difficulty, TTD) การขุดก็หยุด Ethereum ใช้ความยากสะสมแทนเลขบล็อก เพราะถ้าใช้เลขบล็อก ผู้ที่มีพลังขุดจะสร้างสายที่ความยากต่ำให้ถึงเลขนั้นก่อน แล้วชิงกำหนดว่าบล็อก PoW บล็อกใดเป็นบล็อกสุดท้าย หลังจุดเปลี่ยน ข้อมูลที่เคยอยู่ในบล็อก PoW (ธุรกรรมและ state ฝั่ง execution layer) ย้ายไปอยู่ในบล็อกของ Beacon Chain เป็นส่วนที่เรียกว่า <strong>execution payload</strong> และ validator เป็นผู้เสนอบล็อกแทนผู้ขุด</li>
+          <li><strong>12 เมษายน 2023 (Shanghai/Capella):</strong> เปิดให้ถอน stake และรางวัล ก่อนหน้านั้น ETH ที่ฝากเข้า deposit contract ถอนออกไม่ได้เลย</li>
+        </ol>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 250" role="img" aria-label="ลำดับเวลาของ The Merge chain PoW ที่มีธุรกรรมของผู้ใช้ทำงานคู่กับ Beacon Chain ที่เปิดเมื่อ 1 ธันวาคม 2020 ซึ่งยังไม่มีธุรกรรม เมื่อถึง Terminal Total Difficulty ในวันที่ 15 กันยายน 2022 การขุดหยุด และธุรกรรมย้ายไปอยู่ในบล็อกของ Beacon Chain ในฐานะ execution payload การถอน stake เปิดในเดือนเมษายน 2023">
+            <defs>
+              <marker id="arrC8m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+              <marker id="arrC8mo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b85a0e"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <!-- ป้ายเลน -->
+              <text x="16" y="60" font-weight="700" fill="#b85a10">Ethereum PoW</text>
+              <text x="16" y="76" font-size="11" fill="#6b655c">มีธุรกรรมของผู้ใช้</text>
+              <text x="16" y="164" font-weight="700" fill="#4a52c0">Beacon Chain</text>
+              <text x="16" y="180" font-size="11" fill="#6b655c">PoS</text>
+
+              <!-- เส้นแบ่ง The Merge -->
+              <line x1="498" y1="24" x2="498" y2="226" stroke="#c2412d" stroke-width="1.5" stroke-dasharray="5 4"/>
+              <text x="498" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#c2412d">15 ก.ย. 2022 The Merge</text>
+
+              <!-- เลน PoW -->
+              <g stroke="#6b655c" stroke-width="1.1" fill="none">
+                <line x1="176" y1="61" x2="188" y2="61" marker-end="url(#arrC8m)"/>
+                <line x1="226" y1="61" x2="238" y2="61" marker-end="url(#arrC8m)"/>
+                <line x1="276" y1="61" x2="288" y2="61" marker-end="url(#arrC8m)"/>
+                <line x1="326" y1="61" x2="338" y2="61" marker-end="url(#arrC8m)"/>
+                <line x1="376" y1="61" x2="388" y2="61" marker-end="url(#arrC8m)"/>
+                <line x1="426" y1="61" x2="438" y2="61" marker-end="url(#arrC8m)"/>
+              </g>
+              <g fill="#fdf0e3" stroke="#e2761b">
+                <rect x="140" y="46" width="36" height="30" rx="4"/>
+                <rect x="190" y="46" width="36" height="30" rx="4"/>
+                <rect x="240" y="46" width="36" height="30" rx="4"/>
+                <rect x="290" y="46" width="36" height="30" rx="4"/>
+                <rect x="340" y="46" width="36" height="30" rx="4"/>
+                <rect x="390" y="46" width="36" height="30" rx="4"/>
+                <rect x="440" y="46" width="36" height="30" rx="4"/>
+              </g>
+              <text x="476" y="100" text-anchor="end" font-size="11" fill="#b85a0e">ถึง TTD การขุดหยุด</text>
+              <path d="M476,61 C 505,61 512,100 535,138" fill="none" stroke="#b85a0e" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arrC8mo)"/>
+              <text x="530" y="96" font-size="11" fill="#b85a0e">ธุรกรรมย้ายมาเป็น execution payload</text>
+
+              <!-- เลน Beacon ก่อน Merge -->
+              <text x="240" y="134" font-size="11" fill="#4a52c0">1 ธ.ค. 2020: เปิด Beacon Chain</text>
+              <g stroke="#6b655c" stroke-width="1.1" fill="none">
+                <line x1="276" y1="161" x2="288" y2="161" marker-end="url(#arrC8m)"/>
+                <line x1="326" y1="161" x2="338" y2="161" marker-end="url(#arrC8m)"/>
+                <line x1="376" y1="161" x2="388" y2="161" marker-end="url(#arrC8m)"/>
+                <line x1="426" y1="161" x2="438" y2="161" marker-end="url(#arrC8m)"/>
+                <line x1="476" y1="161" x2="518" y2="161" marker-end="url(#arrC8m)"/>
+                <line x1="570" y1="161" x2="580" y2="161" marker-end="url(#arrC8m)"/>
+                <line x1="630" y1="161" x2="640" y2="161" marker-end="url(#arrC8m)"/>
+                <line x1="690" y1="161" x2="700" y2="161" marker-end="url(#arrC8m)"/>
+              </g>
+              <g fill="#eceefb" stroke="#5a63d8">
+                <rect x="240" y="146" width="36" height="30" rx="4"/>
+                <rect x="290" y="146" width="36" height="30" rx="4"/>
+                <rect x="340" y="146" width="36" height="30" rx="4"/>
+                <rect x="390" y="146" width="36" height="30" rx="4"/>
+                <rect x="440" y="146" width="36" height="30" rx="4"/>
+              </g>
+              <text x="240" y="196" font-size="11" fill="#6b655c">ลงคะแนนจริง แต่ยังไม่มีธุรกรรมของผู้ใช้</text>
+
+              <!-- เลน Beacon หลัง Merge -->
+              <g fill="#eceefb" stroke="#5a63d8" stroke-width="1.5">
+                <rect x="520" y="139" width="50" height="44" rx="5"/>
+                <rect x="582" y="139" width="48" height="44" rx="5"/>
+                <rect x="642" y="139" width="48" height="44" rx="5"/>
+                <rect x="702" y="139" width="48" height="44" rx="5"/>
+              </g>
+              <g fill="#fdf0e3" stroke="#e2761b">
+                <rect x="528" y="155" width="34" height="20" rx="3"/>
+                <rect x="589" y="155" width="34" height="20" rx="3"/>
+                <rect x="649" y="155" width="34" height="20" rx="3"/>
+                <rect x="709" y="155" width="34" height="20" rx="3"/>
+              </g>
+              <g font-size="10" text-anchor="middle">
+                <text x="545" y="169">tx</text><text x="606" y="169">tx</text><text x="666" y="169">tx</text><text x="726" y="169">tx</text>
+              </g>
+              <text x="520" y="204" font-size="11" fill="#6b655c">บล็อก PoS มีธุรกรรมอยู่ข้างใน</text>
+              <text x="748" y="238" text-anchor="end" font-size="11" fill="#6b655c">12 เม.ย. 2023 (Shanghai/Capella): เปิดให้ถอน stake</text>
+            </g>
+          </svg>
+          <figcaption>Beacon Chain ทำงานคู่กับ chain PoW เกือบสองปีโดยยังไม่มีธุรกรรมของผู้ใช้ เมื่อ chain PoW ถึงความยากสะสมที่กำหนด การขุดก็หยุด และบล็อกถัดไปของ execution layer ย้ายไปอยู่ในบล็อกของ Beacon Chain บัญชี ยอดเงิน และ contract ทั้งหมดยังอยู่ที่เดิม</figcaption>
+        </figure>
+
+        <h3>โครงสร้างโหนดหลัง The Merge</h3>
+        <p>หลัง The Merge โหนดทุกเครื่องต้องรันซอฟต์แวร์สองตัวคู่กัน (validator client ในหัวข้อ 8.3 จำเป็นเฉพาะโหนดที่ทำหน้าที่ validator) <strong>execution client</strong> รับธุรกรรม รัน EVM และเก็บ state ส่วน <strong>consensus client</strong> ทำงานด้าน PoS ทั้งหมดในหัวข้อ 8.3–8.5 ซอฟต์แวร์ทั้งสองคุยกันผ่าน <strong>Engine API</strong> เมื่อแยกเช่นนี้ Ethereum จึงเปลี่ยนกลไกฉันทามติได้โดยไม่ต้องแก้ส่วน EVM นอกจากนี้ แต่ละฝั่งยังมีซอฟต์แวร์จากหลายทีมให้เลือก (client diversity) ถ้า client ตัวหนึ่งมีข้อบกพร่อง โหนดที่ใช้ client ตัวอื่นยังทำงานต่อได้</p>
+
+        <h3>สิ่งที่ The Merge เปลี่ยน และไม่ได้เปลี่ยน</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>เรื่อง</th><th>หลัง The Merge</th></tr>
+            <tr><td>การใช้พลังงาน</td><td>ลดลงราว 99.95% ตามการประเมินของ Ethereum Foundation</td></tr>
+            <tr><td>ETH ที่ออกใหม่ต่อวัน</td><td>ลดลงราว 90% เพราะไม่ต้องจ่ายรางวัลให้ผู้ขุดไปชดเชยค่าไฟ</td></tr>
+            <tr><td>เวลาต่อบล็อก</td><td>จากเฉลี่ย 13–15 วินาทีที่แกว่งตามโชค เป็น slot คงที่ 12 วินาที</td></tr>
+            <tr><td>ค่า gas</td><td><strong>ไม่ได้ลดลง</strong> ค่า gas ขึ้นกับความต้องการเทียบกับพื้นที่ในบล็อก (หัวข้อ 5.5)</td></tr>
+            <tr><td>จำนวนธุรกรรมต่อวินาที</td><td>เพิ่มขึ้นเพียงเล็กน้อยจากเวลาต่อบล็อกที่สั้นลง การขยายระบบเป็นเรื่องของบทที่ 10</td></tr>
+            <tr><td>การถอน stake</td><td>ยังถอนไม่ได้ จนถึง Shanghai/Capella (เมษายน 2023)</td></tr>
+            <tr><td>บัญชี contract และประวัติธุรกรรม</td><td>เหมือนเดิมทุกอย่าง ผู้ใช้ไม่ต้องย้ายเหรียญ</td></tr>
+          </table>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          The Merge เปลี่ยนเฉพาะ <strong>กลไกฉันทามติ</strong> จาก PoW เป็น PoS ไม่ได้ลดค่า gas ไม่ได้เพิ่มจำนวนธุรกรรมต่อวินาทีอย่างมีนัยสำคัญ และไม่ได้เปิดให้ถอน stake ทันที ข้อที่เปลี่ยนชัดคือการใช้พลังงานลดลงราว 99.95%
+        </div>
+
+        <h3>เปรียบเทียบ PoW กับ PoS</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ประเด็น</th><th>PoW (Bitcoin)</th><th>PoS (Ethereum)</th></tr>
+            <tr><td>ทรัพยากรที่ใช้เป็นน้ำหนัก</td><td>พลังประมวลผล (hash power)</td><td>ETH ที่ล็อกไว้ (stake)</td></tr>
+            <tr><td>ผู้สร้างบล็อก</td><td>ผู้ขุด (miner) ที่หา nonce ได้ก่อน</td><td>proposer ที่โปรโตคอลสุ่มไว้ล่วงหน้าด้วย RANDAO</td></tr>
+            <tr><td>ระยะห่างของบล็อก</td><td>เฉลี่ย 10 นาที แกว่งตามโชค</td><td>slot คงที่ 12 วินาที</td></tr>
+            <tr><td>กฎเลือกสาย</td><td>สายที่มีงานสะสมมากที่สุด</td><td>LMD-GHOST ตามน้ำหนัก attestation</td></tr>
+            <tr><td>finality</td><td>เชิงความน่าจะเป็น ธรรมเนียมรอ 6 confirmation</td><td>economic finality ราว 2 epoch (12.8 นาที)</td></tr>
+            <tr><td>ต้นทุนของผู้สุจริต</td><td>ค่าไฟและเครื่องขุด จ่ายออกนอกระบบ</td><td>ค่าเสียโอกาสของ ETH ที่ล็อก</td></tr>
+            <tr><td>โทษของผู้โกง</td><td>เสียค่าไฟที่ใช้ไป เครื่องขุดยังอยู่</td><td>slashing ยึด stake ได้ถึงทั้งหมด</td></tr>
+            <tr><td>การกัน Sybil attack</td><td>one-CPU-one-vote</td><td>น้ำหนักตาม stake ไม่ใช่ตามจำนวนบัญชี</td></tr>
+            <tr><td>โหนดใหม่ตัดสินสายที่ถูกต้อง</td><td>เลือกเองได้จากงานสะสม (objective)</td><td>ต้องเริ่มจาก checkpoint ที่เชื่อถือ (weak subjectivity)</td></tr>
+            <tr><td>แรงกดดันให้รวมศูนย์</td><td>ฮาร์ดแวร์ ค่าไฟ และ mining pool</td><td>staking pool, exchange และ liquid staking</td></tr>
+            <tr><td>การใช้พลังงาน</td><td>สูงมาก ตามมูลค่ารางวัล</td><td>ต่ำ เท่ากับคอมพิวเตอร์ทั่วไปที่เปิดตลอดเวลา</td></tr>
+          </table>
+        </div>
+
+        <h3>ผู้โจมตีที่ถือ stake มากทำอะไรได้บ้าง</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>สัดส่วน stake ของผู้โจมตี</th><th>ทำอะไรได้</th><th>ผลที่ผู้โจมตีได้รับ</th></tr>
+            <tr><td>เกินหนึ่งในสาม</td><td>หยุด finality ได้ด้วยการไม่ลงคะแนน</td><td>inactivity leak ลดยอดเงินของผู้โจมตีไปเรื่อย ๆ จนฝั่งที่ออนไลน์กลับมาถึงสองในสาม</td></tr>
+            <tr><td>เกินครึ่ง</td><td>ควบคุม head ของ LMD-GHOST ย้อนบล็อกที่ยังไม่ finalized และ censor ธุรกรรมได้</td><td>การคุม head การ censor และการย้อนบล็อกที่ยังไม่ finalized ทำได้ด้วยการลงคะแนนตามปกติ epoch ละครั้ง ไม่ต้องลงลายเซ็นขัดกัน slashing จึงลงโทษไม่ได้ ผู้โจมตีจะโดน slashing เฉพาะเมื่อลงคะแนนซ้ำใน target epoch เดิม (double vote) หรือคร่อมคะแนนเดิม (surround vote)</td></tr>
+            <tr><td>ตั้งแต่สองในสามขึ้นไป</td><td>finalize สายที่ตนเลือกได้ และ censor ได้ยาวนาน</td><td>ย้อนบล็อกที่ finalized ไปแล้วไม่ได้ ถ้าไม่ยอมให้ stake อย่างน้อยหนึ่งในสามโดน slashing</td></tr>
+          </table>
+        </div>
+        <p>ไม่ว่าจะถือ stake มากเท่าใด ผู้โจมตีก็ยังสร้างธุรกรรมที่ผิดกติกาหรือใช้เงินของผู้อื่นไม่ได้ เพราะทุกโหนดตรวจทุกธุรกรรมเอง หลักนี้เหมือน 51% attack ใน Bitcoin (หัวข้อ 2.7) นอกจากนี้ PoS ยังมีทางออกที่ PoW ไม่มี ถ้าผู้โจมตีคุม stake เกินสองในสามแล้ว censor ธุรกรรม ชุมชนยังทำ fork เพื่อตัด stake ของผู้โจมตีออกได้ (บทที่ 9) แต่ใน PoW เครื่องขุดอยู่นอก chain การ fork จึงทำลายทุนของผู้โจมตีไม่ได้</p>
+
+        <h3>การรวมศูนย์ยังมีอยู่ในรูปแบบใหม่</h3>
+        <p>PoS ลดความได้เปรียบจากฮาร์ดแวร์และค่าไฟ แต่ไม่ได้กำจัดการรวมศูนย์ ผู้ที่มี ETH ไม่ถึง 32 ETH หรือไม่อยากรันเครื่องเอง มักฝาก ETH กับ exchange หรือกับ liquid staking protocol เช่น Lido protocol กลุ่มนี้ออก token แทน ETH ที่ฝากไว้ (liquid staking token) ผู้ฝากนำ token นั้นไปใช้ต่อได้ระหว่างที่ ETH ยังล็อกอยู่ ผู้ฝากจำนวนมากจึงเลือกช่องทางนี้ ผู้ให้บริการรายใหญ่ที่สุดอย่าง Lido เคยคุม stake ได้ราวหนึ่งในห้าถึงเกือบหนึ่งในสามของทั้งระบบ ถ้าผู้ให้บริการรายใดคุม stake ได้เกินหนึ่งในสาม แล้ว validator ทั้งหมดของรายนั้นหยุดลงคะแนนพร้อมกัน ไม่ว่าจะตั้งใจหรือเพราะซอฟต์แวร์ขัดข้อง finality ก็หยุดได้ตามตารางด้านบน ปัญหานี้มีรูปแบบคล้าย mining pool ในหัวข้อ 8.1 ข้อสรุปที่ควรจำคือ PoS เปลี่ยนรูปแบบของการรวมศูนย์ แต่ไม่ได้ทำให้การรวมศูนย์หายไป</p>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li><strong>โจทย์:</strong> เครือข่ายต้องเลือกผู้เขียนบล็อกด้วยทรัพยากรที่ปลอมไม่ได้ PoW ใช้พลังประมวลผล ซึ่งตรวจได้แต่ยึดคืนไม่ได้ PoS ใช้ ETH ที่ล็อกไว้ ซึ่งมีจำกัด ตรวจได้บน chain และยึดคืนจากผู้โกงได้</li>
+          <li><strong>8.1:</strong> PoW ใช้ไฟตามมูลค่ารางวัล ไม่ใช่ตามจำนวนธุรกรรม รายได้ที่ไม่แน่นอนทำให้ผู้ขุดเข้า pool และคนไม่กี่รายได้กำหนดเนื้อหาบล็อก และเครือข่ายยึดเครื่องขุดของผู้โจมตีไม่ได้</li>
+          <li><strong>8.2:</strong> PoS ให้น้ำหนักตาม stake ให้รางวัลแก่ผู้ทำหน้าที่ และยึด stake ของผู้โกง ผลตอบแทนคาดหวังต่อ ETH ของ effective balance เท่ากันไม่ว่าจะถือมากหรือน้อย แต่รายได้ระยะสั้นแกว่งตามโชค</li>
+          <li><strong>8.3:</strong> validator ฝากขั้นต่ำ 32 ETH เข้า deposit contract โปรโตคอลสุ่ม proposer หนึ่งรายต่อ slot ด้วย RANDAO ตามสัดส่วน effective balance validator ทุกรายลงคะแนน (attestation) หนึ่งครั้งต่อ epoch ใน committee ของตน</li>
+          <li><strong>8.4:</strong> slot ยาว 12 วินาที และ epoch มี 32 slot (6.4 นาที) LMD-GHOST เลือก head จากกิ่งที่มีน้ำหนัก attestation ล่าสุดมากกว่า Casper FFG ทำให้ checkpoint justified เมื่อได้คะแนนอย่างน้อยสองในสาม และ finalized เมื่อ checkpoint ถัดไปโดยตรง justified ต่อ ปกติใช้ราว 12.8 นาที ผู้ที่จะย้อน finality ต้องยอมให้ stake อย่างน้อยหนึ่งในสามโดน slashing</li>
+          <li><strong>8.5:</strong> nothing-at-stake คือ validator ลงคะแนนทุกสายเพราะไม่มีต้นทุน slashing แก้ปัญหานี้โดยลงโทษ double proposal, double vote และ surround vote โทษหนักขึ้นตามสัดส่วนของ stake ที่โดน slashing ในช่วงเวลาใกล้กัน long-range attack แก้ด้วย weak subjectivity</li>
+          <li><strong>8.6:</strong> The Merge (15 กันยายน 2022) ย้ายธุรกรรมจาก chain PoW เข้าไปอยู่ใน Beacon Chain ที่เปิดตั้งแต่ธันวาคม 2020 ลดพลังงานลงราว 99.95% แต่ไม่ได้ลดค่า gas การถอน stake เปิดในเดือนเมษายน 2023</li>
+        </ul>
+
+        <h3>ตัวเลขที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>รายการ</th><th>ค่า</th></tr>
+            <tr><td>stake ขั้นต่ำต่อ validator</td><td>32 ETH</td></tr>
+            <tr><td>เพดาน effective balance</td><td>32 ETH เดิม และสูงสุด 2,048 ETH หลัง Pectra (พฤษภาคม 2025) สำหรับ validator ที่เลือกใช้</td></tr>
+            <tr><td>ความยาวของ slot</td><td>12 วินาที</td></tr>
+            <tr><td>ความยาวของ epoch</td><td>32 slot = 6.4 นาที</td></tr>
+            <tr><td>เวลาจนถึง finality ในสภาพปกติ</td><td>ราว 2 epoch = 12.8 นาที</td></tr>
+            <tr><td>เกณฑ์ justified</td><td>stake อย่างน้อยสองในสามของทั้งระบบ</td></tr>
+            <tr><td>stake ที่ต้องโดน slashing ถ้าจะย้อน finality</td><td>อย่างน้อยหนึ่งในสาม</td></tr>
+            <tr><td>ขนาด committee</td><td>เป้าหมายอย่างน้อย 128 ราย</td></tr>
+            <tr><td>sync committee</td><td>512 ราย รอบละราว 27 ชั่วโมง</td></tr>
+            <tr><td>inactivity leak เริ่มเมื่อ</td><td>ไม่มี finality นานเกิน 4 epoch</td></tr>
+            <tr><td>ระยะล็อกหลังโดน slashing</td><td>8,192 epoch หรือราว 36 วัน</td></tr>
+            <tr><td>correlation penalty</td><td>ราว effective balance × min(3 × สัดส่วนที่โดน slashing, 1)</td></tr>
+            <tr><td>Beacon Chain / The Merge / Shanghai-Capella</td><td>1 ธ.ค. 2020 / 15 ก.ย. 2022 / 12 เม.ย. 2023</td></tr>
+            <tr><td>พลังงานที่ลดลงหลัง The Merge</td><td>ราว 99.95%</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. ถ้าจำนวนธุรกรรมบน Bitcoin เพิ่มเป็นสองเท่าโดยที่ราคาเหรียญเท่าเดิม ปริมาณไฟฟ้าที่เครือข่ายใช้จะเพิ่มเป็นสองเท่าหรือไม่ เพราะอะไร</p>
+          <details><summary>ดูเฉลย</summary><div><strong>ไม่</strong> ผู้ขุดใช้ไฟตามมูลค่าของรางวัลที่แข่งกันชิง ไม่ได้ใช้ตามจำนวนธุรกรรม บล็อกที่มีธุรกรรมน้อยหรือมากต้องใช้งาน PoW เท่ากัน ถ้ามีธุรกรรมมากขึ้น ค่าธรรมเนียมรวมอาจสูงขึ้นบ้าง รางวัลรวมจึงเพิ่มขึ้นเล็กน้อย แต่ไม่ได้เพิ่มเป็นสองเท่าตามจำนวนธุรกรรม</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. ข้อใดอธิบายปัญหา nothing-at-stake ได้ถูกต้อง</p>
+          <ol><li>ก. validator ที่ไม่มี ETH ลงคะแนนไม่ได้</li><li>ข. validator ลงคะแนนให้ทุกสายของ fork ได้โดยไม่มีต้นทุน จึงได้รางวัลไม่ว่าสายใดชนะ</li><li>ค. ผู้โจมตีใช้ key ของ validator ที่ถอน stake ไปแล้วสร้างประวัติใหม่ตั้งแต่อดีต</li><li>ง. validator ออฟไลน์จนเครือข่ายหยุด finalize</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> ใน PoS ที่ไม่มีโทษ การลงลายเซ็นไม่มีต้นทุน validator จึงสนับสนุนทุกสายพร้อมกัน fork ไม่ยุติ และผู้โจมตีได้คะแนนฟรี Ethereum แก้ด้วย slashing ข้อ ค คือ long-range attack ซึ่งเกี่ยวกับ key ของ validator ที่ถอน stake ไปแล้ว ส่วนข้อ ง เป็นเรื่องของ inactivity leak</div></details>
+        </div>
+
+        <div class="q">
+          <p>3. สมมติว่าระบบมี stake รวม 30 ล้าน ETH และผู้ให้บริการรายหนึ่งถือ stake 3 ล้าน ETH แบ่งเป็น validator หลายราย ภายในหนึ่งวัน ผู้ให้บริการรายนี้จะได้เสนอบล็อกเฉลี่ยกี่ slot</p>
+          <details><summary>ดูเฉลย</summary><div>หนึ่งวันมี 86,400 ÷ 12 = 7,200 slot ผู้ให้บริการถือ stake 3 ÷ 30 = 10% ของทั้งระบบ จึงได้เสนอบล็อกเฉลี่ย 7,200 × 10% = <strong>720 slot ต่อวัน</strong> จำนวน validator ไม่มีผล เพราะโอกาสขึ้นกับสัดส่วนของ effective balance รวม</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. จาก checkpoint J มีบล็อกลูก P และ Q บล็อก P มีลูก R และ R′ บล็อก Q มีลูก S และ S มีลูก T สัดส่วน stake ของ attestation ล่าสุด: P 5%, R 20%, R′ 30%, Q 5%, S 15%, T 25% LMD-GHOST เลือกบล็อกใดเป็น head และสายที่ยาวที่สุดคือสายใด</p>
+          <details><summary>ดูเฉลย</summary><div>กิ่ง P มีน้ำหนัก 5 + 20 + 30 = 55% กิ่ง Q มีน้ำหนัก 5 + 15 + 25 = 45% ที่ J จึงเลือก P ที่ P เลือก R′ (30% &gt; 20%) R′ ไม่มีบล็อกลูก <strong>head คือ R′</strong> ส่วนสายที่ยาวที่สุดคือ J–Q–S–T ตัวอย่างนี้แสดงว่า LMD-GHOST ไม่ได้เลือกตามความยาว แต่เลือกตามน้ำหนักของ stake ที่สนับสนุน</div></details>
+        </div>
+
+        <div class="q">
+          <p>5. checkpoint ของ epoch N ได้คะแนน 70% ของ stake (source คือ checkpoint ที่ justified แล้ว) ใน epoch N+1 มีเพียง 60% ที่ลงคะแนน source N → target N+1 สถานะของ N และ N+1 เป็นอย่างไร และถ้าสัดส่วนผู้ลงคะแนนอยู่ที่ 60% ไปอีกหลาย epoch จะเกิดอะไรขึ้น</p>
+          <details><summary>ดูเฉลย</summary><div>N <strong>justified</strong> เพราะ 70% ถึงสองในสาม แต่ N+1 ได้ 60% ไม่ถึงเกณฑ์ จึงไม่ justified และ N ก็ <strong>ยังไม่ finalized</strong> ถ้าสัดส่วนยังอยู่ที่ 60% finality จะหยุด แต่ chain ยังมีบล็อกใหม่ เพราะ LMD-GHOST ยังทำงาน เมื่อไม่มี finality นานเกิน 4 epoch inactivity leak จะลดยอดเงินของ validator ที่ไม่ลงคะแนนไปเรื่อย ๆ จนสัดส่วนของฝั่งที่ออนไลน์กลับมาถึงสองในสาม แล้ว finality จึงกลับมา</div></details>
+        </div>
+
+        <div class="q">
+          <p>6. ทำไม Casper FFG จึงใช้เกณฑ์สองในสาม แทนเกณฑ์เกินครึ่ง</p>
+          <details><summary>ดูเฉลย</summary><div>ถ้าสอง checkpoint ที่ขัดกัน finalized ทั้งคู่ แต่ละจุดต้องมี stake อย่างน้อยสองในสาม รวมกันได้อย่างน้อยสี่ในสาม จึงต้องมีส่วนซ้อนอย่างน้อยหนึ่งในสามที่ลงคะแนนให้ทั้งสองฝั่ง ลายเซ็นที่ขัดกันเป็นหลักฐานให้ slashing กลุ่มนี้ได้ทั้งหมด (accountable safety) ถ้าใช้เกณฑ์เกินครึ่ง ส่วนซ้อนอาจเล็กมาก ผู้โจมตีจะย้อน finality ได้โดยเสีย stake เพียงเล็กน้อย</div></details>
+        </div>
+
+        <div class="q">
+          <p>7. attestation คู่ใดของ validator รายเดียวกันทำให้โดน slashing (เขียนในรูป source → target)</p>
+          <ol><li>ก. 1 → 2 และ 2 → 3</li><li>ข. 2 → 5 และ 3 → 4</li><li>ค. 3 → 4 และ 4 → 5</li><li>ง. 2 → 4 และ 3 → 5</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> คะแนน 2 → 5 คร่อมคะแนน 3 → 4 เพราะ source เก่ากว่า (2 &lt; 3) และ target ใหม่กว่า (5 &gt; 4) จึงเป็น surround vote ข้อ ก และ ค คือการลงคะแนนต่อเนื่องตามปกติ ข้อ ง มีช่วงซ้อนกันบางส่วน แต่ไม่มีคะแนนใดคร่อมอีกคะแนนทั้งช่วง และ target ต่างกัน จึงไม่ผิดทั้ง surround vote และ double vote</div></details>
+        </div>
+
+        <div class="q">
+          <p>8. validator ที่มี effective balance 32 ETH โดน slashing คำนวณ correlation penalty โดยประมาณ ในกรณีที่ stake ทั้งระบบโดน slashing ในช่วงใกล้กัน (ก) 10% และ (ข) 40%</p>
+          <details><summary>ดูเฉลย</summary><div>(ก) 32 × min(3 × 0.10, 1) = 32 × 0.30 = <strong>9.6 ETH</strong> (ข) 3 × 0.40 = 1.2 เกิน 1 จึงใช้ 1 ได้ 32 × 1 = <strong>32 ETH</strong> หรือเสียทั้งหมด ทั้งสองกรณียังไม่รวมโทษทันทีและค่าปรับระหว่างช่วงล็อก ในกรณี (ข) stake ที่โดน slashing เกินหนึ่งในสาม ซึ่งเป็นขนาดที่ใช้ย้อน finality ได้ โปรโตคอลจึงลงโทษเต็มจำนวน</div></details>
+        </div>
+
+        <div class="q">
+          <p>9. ข้อใดถูกต้องเกี่ยวกับ The Merge</p>
+          <ol><li>ก. ค่า gas ลดลงมากทันทีหลัง The Merge</li><li>ข. ผู้ที่ฝาก ETH ไว้ถอน stake ได้ตั้งแต่วันที่ Merge</li><li>ค. บัญชีและ contract เดิมอยู่ครบ และการใช้พลังงานลดลงราว 99.95%</li><li>ง. Ethereum เลิกใช้ EVM และเปลี่ยนไปใช้ Beacon Chain รันธุรกรรมแทน</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> The Merge เปลี่ยนเฉพาะกลไกฉันทามติ บัญชี ยอดเงิน contract และประวัติยังอยู่ครบ ข้อ ก ผิดเพราะค่า gas ขึ้นกับความต้องการพื้นที่ในบล็อก ข้อ ข ผิดเพราะการถอนเปิดใน Shanghai/Capella เมษายน 2023 ข้อ ง ผิดเพราะ execution client ยังรัน EVM เหมือนเดิม Beacon Chain ทำหน้าที่ด้านฉันทามติเท่านั้น</div></details>
+        </div>
+
+        <div class="q">
+          <p>10. ทำไมโหนดใหม่ของ Ethereum จึงควรเริ่ม sync จาก checkpoint ล่าสุดที่ได้จากแหล่งที่เชื่อถือ ทั้งที่โหนดใหม่ของ Bitcoin ไม่ต้องทำเช่นนี้</p>
+          <details><summary>ดูเฉลย</summary><div>เพราะ PoS เสี่ยงต่อ long-range attack ผู้โจมตีอาจใช้ key ของ validator ที่ถอน stake ไปแล้ว สร้างประวัติทางเลือกตั้งแต่อดีต slashing ลงโทษ validator กลุ่มนี้ไม่ได้ เพราะไม่มี stake เหลือให้ยึด และโหนดใหม่ก็ไม่มีงานสะสมให้เทียบว่าประวัติใดจริง จึงต้องอาศัย weak subjectivity คือเริ่มจาก checkpoint ที่ finalized แล้ว และได้มาจากแหล่งที่เชื่อถือ ส่วนใน Bitcoin การสร้างประวัติปลอมต้องทำ PoW ใหม่ทั้งหมด โหนดใหม่จึงเลือกสายที่มีงานสะสมมากที่สุดได้เอง</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+  <script>
+    // แบบจำลอง Casper FFG และ correlation penalty
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const pct = (id) => Math.min(100, Math.max(0, Number($(id).value) || 0));
+      const fmt = (n) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+      const twoThirds = (p) => 3 * p >= 200;
+
+      // --- Casper FFG ---
+      function renderFfg() {
+        const pN = pct("fN"), pN1 = pct("fN1");
+        const out = $("fOut");
+        if (!twoThirds(pN)) {
+          out.innerHTML =
+            `checkpoint N ได้คะแนน ${fmt(pN)}% ไม่ถึงสองในสาม จึง<strong>ยังไม่ justified</strong> และใช้เป็น source ของ epoch ถัดไปไม่ได้` +
+            `<br>finality ของรอบนี้หยุด แต่ LMD-GHOST ยังเลือก head และ chain ยังมีบล็อกใหม่ทุก slot` +
+            `<br>ถ้าไม่มี finality นานเกิน 4 epoch inactivity leak จะเริ่มลดยอดเงินของ validator ที่ไม่ลงคะแนน`;
+          return;
+        }
+        if (!twoThirds(pN1)) {
+          out.innerHTML =
+            `checkpoint N <strong>justified</strong> (${fmt(pN)}%) แต่ source N → target N+1 ได้เพียง ${fmt(pN1)}% ไม่ถึงสองในสาม` +
+            `<br>checkpoint N+1 จึงยังไม่ justified และ checkpoint N <strong>ยังไม่ finalized</strong> ในรอบนี้`;
+          return;
+        }
+        out.innerHTML =
+          `checkpoint N <strong>finalized</strong> และ checkpoint N+1 <strong>justified</strong>` +
+          `<br>ถ้า epoch N+2 ได้คะแนนถึงสองในสามโดยใช้ N+1 เป็น source checkpoint N+1 จะ finalized ต่อ` +
+          `<br>ผู้ที่จะย้อนไปก่อน N ต้องยอมให้ stake อย่างน้อยหนึ่งในสามโดน slashing`;
+      }
+
+      // --- Correlation penalty ---
+      function renderSlash() {
+        const eb = Math.min(2048, Math.max(0, Number($("sEB").value) || 0));
+        const p = pct("sPct") / 100;
+        const frac = Math.min(3 * p, 1);
+        const penalty = eb * frac;
+        let html =
+          `correlation penalty ≈ ${fmt(eb)} × min(3 × ${fmt(p * 100)}%, 1) = <strong>${fmt(penalty)} ETH</strong>` +
+          ` (${fmt(frac * 100)}% ของ effective balance)`;
+        if (frac >= 1) {
+          html += `<br>stake ที่โดน slashing พร้อมกันถึงหนึ่งในสามแล้ว ซึ่งเป็นขนาดที่ใช้ย้อน finality validator ทุกรายจึง<strong>เสีย stake ทั้งหมด</strong>`;
+        } else if (p <= 0.001) {
+          html += `<br>เมื่อโดน slashing เพียงไม่กี่ราย โทษส่วนนี้แทบเป็นศูนย์ ความผิดพลาดของรายเดียวจึงไม่ทำให้หมดตัว`;
+        }
+        html += `<br><small>ยังไม่รวมโทษทันทีและค่าปรับระหว่างช่วงล็อกราว 36 วัน</small>`;
+        $("sOut").innerHTML = html;
+      }
+
+      ["fN", "fN1"].forEach((id) => $(id).addEventListener("input", renderFfg));
+      ["sEB", "sPct"].forEach((id) => $(id).addEventListener("input", renderSlash));
+      renderFfg();
+      renderSlash();
+    })();
+  </script>
+</body>
+</html>

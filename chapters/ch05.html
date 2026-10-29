@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บทที่ 5 Ethereum และ Smart Contract</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="p2" data-chapter="ch05">
+  <main class="wrap">
+    <nav class="crumb"><a href="../index.html">สารบัญ</a> / ภาค 2 Ethereum และ Smart Contract</nav>
+
+    <header class="chapter-head">
+      <div class="eyebrow">บทที่ 5 · พื้นฐาน Ethereum</div>
+      <h1>Ethereum และ Smart Contract เบื้องต้น</h1>
+      <p class="lead">Bitcoin ตอบโจทย์เงินดิจิทัลที่ไม่ต้องมีตัวกลาง Ethereum ขยายโจทย์ต่อว่า ถ้าเครือข่ายตกลงกันเรื่องยอดเงินได้ ก็ควรตกลงกันได้ด้วยว่าโปรแกรมทำงานแล้วได้ผลอะไร บทนี้อธิบายสิ่งที่ Ethereum ต้องเปลี่ยนเพื่อให้ทำเช่นนั้นได้ ได้แก่ Account model บัญชีสองประเภท EVM (Ethereum Virtual Machine) โครงสร้างของธุรกรรมและบล็อก กฎเลือกสาย (fork choice rule) ค่า gas ภาษา Solidity และเครื่องมือสำหรับทดลอง</p>
+    </header>
+
+    <div class="mini-toc">
+      <strong>ในบทนี้</strong>
+      <ol>
+        <li><a href="#s0">เริ่มจากโจทย์: ทุกแอปต้องสร้าง blockchain ของตัวเองหรือไม่</a></li>
+        <li><a href="#s1">UTXO model ของ Bitcoin เทียบกับ Account model ของ Ethereum</a></li>
+        <li><a href="#s2">บัญชีผู้ใช้ (EOA) และบัญชีสัญญา (Contract account)</a></li>
+        <li><a href="#s3">Smart contract และการทำงานบน EVM</a></li>
+        <li><a href="#s4">ธุรกรรมและบล็อกของ Ethereum: ฟิลด์ของธุรกรรม, state root และการเลือกสายโซ่</a></li>
+        <li><a href="#s5">Gas: gas limit, base fee, priority fee และหน่วย Wei / Gwei / ETH</a></li>
+        <li><a href="#s6">พื้นฐานภาษา Solidity: ชนิดข้อมูล, visibility, modifier และ event</a></li>
+        <li><a href="#s7">เครื่องมือที่ใช้: Remix, MetaMask และ Sepolia testnet</a></li>
+        <li><a href="#summary">สรุปท้ายบท</a></li>
+        <li><a href="#quiz">แบบฝึกหัด</a></li>
+      </ol>
+    </div>
+
+    <article>
+      <!-- ==================== เริ่มจากโจทย์ ==================== -->
+      <section id="s0">
+        <h2>เริ่มจากโจทย์: ทุกแอปต้องสร้าง blockchain ของตัวเองหรือไม่</h2>
+
+        <p>หลังจาก Bitcoin ใช้งานได้จริง หลายคนต้องการนำแนวคิดเดียวกันไปใช้กับเรื่องอื่นนอกจากการโอนเงิน เช่น ระบบจดทะเบียนชื่อโดเมน การออกเหรียญของตัวเอง หรือการโหวตขององค์กร แต่ผู้ออกแบบจงใจให้ Bitcoin Script ทำได้น้อย เพราะทุกโหนดต้องรันสคริปต์ของทุกธุรกรรม ถ้าสคริปต์วนลูปได้ ผู้โจมตีก็ส่งสคริปต์ที่ไม่มีวันจบมาทำให้ทุกโหนดค้างได้ ภาษานี้จึงไม่มีลูป เก็บข้อมูลข้ามธุรกรรมไม่ได้ และทำได้เพียงกำหนดเงื่อนไขการปลดล็อกเหรียญ ในช่วงแรกจึงต้องสร้าง blockchain ใหม่สำหรับแต่ละแอป เช่น Namecoin (2011) แยกมาจาก Bitcoin เพื่อใช้จดทะเบียนชื่อโดยเฉพาะ</p>
+
+        <h3>ปัญหาของการสร้าง blockchain ใหม่ทุกครั้ง</h3>
+        <ul>
+          <li><strong>พลังขุดกระจายคนละ chain:</strong> บทที่ 2 แสดงว่าผู้โจมตีต้องมีพลังขุด (hash power) มากกว่าครึ่งของทั้งเครือข่ายจึงจะเขียนประวัติใหม่ได้ บน chain ใหม่ที่มีผู้ขุด (miner) เพียงไม่กี่ราย ผู้โจมตีหาพลังขุดเกินครึ่งได้ง่าย และโจมตีแบบ 51% ได้</li>
+          <li><strong>ต้นทุนซ้ำซ้อน:</strong> ทุกแอปต้องสร้างเครือข่าย โหนด และผู้ขุดใหม่ทั้งหมด</li>
+          <li><strong>แอปคุยกันไม่ได้:</strong> เหรียญบน chain หนึ่งใช้กับแอปบนอีก chain หนึ่งโดยตรงไม่ได้</li>
+        </ul>
+
+        <h3>ทางออกของ Ethereum: blockchain เดียวที่เขียนโปรแกรมได้</h3>
+        <p>Vitalik Buterin เสนอ Ethereum ในปลายปี 2013 และเครือข่ายเปิดใช้งานในเดือนกรกฎาคม 2015 แนวคิดคือสร้าง blockchain เดียวที่มีภาษาโปรแกรมทั่วไปในตัว ใครต้องการสร้างแอปก็เขียนโปรแกรมแล้ว deploy ขึ้น chain นี้ ทุกแอปใช้ความปลอดภัยร่วมกัน และเรียกใช้กันได้โดยตรง เมื่อเครือข่ายต้องตกลงกันเรื่องผลของโปรแกรมแทนยอดเงิน ก็มีคำถามใหม่ตามมาหลายข้อ</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำถามที่ตามมา</th><th>คำตอบของ Ethereum</th><th>หัวข้อ</th></tr>
+            <tr><td>โปรแกรมต้องจำข้อมูลข้ามธุรกรรม จะเก็บสถานะแบบใด</td><td>Account model</td><td>5.1</td></tr>
+            <tr><td>โปรแกรมเป็นเจ้าของเงินได้หรือไม่ และใครสั่งให้โปรแกรมทำงาน</td><td>EOA และ Contract account</td><td>5.2</td></tr>
+            <tr><td>ทำอย่างไรให้โหนดทั่วโลกรันโปรแกรมแล้วได้ผลตรงกันทุกเครื่อง</td><td>EVM</td><td>5.3</td></tr>
+            <tr><td>ธุรกรรมกลายเป็นบล็อกได้อย่างไร และเมื่อเกิด fork โหนดเชื่อสายไหน</td><td>ฟิลด์ของธุรกรรม, state root และ fork choice rule</td><td>5.4</td></tr>
+            <tr><td>ถ้ามีคนส่งโปรแกรมที่วนไม่รู้จบหรือใช้ทรัพยากรมหาศาล จะหยุดอย่างไร</td><td>Gas</td><td>5.5</td></tr>
+            <tr><td>เขียนโปรแกรมด้วยภาษาอะไร</td><td>Solidity</td><td>5.6</td></tr>
+            <tr><td>ทดลองโดยไม่เสียเงินจริงได้อย่างไร</td><td>Remix, MetaMask, Sepolia</td><td>5.7</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 5.1 ==================== -->
+      <section id="s1">
+        <h2><span class="no">5.1</span>UTXO model ของ Bitcoin เทียบกับ Account model ของ Ethereum</h2>
+
+        <h3>ทำไม Ethereum ไม่ใช้ UTXO</h3>
+        <p>บทที่ 4 แสดงว่า UTXO เหมาะกับเงิน เพราะเงินแต่ละก้อนใช้ได้ครั้งเดียวแล้วหมดไป จึงตรวจการใช้จ่ายซ้ำ (double-spending) ได้ง่าย แต่โปรแกรมต้องการสิ่งที่ต่างออกไป เช่น โปรแกรมนับคะแนนโหวตต้องจำว่าตอนนี้แต่ละตัวเลือกได้กี่คะแนน และแก้ตัวเลขนั้นทุกครั้งที่มีคนโหวต ถ้าเก็บคะแนนไว้ใน UTXO ก้อนหนึ่ง ทุกการโหวตต้องใช้ก้อนนั้นจนหมดแล้วสร้างก้อนใหม่ที่มีคะแนนล่าสุด เมื่อสองคนโหวตพร้อมกัน ธุรกรรมทั้งสองจะอ้างถึง UTXO ก้อนเดียวกัน เครือข่ายรับได้เพียงรายการเดียว อีกคนต้องสร้างธุรกรรมใหม่จากก้อนล่าสุด Ethereum จึงเลือก <strong>Account model</strong> และเก็บ <strong>world state</strong> (สถานะของทุกบัญชี ณ ขณะนั้น) เป็นตารางบัญชี แต่ละบัญชีมียอดคงเหลือและข้อมูลที่แก้ทับได้</p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 272" role="img" aria-label="ฝั่ง Bitcoin ธุรกรรมใช้ UTXO 0.3 และ 0.5 จนหมด แล้วสร้าง UTXO ใหม่ให้ Bob และเงินทอน ฝั่ง Ethereum ธุรกรรมแก้ยอดในตาราง world state ยอดของ Alice ลดจาก 5.0 เป็น 4.4 Bob เพิ่มจาก 1.0 เป็น 1.6 และ nonce ของ Alice เพิ่มจาก 7 เป็น 8">
+            <defs>
+              <marker id="arrAcc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <text x="190" y="22" text-anchor="middle" font-weight="700" fill="#b85a10">Bitcoin: UTXO model</text>
+              <rect x="20" y="50" width="110" height="36" rx="7" fill="#f0ebe1"/>
+              <text x="75" y="73" text-anchor="middle">UTXO 0.3</text>
+              <rect x="20" y="110" width="110" height="36" rx="7" fill="#f0ebe1"/>
+              <text x="75" y="133" text-anchor="middle">UTXO 0.5</text>
+              <text x="75" y="166" text-anchor="middle" font-size="11" fill="#6b655c">ใช้หมดแล้ว</text>
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="132" y1="68" x2="158" y2="88" marker-end="url(#arrAcc)"/>
+                <line x1="132" y1="128" x2="158" y2="110" marker-end="url(#arrAcc)"/>
+                <line x1="232" y1="84" x2="258" y2="64" marker-end="url(#arrAcc)"/>
+                <line x1="232" y1="108" x2="258" y2="114" marker-end="url(#arrAcc)"/>
+              </g>
+              <rect x="160" y="62" width="72" height="72" rx="8" fill="#fff" stroke="currentColor"/>
+              <text x="196" y="103" text-anchor="middle" font-size="12">ธุรกรรม</text>
+              <rect x="260" y="46" width="110" height="36" rx="7" fill="#e8f5ef" stroke="#1f8a70"/>
+              <text x="315" y="69" text-anchor="middle">Bob 0.6</text>
+              <rect x="260" y="96" width="110" height="36" rx="7" fill="#fdf0e3" stroke="#e2761b"/>
+              <text x="315" y="119" text-anchor="middle">ทอน 0.2</text>
+              <text x="315" y="152" text-anchor="middle" font-size="11" fill="#6b655c">UTXO ใหม่</text>
+              <g font-size="12">
+                <text x="20" y="214">เงินเป็นก้อน ใช้แล้วหมดไป ต้องทอน</text>
+                <text x="20" y="236">ป้องกันใช้ซ้ำ: ก้อนที่อ้างถึงต้องยังอยู่ใน UTXO set</text>
+              </g>
+
+              <line x1="385" y1="14" x2="385" y2="256" stroke="#e4ddd0" stroke-width="1.5"/>
+
+              <text x="570" y="22" text-anchor="middle" font-weight="700" fill="#4a52c0">Ethereum: Account model</text>
+              <rect x="400" y="38" width="340" height="34" rx="7" fill="#fff" stroke="currentColor"/>
+              <text x="570" y="60" text-anchor="middle" font-size="12">ธุรกรรม: Alice โอน 0.6 ETH ให้ Bob (nonce = 7)</text>
+              <line x1="570" y1="74" x2="570" y2="96" stroke="#6b655c" stroke-width="1.2" marker-end="url(#arrAcc)"/>
+              <rect x="400" y="98" width="340" height="24" fill="#f0ebe1"/>
+              <g font-size="12">
+                <text x="412" y="115" font-weight="700">บัญชี</text>
+                <text x="580" y="115" text-anchor="middle" font-weight="700">balance (ETH)</text>
+                <text x="690" y="115" text-anchor="middle" font-weight="700">nonce</text>
+                <text x="412" y="141">Alice</text>
+                <text x="580" y="141" text-anchor="middle" fill="#1f6e5a" font-weight="700">5.0 → 4.4</text>
+                <text x="690" y="141" text-anchor="middle" fill="#1f6e5a" font-weight="700">7 → 8</text>
+                <text x="412" y="167">Bob</text>
+                <text x="580" y="167" text-anchor="middle" fill="#1f6e5a" font-weight="700">1.0 → 1.6</text>
+                <text x="690" y="167" text-anchor="middle">0</text>
+                <text x="412" y="193">Contract X</text>
+                <text x="580" y="193" text-anchor="middle">2.0</text>
+                <text x="690" y="193" text-anchor="middle">1</text>
+              </g>
+              <rect x="400" y="98" width="340" height="104" fill="none" stroke="#e4ddd0"/>
+              <line x1="400" y1="148" x2="740" y2="148" stroke="#e4ddd0"/>
+              <line x1="400" y1="174" x2="740" y2="174" stroke="#e4ddd0"/>
+              <g font-size="12">
+                <text x="400" y="232">ยอดเงินเป็นตัวเลขที่แก้ทับได้ ไม่ต้องทอน</text>
+                <text x="400" y="254">ป้องกันส่งซ้ำ: nonce ต้องตรงกับค่าปัจจุบันของบัญชี</text>
+              </g>
+            </g>
+          </svg>
+          <figcaption>ธุรกรรมเดียวกันในสองแบบ (ไม่นับค่าธรรมเนียม) Bitcoin ทำลายก้อนเงินเดิมแล้วสร้างก้อนใหม่ Ethereum แก้ตัวเลขในตาราง world state และเพิ่ม nonce ของผู้ส่ง</figcaption>
+        </figure>
+
+        <h3>ทำไม Account model ต้องมี nonce</h3>
+        <p>ใน Bitcoin ธุรกรรมที่บันทึกลง chain แล้วส่งซ้ำไม่ได้ เพราะ UTXO ที่ธุรกรรมนั้นอ้างถึงหายไปแล้ว แต่ Account model ไม่มีก้อนเงินที่ใช้แล้วหมดไป ถ้าไม่มีกลไกเพิ่มเติม ใครก็ตามที่เห็นธุรกรรม "Alice โอน 0.6 ETH ให้ Bob" ซึ่ง Alice ลงลายเซ็นแล้ว ก็นำธุรกรรมเดิมไปส่งซ้ำได้เรื่อย ๆ จนเงินของ Alice หมด การโจมตีแบบนี้เรียกว่า replay attack Ethereum จึงให้ทุกบัญชีมี <strong>nonce</strong> เป็นตัวนับธุรกรรมที่บัญชีนั้นส่งไปแล้ว ธุรกรรมจะผ่านก็ต่อเมื่อระบุ nonce ตรงกับค่าปัจจุบันของบัญชี เมื่อผ่านแล้ว nonce ของบัญชีจะเพิ่มขึ้นหนึ่ง ธุรกรรมเดิมจึงใช้ซ้ำไม่ได้ นอกจากนี้ nonce ยังบังคับให้ธุรกรรมจากบัญชีเดียวกันเข้าบล็อกตามลำดับ</p>
+
+        <div class="callout">
+          <span class="h">nonce สองความหมาย</span>
+          nonce ในบทที่ 2 คือตัวเลขที่ผู้ขุดเปลี่ยนไปเรื่อย ๆ จนได้ค่าแฮชของ header ต่ำกว่าเป้าหมาย (target) ส่วน nonce ของบัญชี Ethereum คือตัวนับธุรกรรม ทั้งสองใช้ชื่อเดียวกันเพราะมาจากคำว่า "number used once" แต่ทำหน้าที่คนละอย่าง
+        </div>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>UTXO model (Bitcoin)</th><th>Account model (Ethereum)</th></tr>
+            <tr><td>สิ่งที่บันทึก</td><td>ก้อนเงินที่ยังไม่ได้ใช้ (UTXO)</td><td>ยอดคงเหลือ nonce code และ storage ของแต่ละบัญชี</td></tr>
+            <tr><td>การโอน</td><td>ใช้ก้อนเดิมทั้งก้อน แล้วสร้างก้อนใหม่และเงินทอน (change)</td><td>ลดยอดผู้ส่ง เพิ่มยอดผู้รับ</td></tr>
+            <tr><td>ป้องกันการใช้ซ้ำ</td><td>ก้อนที่อ้างถึงต้องยังอยู่ใน UTXO set</td><td>nonce ต้องตรงกับค่าปัจจุบัน</td></tr>
+            <tr><td>ความเป็นส่วนตัว</td><td>ดีกว่า ใช้ address ใหม่ได้ทุกครั้ง</td><td>ด้อยกว่า มักใช้บัญชีเดิมตลอด</td></tr>
+            <tr><td>ตรวจธุรกรรมแบบขนาน (parallel)</td><td>ทำได้ง่าย ธุรกรรมที่ใช้ก้อนต่างกันไม่เกี่ยวข้องกัน</td><td>ยากกว่า ธุรกรรมหลายรายการอาจแก้บัญชีเดียวกัน</td></tr>
+            <tr><td>เหมาะกับ</td><td>การโอนเงิน</td><td>โปรแกรมที่ต้องจำและแก้สถานะ</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 5.2 ==================== -->
+      <section id="s2">
+        <h2><span class="no">5.2</span>บัญชีผู้ใช้ (EOA) และบัญชีสัญญา (Contract account)</h2>
+
+        <h3>ทำไมต้องมีบัญชีสองประเภท</h3>
+        <p>บน Ethereum โปรแกรมต้องถือเงินได้ เช่น โปรแกรมระดมทุนต้องเก็บ ETH ไว้จนกว่าจะครบเป้า แต่โปรแกรมถือ private key เองไม่ได้ ถ้าให้ใครคนหนึ่งถือ private key แทน คนนั้นก็ถอนเงินออกไปได้ตามใจ ผู้ใช้จึงต้องกลับไปเชื่อใจคนคนนั้น Ethereum จึงแบ่งบัญชีเป็นสองประเภท ได้แก่ บัญชีที่ควบคุมด้วย private key และบัญชีที่ควบคุมด้วยโค้ด</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>EOA (Externally Owned Account)</th><th>Contract account</th></tr>
+            <tr><td>ควบคุมโดย</td><td>private key ของผู้ใช้</td><td>โค้ดของ contract</td></tr>
+            <tr><td>มี code และ storage</td><td>ไม่มี</td><td>มี</td></tr>
+            <tr><td>เริ่มธุรกรรมเองได้</td><td>ได้ ทุกธุรกรรมต้องเริ่มจาก EOA</td><td>ไม่ได้ ทำงานเมื่อมีผู้เรียกเท่านั้น</td></tr>
+            <tr><td>ที่มาของ address</td><td>20 ไบต์สุดท้ายของค่าแฮช Keccak-256 ของ public key</td><td>คำนวณจาก address ของผู้สร้างกับ nonce ของผู้สร้าง (ถ้าสร้างด้วย CREATE2 จะใช้ address ผู้สร้าง, salt และค่าแฮชของ init code แทน nonce)</td></tr>
+            <tr><td>จ่ายค่า gas</td><td>ผู้ส่งธุรกรรมเป็นผู้จ่าย</td><td>ไม่ได้จ่าย ใช้ gas ที่ EOA ผู้เรียกจ่ายมา</td></tr>
+          </table>
+        </div>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 210" role="img" aria-label="EOA ของ Alice ลงลายเซ็นธุรกรรมเรียก Contract A จากนั้น Contract A ส่ง message call ไปยัง Contract B contract เริ่มทำงานเองไม่ได้">
+            <defs>
+              <marker id="arrEoa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <rect x="20" y="50" width="170" height="100" rx="10" fill="#fff" stroke="currentColor" stroke-width="1.3"/>
+              <text x="105" y="78" text-anchor="middle" font-weight="700">EOA (Alice)</text>
+              <text x="105" y="102" text-anchor="middle" font-size="12">ถือ private key</text>
+              <text x="105" y="122" text-anchor="middle" font-size="12" fill="#6b655c">balance, nonce</text>
+
+              <line x1="192" y1="100" x2="288" y2="100" stroke="#6b655c" stroke-width="1.3" marker-end="url(#arrEoa)"/>
+              <text x="240" y="88" text-anchor="middle" font-size="11" fill="#6b655c">ธุรกรรม</text>
+              <text x="240" y="122" text-anchor="middle" font-size="11" fill="#6b655c">มีลายเซ็น</text>
+
+              <rect x="290" y="50" width="190" height="100" rx="10" fill="#eceefb" stroke="#5a63d8" stroke-width="1.5"/>
+              <text x="385" y="78" text-anchor="middle" font-weight="700">Contract A</text>
+              <text x="385" y="102" text-anchor="middle" font-size="12">code + storage</text>
+              <text x="385" y="122" text-anchor="middle" font-size="12" fill="#6b655c">balance, nonce</text>
+
+              <line x1="482" y1="100" x2="568" y2="100" stroke="#6b655c" stroke-width="1.3" marker-end="url(#arrEoa)"/>
+              <text x="525" y="88" text-anchor="middle" font-size="11" fill="#6b655c">message</text>
+              <text x="525" y="122" text-anchor="middle" font-size="11" fill="#6b655c">call</text>
+
+              <rect x="570" y="50" width="170" height="100" rx="10" fill="#eceefb" stroke="#5a63d8" stroke-width="1.5"/>
+              <text x="655" y="78" text-anchor="middle" font-weight="700">Contract B</text>
+              <text x="655" y="102" text-anchor="middle" font-size="12">code + storage</text>
+              <text x="655" y="122" text-anchor="middle" font-size="12" fill="#6b655c">balance, nonce</text>
+
+              <text x="105" y="180" text-anchor="middle" font-size="12">จุดเริ่มต้นของทุกการทำงาน</text>
+              <text x="520" y="180" text-anchor="middle" font-size="12">ไม่มี private key ทำงานเมื่อมีผู้เรียกเท่านั้น</text>
+              <text x="520" y="198" text-anchor="middle" font-size="12">แต่เรียก contract อื่นต่อได้ภายในธุรกรรมเดียวกัน</text>
+            </g>
+          </svg>
+          <figcaption>ทุกการทำงานบน Ethereum เริ่มจากธุรกรรมที่ EOA ลงลายเซ็น contract ที่รับการเรียกอาจเรียก contract อื่นต่อเป็นทอด ๆ การเรียกทั้งหมดนี้อยู่ในธุรกรรมเดียวและใช้ gas ที่ EOA จ่ายมา</figcaption>
+        </figure>
+
+        <p>address ของ Ethereum ทั้งสองประเภทมีรูปแบบเดียวกัน คือ <code>0x</code> ตามด้วยเลขฐานสิบหก 40 ตัว (20 ไบต์) ดูจาก address อย่างเดียวจึงแยกไม่ได้ว่าเป็นบัญชีประเภทใด ต้องตรวจว่ามี code อยู่ที่ address นั้นหรือไม่ ส่วน address ที่เขียนตัวพิมพ์ใหญ่ปนเล็กคือ checksum ตาม EIP-55 ตัวพิมพ์ใหญ่เล็กเหล่านี้ใช้จับการพิมพ์ผิด เช่นเดียวกับ checksum ของ address ใน Bitcoin</p>
+
+        <div class="callout">
+          <span class="h">ข้อมูลเพิ่มเติม</span>
+          การอัปเกรด Pectra (พฤษภาคม 2025) เพิ่ม EIP-7702 ให้ EOA ตั้งค่าให้ใช้โค้ดของ contract ได้ เส้นแบ่งระหว่างบัญชีสองประเภทจึงไม่ชัดเท่าเดิม แต่หลักที่ว่าทุกธุรกรรมเริ่มจากผู้ถือ private key ยังเป็นจริง และข้อสอบพื้นฐานถามหลักข้อนี้ ผลข้างเคียงอีกข้อคือ EOA ที่ตั้งค่าตาม EIP-7702 จะมี code สั้น ๆ ที่ชี้ไปยัง contract อื่น การตรวจว่ามี code อยู่ที่ address จึงแยกบัญชีสองประเภทได้ไม่แน่นอนเหมือนเดิม
+        </div>
+      </section>
+
+      <!-- ==================== 5.3 ==================== -->
+      <section id="s3">
+        <h2><span class="no">5.3</span>Smart contract และการทำงานบน EVM</h2>
+
+        <h3>Smart contract คืออะไร</h3>
+        <p>Nick Szabo เสนอคำว่า smart contract ในช่วงทศวรรษ 1990 ตัวอย่างที่เขาใช้คือ <strong>ตู้ขายของอัตโนมัติ (vending machine)</strong> เมื่อใส่เงินครบและกดเลือก ตู้ก็ส่งสินค้าออกมาตามกติกาที่ตั้งไว้ในเครื่อง ผู้ซื้อไม่ต้องพึ่งพนักงานและไม่ต้องเชื่อใจผู้ขาย บน Ethereum smart contract คือโปรแกรมที่ deploy ไว้ที่ address หนึ่งบน blockchain เมื่อมีธุรกรรมเรียก โปรแกรมจะทำงานตามโค้ดและแก้สถานะได้ ไม่มีใครแก้กติกาหรือหยุดโปรแกรมได้ เว้นแต่โค้ดจะเขียนเปิดช่องไว้</p>
+
+        <h3>ทำไมต้องมี virtual machine</h3>
+        <p>ใน Bitcoin ทุกโหนดตรวจลายเซ็นของทุกธุรกรรมเอง ใน Ethereum ทุกโหนดต้อง <strong>รันโปรแกรมของทุกธุรกรรมเอง</strong> แล้วเทียบว่าได้สถานะใหม่ตรงกับที่ผู้สร้างบล็อกประกาศ ถ้าผลต่างกันแม้บิตเดียว เครือข่ายจะตกลงกันไม่ได้ แต่แต่ละโหนดใช้ CPU ระบบปฏิบัติการ และภาษาโปรแกรมต่างกัน Ethereum จึงกำหนด <strong>EVM (Ethereum Virtual Machine)</strong> เป็นคอมพิวเตอร์จำลองที่ทุกโหนดใช้กติกาเดียวกัน ทุกคำสั่ง (opcode) ให้ผลแน่นอนตามที่กำหนดไว้ (deterministic)</p>
+
+        <h3>ลักษณะของ EVM</h3>
+        <ul>
+          <li>คอมไพเลอร์แปลโค้ด Solidity เป็น <strong>bytecode</strong> ซึ่งก็คือลำดับของ opcode เช่น <code>ADD</code>, <code>SSTORE</code>, <code>CALL</code> สิ่งที่เก็บไว้บน chain คือ bytecode นี้ ไม่ใช่โค้ด Solidity</li>
+          <li>เป็น stack machine ข้อมูลแต่ละช่องมีขนาด 256 บิต และ stack ลึกได้ไม่เกิน 1,024 ช่อง</li>
+          <li>มีพื้นที่เก็บข้อมูลหลายแบบ ได้แก่ <strong>storage</strong> อยู่ถาวรบน chain และแพงที่สุด <strong>memory</strong> ใช้ชั่วคราวระหว่างการเรียกหนึ่งครั้ง และ <strong>calldata</strong> คือข้อมูลที่ส่งมากับการเรียก รายละเอียดอยู่ในบทที่ 6</li>
+          <li>เป็น <strong>Turing-complete</strong> จึงเขียนลูปได้ แต่ก็มีปัญหาลูปไม่รู้จบตามมา Ethereum แก้ปัญหานี้ด้วย gas (หัวข้อ 5.5 และบทที่ 7)</li>
+        </ul>
+
+        <h3>ทำไม contract จึงทำบางอย่างไม่ได้</h3>
+        <p>ทุกโหนดต้องได้ผลตรงกัน ข้อกำหนดนี้ทำให้ contract ทำบางอย่างไม่ได้</p>
+        <ul>
+          <li>contract <strong>เรียกเว็บไซต์หรือ API ภายนอกไม่ได้</strong> เพราะแต่ละโหนดเรียกในเวลาต่างกันและอาจได้คำตอบต่างกัน</li>
+          <li>contract <strong>สุ่มตัวเลขแบบปลอดภัยไม่ได้</strong> เพราะทุกโหนดต้องสุ่มได้ค่าเดียวกัน ค่าตั้งต้น (seed) จึงต้องมาจากข้อมูลบน chain เช่น ข้อมูลของบล็อก ผู้เสนอบล็อกและผู้เล่นเห็นข้อมูลนี้ได้ก่อน และทำนายผลได้</li>
+          <li>EVM <strong>ไม่มีเลขทศนิยมแบบ floating point</strong> เพราะการปัดเศษอาจให้ผลต่างกันในแต่ละเครื่อง</li>
+        </ul>
+        <p>เมื่อ contract ดึงข้อมูลภายนอกเองไม่ได้ ข้อมูลเหล่านั้นต้องมีคนส่งเข้ามาผ่านธุรกรรม และนี่คือที่มาของ Oracle ในบทที่ 13</p>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          Contract ที่ deploy แล้ว <strong>แก้โค้ดไม่ได้</strong> (immutable) ข้อดีคือผู้ใช้มั่นใจได้ว่าไม่มีใครเปลี่ยนกติกาภายหลัง ข้อเสียคือถ้าโค้ดมีช่องโหว่ก็แก้ไม่ได้ โครงการที่ต้องการอัปเกรดได้จึงใช้รูปแบบ proxy ผู้ใช้เรียก contract ตัวกลาง (proxy) ซึ่งส่งต่อการเรียกไปยัง contract ที่เก็บ logic ไว้ โค้ดของแต่ละ contract ยังแก้ไม่ได้ แต่ผู้ดูแลเปลี่ยน address ของ contract ปลายทางได้ ผู้ใช้จึงต้องเชื่อใจผู้ที่มีสิทธิ์อัปเกรดแทน
+        </div>
+      </section>
+
+      <!-- ==================== 5.4 ==================== -->
+      <section id="s4">
+        <h2><span class="no">5.4</span>ธุรกรรมและบล็อกของ Ethereum: ฟิลด์ของธุรกรรม, state root และการเลือกสายโซ่</h2>
+
+        <p>หัวข้อ 5.1–5.3 อธิบายว่า Ethereum เก็บสถานะอะไรและรันโปรแกรมอย่างไร หัวข้อนี้ตอบคำถามที่บทที่ 0–3 เคยตอบให้ Bitcoin มาแล้ว คือธุรกรรมมีข้อมูลอะไร บล็อกผูกกันอย่างไร และเมื่อเครือข่ายแตกเป็นสองสาย โหนดจะเชื่อสายไหน คำตอบหลายข้อต่างจาก Bitcoin และข้อสอบมักถามความแตกต่างนี้</p>
+
+        <h3>ทำไมธุรกรรมต้องมีฟิลด์เหล่านี้</h3>
+        <p>ธุรกรรมของ Ethereum ต้องบอกได้ครบว่าใครสั่ง สั่งให้ใครทำอะไร ยอมจ่ายเท่าใด และต้องใช้ซ้ำไม่ได้ ฟิลด์แต่ละตัวตอบโจทย์ข้อหนึ่ง</p>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ฟิลด์</th><th>เนื้อหา</th><th>มีไว้เพื่อ</th></tr>
+            <tr><td><code>nonce</code></td><td>ลำดับธุรกรรมของผู้ส่ง</td><td>กัน replay attack ภายในเครือข่ายเดียวกัน และกำหนดลำดับ (หัวข้อ 5.1)</td></tr>
+            <tr><td><code>chainId</code></td><td>หมายเลขเครือข่าย เช่น 1 คือ mainnet</td><td>กันการนำธุรกรรมไปส่งซ้ำบนเครือข่ายอื่น (EIP-155)</td></tr>
+            <tr><td><code>to</code></td><td>address ผู้รับ หรือ contract ที่ต้องการเรียก</td><td>ถ้าว่าง หมายถึงการสร้าง contract ใหม่</td></tr>
+            <tr><td><code>value</code></td><td>จำนวน ETH ที่ส่ง (หน่วย wei)</td><td>โอนเงิน หรือส่งเงินเข้าฟังก์ชัน <code>payable</code></td></tr>
+            <tr><td><code>data</code></td><td>ข้อมูลสำหรับ contract</td><td>ระบุฟังก์ชันและพารามิเตอร์ที่ต้องการเรียก หรือ bytecode ของ contract ที่จะสร้าง</td></tr>
+            <tr><td><code>gasLimit</code>, <code>maxFeePerGas</code>, <code>maxPriorityFeePerGas</code></td><td>เพดาน gas และราคา</td><td>จำกัดค่าใช้จ่ายสูงสุดที่ผู้ส่งยอมจ่าย (หัวข้อ 5.5)</td></tr>
+            <tr><td>ลายเซ็น (<code>yParity</code>, <code>r</code>, <code>s</code>)</td><td>ลายเซ็น ECDSA ของผู้ส่ง (ธุรกรรมแบบ legacy ใช้ <code>v</code> แทน <code>yParity</code>)</td><td>พิสูจน์ว่าเจ้าของ private key อนุญาตธุรกรรมนี้</td></tr>
+          </table>
+        </div>
+        <p>ธุรกรรม <strong>ไม่มีฟิลด์ from</strong> เพราะเครือข่ายคำนวณ address ของผู้ส่งกลับจากลายเซ็นได้เอง ถ้าใส่ฟิลด์ from ไว้ โหนดก็ยังต้องตรวจว่าตรงกับลายเซ็นอยู่ดี ฟิลด์นี้จึงซ้ำซ้อนและเปลืองพื้นที่ ค่า <code>tx.origin</code> ใน Solidity มาจากการคำนวณนี้ ในการเรียกชั้นแรกจาก EOA ค่า <code>msg.sender</code> ก็เป็น address เดียวกัน แต่ถ้า contract A เรียก contract B ต่อ ค่า <code>msg.sender</code> ใน B จะเป็น address ของ A (หัวข้อ 5.6)</p>
+
+        <div class="callout">
+          <span class="h">chainId มาจากเหตุการณ์จริง</span>
+          ในปี 2016 Ethereum แยกเป็นสอง chain คือ Ethereum และ Ethereum Classic (บทที่ 9) บัญชีและ nonce ของทั้งสอง chain เหมือนกันทุกประการ ธุรกรรมที่ลงลายเซ็นบน chain หนึ่งจึงนำไปส่งบนอีก chain ได้ และผู้ใช้หลายคนเสียเงินบน chain ที่ไม่ได้ตั้งใจโอน EIP-155 แก้โดยนำ chainId ไปรวมไว้ในข้อมูลที่ลงลายเซ็น ลายเซ็นสำหรับ chain หนึ่งจึงใช้กับอีก chain ไม่ได้
+        </div>
+
+        <h3>data เรียกฟังก์ชันได้อย่างไร</h3>
+        <p>contract หนึ่งมีหลายฟังก์ชัน ธุรกรรมจึงต้องระบุว่าต้องการเรียกฟังก์ชันใด แต่ถ้าส่งชื่อฟังก์ชันเป็นข้อความยาว ๆ จะเปลือง gas Ethereum จึงใช้ <strong>function selector</strong> แทนชื่อ selector คือ 4 ไบต์แรกของค่าแฮช Keccak-256 ของ function signature คือชื่อฟังก์ชันตามด้วยชนิดพารามิเตอร์ เช่น <code>transfer(address,uint256)</code> (คำนี้ไม่เกี่ยวกับลายเซ็นดิจิทัลของธุรกรรม) data จะเริ่มด้วย selector แล้วตามด้วยพารามิเตอร์ที่เข้ารหัส (encode) ตามรูปแบบ ABI (Application Binary Interface) ตัวอย่างที่พบบ่อยที่สุดคือฟังก์ชันโอนเหรียญ ERC-20</p>
+<pre><code>keccak256("transfer(address,uint256)") = a9059cbb2ab09eb2…
+function selector                      = 0xa9059cbb
+
+data = 0xa9059cbb
+       000000000000000000000000&lt;address ผู้รับ 20 ไบต์&gt;      พารามิเตอร์ที่ 1 (เติมให้ครบ 32 ไบต์)
+       &lt;จำนวนเหรียญ 32 ไบต์&gt;                                 พารามิเตอร์ที่ 2</code></pre>
+        <p>เมื่อกดเรียกฟังก์ชัน <code>tip</code> ของ TipJar (ตัวอย่างในหัวข้อ 5.6) ใน Remix เครื่องมือจะคำนวณ selector ของ <code>"tip(string)"</code> และเข้ารหัสข้อความให้แบบเดียวกัน EVM เองไม่รู้จัก selector โค้ดส่วน dispatcher ที่คอมไพเลอร์ใส่ไว้ใน bytecode ของ contract จะอ่าน 4 ไบต์แรกของ data แล้วกระโดดไปทำงานที่ฟังก์ชันที่ตรงกัน</p>
+
+        <h3>วงจรชีวิตของธุรกรรม (transaction lifecycle)</h3>
+        <ol>
+          <li>wallet เช่น MetaMask สร้างธุรกรรม ลงลายเซ็นด้วย private key แล้วส่งให้โหนด</li>
+          <li>โหนดตรวจลายเซ็นและ nonce และตรวจว่ายอดเงินพอจ่ายค่า gas สูงสุด (gasLimit × maxFeePerGas) รวมกับจำนวน ETH ที่ส่ง (value) จากนั้นกระจายธุรกรรมต่อให้โหนดอื่น ธุรกรรมรออยู่ใน mempool เหมือนใน Bitcoin</li>
+          <li>เวลาของ Ethereum แบ่งเป็นช่วงละ 12 วินาที เรียกว่า slot ในแต่ละ slot เครือข่ายเลือก validator หนึ่งรายเป็นผู้เสนอบล็อก (proposer) validator คือผู้ที่วาง ETH เป็นเงินค้ำประกัน (stake) เพื่อได้สิทธิ์สร้างและรับรองบล็อก proposer เลือกธุรกรรมจาก mempool โดยมักเรียงตาม priority fee แล้วรันทีละรายการบน EVM</li>
+          <li>proposer ประกาศบล็อกพร้อม state root ใหม่ โหนดอื่นรันธุรกรรมทั้งหมดซ้ำเอง ถ้าได้ state root ไม่ตรงกับที่ประกาศ โหนดจะปฏิเสธบล็อกนั้น</li>
+          <li>validator รายอื่นส่งคะแนนรับรอง (attestation) ให้บล็อก ช่วงเวลา 32 slot (6.4 นาที) เรียกว่าหนึ่ง epoch เมื่อผ่านไปราว 2 epoch หรือ 12.8 นาที บล็อกจะ finalized</li>
+        </ol>
+
+        <h3>ทำไม header ของ Ethereum จึงมี root หลักสามค่า</h3>
+        <p>header ของ Bitcoin ผูก (commit) กับข้อมูลชุดเดียว คือธุรกรรม ผ่าน Merkle root (บทที่ 3) SPV จึงพิสูจน์ได้ว่าธุรกรรมอยู่ในบล็อก แต่พิสูจน์ยอดเงินคงเหลือไม่ได้ เพราะ header ไม่มีค่าใดผูกกับยอดเงิน ใน Ethereum ผู้ใช้ต้องการถามได้มากกว่านั้น เช่น ตอนนี้บัญชีนี้มีเงินเท่าใด หรือ contract เก็บค่าอะไรไว้ header จึงผูกกับข้อมูลสามชุดผ่าน root สามค่า ได้แก่ <code>transactionsRoot</code>, <code>stateRoot</code> และ <code>receiptsRoot</code> ตารางด้านล่างใส่ <code>parentHash</code> ไว้ด้วยเพื่อเทียบกับ Bitcoin</p>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ฟิลด์ใน header</th><th>ผูกกับ</th><th>ใช้พิสูจน์</th></tr>
+            <tr><td><code>parentHash</code></td><td>header ของบล็อกก่อนหน้า</td><td>ลำดับของบล็อก เหมือน hash chain ในบทที่ 0</td></tr>
+            <tr><td><code>transactionsRoot</code></td><td>ธุรกรรมทั้งหมดในบล็อก</td><td>ธุรกรรมอยู่ในบล็อกนี้ เทียบเท่า Merkle root ของ Bitcoin</td></tr>
+            <tr><td><code>stateRoot</code></td><td>world state ทั้งหมดหลังรันบล็อกนี้</td><td>ยอดเงิน nonce code และค่าใน storage ของบัญชีใดก็ได้</td></tr>
+            <tr><td><code>receiptsRoot</code></td><td>ผลการรันของแต่ละธุรกรรม รวมถึง event log</td><td>ธุรกรรมสำเร็จหรือไม่ และเกิด event ใดบ้าง</td></tr>
+          </table>
+        </div>
+        <p>ทั้งสามค่าเป็น root ของ <strong>Merkle Patricia Trie</strong> โครงสร้างนี้ต่อยอดจาก Merkle tree ให้ค้นหาด้วย key ได้ เช่น ค้นด้วย address แล้วได้ข้อมูลบัญชี หลักการยังเหมือนบทที่ 3 คือ ถ้าข้อมูลส่วนใดเปลี่ยน root ก็เปลี่ยนตาม และพิสูจน์ข้อมูลหนึ่งรายการได้ด้วยค่าแฮชตามเส้นทางขึ้นไปถึง root</p>
+        <p>header รุ่นปัจจุบันมี root เพิ่มขึ้นอีก เช่น <code>withdrawalsRoot</code> ที่เพิ่มในการอัปเกรด Shanghai (2023) สำหรับรายการถอน stake ค่าเหล่านี้อยู่นอกเนื้อหาของบทนี้ root หลักที่ใช้พิสูจน์ธุรกรรม สถานะ และผลการรันยังเป็นสามค่าข้างต้น</p>
+
+        <h3>เมื่อเกิด fork โหนดเชื่อสายไหน</h3>
+        <p>หัวข้อ 2.3 แสดงว่า Bitcoin เลือกสายที่มีงานสะสมมากที่สุด กฎนี้ใช้ได้เพราะงานปลอมไม่ได้ ผู้ที่ต้องการสร้างสายแซงต้องลงพลังประมวลผลจริง Ethereum มีสองยุค และแต่ละยุคมีเหตุผลให้ต้องปรับกฎนี้</p>
+        <ul>
+          <li><strong>ยุค PoW (2015–2022):</strong> ยังเลือกสายที่มีความยากสะสม (total difficulty) สูงที่สุดเหมือน Bitcoin แต่บล็อกเกิดทุก 13–15 วินาที จึงมีบล็อกเกิดพร้อมกันบ่อย และกลายเป็น stale block บ่อยกว่า Bitcoin มาก ผู้ที่เสียเปรียบคือผู้ขุดรายเล็ก pool ใหญ่รู้บล็อกที่ตัวเองเพิ่งขุดได้ทันทีและขุดต่อจากบล็อกนั้นได้เลย ส่วนผู้ขุดรายเล็กต้องรอให้บล็อกใหม่กระจายมาถึง ระหว่างรอก็อาจขุดบนบล็อกที่กำลังจะกลายเป็น stale block ถ้าปล่อยไว้ ผู้ขุดจะย้ายไปรวมกับ pool ใหญ่และการขุดจะรวมศูนย์ Ethereum จึงให้บล็อกถัดไปอ้างถึง stale block ในฐานะ <strong>uncle (ommer)</strong> และให้รางวัลบางส่วนแก่ผู้ขุด uncle แนวคิดนี้มาจากงานวิจัย GHOST</li>
+          <li><strong>ยุค PoS (ตั้งแต่ The Merge กันยายน 2022):</strong> เมื่อการสร้างบล็อกไม่ต้องลงงานแล้วและแทบไม่มีต้นทุน ความยาวของสายก็ไม่สะท้อนต้นทุนที่ผู้สร้างลงไปเหมือนใน PoW Ethereum จึงเปลี่ยนไปนับ <strong>การรับรอง (attestation) ของ validator</strong> แทน กฎ <strong>LMD-GHOST</strong> เลือกกิ่งที่ได้ attestation ล่าสุดจาก validator หนักกว่า โดยถ่วงน้ำหนักตามจำนวน stake ของแต่ละราย ส่วน <strong>Casper FFG</strong> กำหนดจุดที่ย้อนกลับไม่ได้ validator ไม่ได้ลงคะแนน FFG ให้ทุกบล็อก แต่ลงคะแนนที่ checkpoint คือบล็อกแรกของแต่ละ epoch เงื่อนไขคือ validator ที่ถือ stake รวมกันอย่างน้อยสองในสามของทั้งระบบต้องรับรอง checkpoint นั้น เมื่อ checkpoint ถัดไปผ่านเงื่อนไขเดียวกันต่อกันทันที checkpoint แรกจะ <strong>finalized</strong> โหนดจะไม่ย้อนกลับไปก่อนจุดนั้นอีก ถ้าจะย้อนบล็อกที่ finalized แล้ว validator ที่ถือ stake รวมกันอย่างน้อยหนึ่งในสามต้องลงคะแนนขัดกันเอง โปรโตคอลจะลงโทษ validator เหล่านั้นด้วย slashing คือยึด stake ส่วนหนึ่ง รายละเอียดอยู่ในบทที่ 8</li>
+        </ul>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 360" role="img" aria-label="เปรียบเทียบการเลือกสายเมื่อเกิด fork Bitcoin เลือกสายที่มีงานสะสมมากที่สุด Ethereum ยุค PoW เลือกสายที่ total difficulty สูงสุดและให้บล็อกถัดไปอ้างถึง stale block เป็น uncle Ethereum ยุค PoS เลือกกิ่งที่มีน้ำหนัก attestation มากกว่าและไม่ย้อนก่อนบล็อกที่ finalized">
+            <defs>
+              <marker id="arrFc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b655c"/></marker>
+            </defs>
+            <g font-size="13" fill="currentColor">
+              <!-- แถว 1: Bitcoin -->
+              <text x="16" y="48" font-weight="700" fill="#b85a10">Bitcoin</text>
+              <text x="16" y="66" font-size="11" fill="#6b655c">PoW</text>
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="240" y1="45" x2="268" y2="45" marker-end="url(#arrFc)"/>
+                <line x1="340" y1="45" x2="368" y2="45" marker-end="url(#arrFc)"/>
+                <line x1="440" y1="45" x2="468" y2="45" marker-end="url(#arrFc)"/>
+                <line x1="340" y1="50" x2="368" y2="86" marker-end="url(#arrFc)"/>
+              </g>
+              <rect x="170" y="30" width="70" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="205" y="50" text-anchor="middle">#100</text>
+              <rect x="270" y="30" width="70" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="305" y="50" text-anchor="middle">#101</text>
+              <rect x="370" y="30" width="70" height="30" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="405" y="50" text-anchor="middle">#102A</text>
+              <rect x="470" y="30" width="70" height="30" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="505" y="50" text-anchor="middle">#103A</text>
+              <rect x="370" y="75" width="70" height="30" rx="6" fill="none" stroke="#b9b1a3" stroke-dasharray="4 4"/>
+              <text x="405" y="95" text-anchor="middle" fill="#a39a8b">#102B</text>
+              <text x="452" y="95" font-size="11" fill="#6b655c">stale block</text>
+              <text x="565" y="42" font-size="12">เลือกสายที่มีงานสะสม</text>
+              <text x="565" y="60" font-size="12">มากที่สุด (หัวข้อ 2.3)</text>
+
+              <line x1="16" y1="122" x2="744" y2="122" stroke="#e4ddd0"/>
+
+              <!-- แถว 2: Ethereum PoW -->
+              <text x="16" y="163" font-weight="700" fill="#4a52c0">Ethereum</text>
+              <text x="16" y="181" font-size="11" fill="#6b655c">ยุค PoW 2015–2022</text>
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="240" y1="160" x2="268" y2="160" marker-end="url(#arrFc)"/>
+                <line x1="340" y1="160" x2="368" y2="160" marker-end="url(#arrFc)"/>
+                <line x1="440" y1="160" x2="468" y2="160" marker-end="url(#arrFc)"/>
+                <line x1="240" y1="165" x2="268" y2="200" marker-end="url(#arrFc)"/>
+              </g>
+              <line x1="390" y1="176" x2="342" y2="203" stroke="#5a63d8" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#arrFc)"/>
+              <rect x="170" y="145" width="70" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="205" y="165" text-anchor="middle">N</text>
+              <rect x="270" y="145" width="70" height="30" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="305" y="165" text-anchor="middle">N+1</text>
+              <rect x="370" y="145" width="70" height="30" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="405" y="165" text-anchor="middle">N+2</text>
+              <rect x="470" y="145" width="70" height="30" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="505" y="165" text-anchor="middle">N+3</text>
+              <rect x="270" y="190" width="70" height="30" rx="6" fill="none" stroke="#b9b1a3" stroke-dasharray="4 4"/>
+              <text x="305" y="210" text-anchor="middle" fill="#a39a8b">N+1′</text>
+              <text x="400" y="203" font-size="11" fill="#4a52c0">N+2 อ้างถึง N+1′ เป็น uncle</text>
+              <text x="400" y="219" font-size="11" fill="#4a52c0">ผู้ขุด N+1′ ได้รางวัลบางส่วน</text>
+              <text x="565" y="157" font-size="12">เลือกสายที่ total difficulty</text>
+              <text x="565" y="175" font-size="12">สูงสุด และให้รางวัล uncle</text>
+
+              <line x1="16" y1="237" x2="744" y2="237" stroke="#e4ddd0"/>
+
+              <!-- แถว 3: Ethereum PoS -->
+              <text x="16" y="278" font-weight="700" fill="#4a52c0">Ethereum</text>
+              <text x="16" y="296" font-size="11" fill="#6b655c">ยุค PoS ปัจจุบัน</text>
+              <g stroke="#6b655c" stroke-width="1.2" fill="none">
+                <line x1="240" y1="275" x2="268" y2="275" marker-end="url(#arrFc)"/>
+                <line x1="340" y1="275" x2="368" y2="275" marker-end="url(#arrFc)"/>
+                <line x1="440" y1="275" x2="468" y2="275" marker-end="url(#arrFc)"/>
+                <line x1="340" y1="280" x2="368" y2="316" marker-end="url(#arrFc)"/>
+              </g>
+              <rect x="170" y="260" width="70" height="30" rx="6" fill="#eceefb" stroke="#5a63d8" stroke-width="2.4"/>
+              <text x="205" y="280" text-anchor="middle" font-size="12" font-weight="700">finalized</text>
+              <rect x="270" y="260" width="70" height="30" rx="6" fill="#fff" stroke="currentColor"/>
+              <text x="305" y="280" text-anchor="middle">A</text>
+              <rect x="370" y="260" width="70" height="30" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="405" y="280" text-anchor="middle">B · 70%</text>
+              <rect x="470" y="260" width="70" height="30" rx="6" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.5"/>
+              <text x="505" y="280" text-anchor="middle">D</text>
+              <rect x="370" y="305" width="70" height="30" rx="6" fill="none" stroke="#b9b1a3" stroke-dasharray="4 4"/>
+              <text x="405" y="325" text-anchor="middle" fill="#a39a8b">C · 30%</text>
+              <text x="205" y="312" text-anchor="middle" font-size="11" fill="#4a52c0">ไม่ย้อนก่อนจุดนี้</text>
+              <text x="452" y="349" font-size="11" fill="#6b655c">ตัวเลข % = น้ำหนัก attestation ของแต่ละกิ่ง</text>
+              <text x="565" y="272" font-size="12">LMD-GHOST: เลือกกิ่งที่</text>
+              <text x="565" y="290" font-size="12">attestation หนักกว่า</text>
+              <text x="565" y="308" font-size="12">Casper FFG: ห้ามย้อนก่อน</text>
+              <text x="565" y="326" font-size="12">บล็อกที่ finalized</text>
+            </g>
+          </svg>
+          <figcaption>สามระบบเลือกสายจากสิ่งที่ต่างกัน Bitcoin นับงานสะสม Ethereum ยุค PoW นับความยากสะสมและชดเชย stale block ด้วยรางวัล uncle ส่วน Ethereum ยุค PoS นับน้ำหนัก attestation ของ validator และมีจุด finalized ที่ย้อนกลับไม่ได้</figcaption>
+        </figure>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th></th><th>Bitcoin</th><th>Ethereum (PoS)</th></tr>
+            <tr><td>เวลาต่อบล็อก</td><td>ราว 10 นาที</td><td>12 วินาทีต่อ slot</td></tr>
+            <tr><td>กฎเลือกสาย</td><td>สายที่มีงานสะสมมากที่สุด</td><td>LMD-GHOST ตามน้ำหนัก attestation</td></tr>
+            <tr><td>ความแน่นอนของธุรกรรม</td><td>เพิ่มขึ้นตามจำนวนบล็อกที่ต่อท้าย ไม่มีจุดที่ย้อนไม่ได้เด็ดขาด (probabilistic finality)</td><td>มีจุด finalized หลังราว 2 epoch หรือ 12.8 นาที การย้อนทำให้ stake อย่างน้อยหนึ่งในสามของทั้งระบบโดน slashing (economic finality)</td></tr>
+            <tr><td>ธรรมเนียมการรอ</td><td>6 confirmation ราว 1 ชั่วโมง</td><td>รอจน finalized ราว 13 นาที</td></tr>
+            <tr><td>header ผูกกับ</td><td>ธุรกรรม (Merkle root)</td><td>ธุรกรรม, world state และผลการรัน (root หลักสามค่า)</td></tr>
+          </table>
+        </div>
+
+        <div class="callout exam">
+          <span class="h">ประเด็นที่มักออกสอบ</span>
+          "Ethereum เชื่อสายที่ยาวที่สุดเหมือน Bitcoin" เป็นข้อความที่ <strong>ผิด</strong> สำหรับ Ethereum ปัจจุบัน เพราะใน PoS การสร้างบล็อกไม่ต้องลงงาน ความยาวของสายจึงไม่สะท้อนต้นทุนที่ผู้สร้างลงไป Ethereum ใช้น้ำหนักของ attestation ที่ผูกกับ stake (LMD-GHOST) ร่วมกับ finality (Casper FFG)
+        </div>
+      </section>
+
+      <!-- ==================== 5.5 ==================== -->
+      <section id="s5">
+        <h2><span class="no">5.5</span>Gas: gas limit, base fee, priority fee และหน่วย Wei / Gwei / ETH</h2>
+
+        <h3>ทำไมต้องมี gas</h3>
+        <p>เมื่อใครก็ deploy โปรแกรมที่มีลูปได้ ผู้ไม่หวังดีก็ส่งโปรแกรมที่วนไม่รู้จบมาทำให้ทุกโหนดทั่วโลกค้างได้ และไม่มีวิธีตรวจล่วงหน้าว่าโปรแกรมใดจะหยุดทำงาน (Halting problem ในบทที่ 7) Ethereum แก้ปัญหานี้ด้วยการ <strong>คิดราคาทุกขั้นของการคำนวณ</strong> opcode แต่ละตัวมีราคาเป็นหน่วย gas ผู้ส่งธุรกรรมกำหนดเพดาน gas ไว้ล่วงหน้า และจ่ายตามจำนวน gas ที่ใช้จริง โปรแกรมที่วนไม่รู้จบจะใช้ gas จนหมดเพดานแล้วหยุด ผู้ส่งเสียค่าธรรมเนียมตามที่ใช้ไป การโจมตีจึงมีต้นทุนจริง ค่าธรรมเนียมนี้ยังชดเชยทรัพยากรที่โหนดต้องใช้ด้วย</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>การทำงาน</th><th>gas โดยประมาณ</th></tr>
+            <tr><td>บวกเลข (<code>ADD</code>)</td><td>3</td></tr>
+            <tr><td>โอน ETH ธรรมดาระหว่าง EOA</td><td>21,000</td></tr>
+            <tr><td>เขียนค่าลง storage ช่องที่ว่างอยู่ (<code>SSTORE</code>)</td><td>ราว 20,000 ขึ้นไป</td></tr>
+          </table>
+        </div>
+        <p>ตัวเลขในตารางเป็นค่าบน mainnet ก่อนการอัปเกรด Glamsterdam การอัปเกรดนี้มีแผนปรับราคา gas ของการเขียน state ใหม่ ค่าที่เห็นบน testnet ที่อัปเกรดไปก่อนจึงอาจต่างจากตาราง</p>
+        <p>การเขียน storage แพงกว่าการบวกเลขหลายพันเท่า เพราะทุกโหนดต้องเก็บข้อมูลนั้นไว้ตลอดไป ขณะที่การบวกเลขใช้ CPU เพียงชั่วขณะ</p>
+
+        <h3>คำศัพท์ของ gas</h3>
+        <ul>
+          <li><strong>Gas limit</strong> ของธุรกรรม: จำนวน gas สูงสุดที่ผู้ส่งยอมให้ใช้ ถ้าใช้ไม่หมด ผู้ส่งไม่ต้องจ่ายส่วนที่เหลือ ถ้าใช้หมดก่อนทำงานเสร็จ จะเกิด Out of gas และ EVM ย้อนสถานะทั้งหมดกลับ (revert) แต่ไม่คืนค่า gas ที่ใช้ไปแล้ว เพราะทุกโหนดได้รันคำสั่งเหล่านั้นไปแล้วจริง ถ้าคืนเงิน ผู้โจมตีก็ส่งลูปไม่รู้จบมาได้ฟรี (บทที่ 7)</li>
+          <li><strong>Block gas limit:</strong> เพดานรวมของ gas ในหนึ่งบล็อก มีไว้จำกัดงานต่อบล็อก โหนดทั่วไปจึงรันและเก็บข้อมูลได้ทันเวลา validator ปรับเพดานนี้ขึ้นลงได้ทีละเล็กน้อย ค่าเป้าหมาย (target) อยู่ที่ครึ่งหนึ่งของเพดาน เมื่อความต้องการสูงขึ้น บล็อกรับธุรกรรมเกิน target ได้ชั่วคราว และส่วนที่เกินนี้เป็นสัญญาณให้ base fee ปรับขึ้น</li>
+          <li><strong>Base fee:</strong> ราคาขั้นต่ำต่อ gas ที่โปรโตคอลคำนวณเองในแต่ละบล็อก โปรโตคอลจะ <strong>เผาทิ้ง (burn)</strong> ส่วนนี้</li>
+          <li><strong>Priority fee (tip):</strong> ราคาต่อ gas ที่ผู้ส่งจ่ายเพิ่มให้ validator เพื่อจูงใจให้ validator รวมธุรกรรมของผู้ส่งเข้าบล็อกก่อนธุรกรรมอื่น</li>
+          <li><strong>Max fee per gas:</strong> ราคาสูงสุดต่อ gas ที่ผู้ส่งยอมจ่าย ผู้ส่งไม่ต้องจ่ายส่วนที่เกินจาก base fee บวก priority fee</li>
+        </ul>
+
+        <h3>ทำไม base fee จึงปรับเองและต้องเผาทิ้ง</h3>
+        <p>ก่อนการอัปเกรด London (สิงหาคม 2021) ผู้ใช้ต้องประมูลราคา gas แข่งกัน (first-price auction) และเดาไม่ได้ว่าต้องเสนอเท่าใดจึงจะได้เข้าบล็อก ผู้ใช้จึงมักเสนอเผื่อไว้และจ่ายเกินจำเป็น EIP-1559 เปลี่ยนให้โปรโตคอลกำหนด base fee เอง ถ้าบล็อกก่อนหน้าใช้ gas เกินเป้าหมาย base fee เพิ่มขึ้น ถ้าต่ำกว่าเป้าหมาย base fee ลดลง base fee ปรับได้ไม่เกิน 12.5% ต่อบล็อก ผู้ใช้จึงคาดการณ์ค่าธรรมเนียมได้ ส่วนเหตุผลที่ต้องเผา base fee แทนที่จะให้ validator คือ ถ้า validator ได้ส่วนนี้ ก็จะมีแรงจูงใจใส่ธุรกรรมปลอมของตัวเองให้บล็อกเต็ม เพื่อดัน base fee ให้สูงขึ้น</p>
+
+        <h3>หน่วยของ ETH</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>หน่วย</th><th>เท่ากับ</th><th>ใช้กับ</th></tr>
+            <tr><td>Wei</td><td>หน่วยเล็กที่สุด</td><td>ค่าในโค้ดของ contract (<code>msg.value</code> มีหน่วยเป็น wei)</td></tr>
+            <tr><td>Gwei</td><td>10<sup>9</sup> wei = 0.000000001 ETH</td><td>ราคา gas</td></tr>
+            <tr><td>ETH</td><td>10<sup>18</sup> wei = 10<sup>9</sup> Gwei</td><td>ยอดเงินทั่วไป</td></tr>
+          </table>
+        </div>
+
+        <h3>การคำนวณค่าธรรมเนียม</h3>
+<pre>ราคาต่อ gas   = base fee + priority fee
+               ถ้าผลรวมเกิน max fee per gas ส่วน priority fee จะลดเหลือ max fee − base fee
+               ถ้า max fee per gas ต่ำกว่า base fee ธุรกรรมจะรอจนกว่า base fee ลดลง
+ค่าธรรมเนียม = gas ที่ใช้จริง × ราคาต่อ gas</pre>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 760 190" role="img" aria-label="max fee per gas 20 Gwei แบ่งเป็น base fee 10 Gwei ที่โปรโตคอลเผาทิ้ง priority fee 2 Gwei ที่ให้ validator และส่วนที่ไม่ได้ใช้ 8 Gwei ซึ่งผู้ส่งไม่ต้องจ่าย">
+            <g font-size="13" fill="currentColor">
+              <line x1="40" y1="36" x2="720" y2="36" stroke="currentColor" stroke-width="1.2"/>
+              <line x1="40" y1="30" x2="40" y2="42" stroke="currentColor" stroke-width="1.2"/>
+              <line x1="720" y1="30" x2="720" y2="42" stroke="currentColor" stroke-width="1.2"/>
+              <text x="380" y="24" text-anchor="middle" font-size="12">max fee per gas = 20 Gwei (เพดานที่ผู้ส่งยอมจ่ายต่อ gas)</text>
+
+              <rect x="40" y="54" width="340" height="44" fill="#f8e1db" stroke="#c2412d" stroke-width="1.4"/>
+              <text x="210" y="81" text-anchor="middle" font-weight="700">base fee 10 Gwei</text>
+              <rect x="380" y="54" width="68" height="44" fill="#e8f5ef" stroke="#1f8a70" stroke-width="1.4"/>
+              <text x="414" y="81" text-anchor="middle" font-weight="700">tip 2</text>
+              <rect x="448" y="54" width="272" height="44" fill="none" stroke="#b9b1a3" stroke-dasharray="5 4"/>
+              <text x="584" y="81" text-anchor="middle" fill="#6b655c">ไม่ได้ใช้ 8 Gwei</text>
+
+              <g font-size="12" text-anchor="middle">
+                <text x="210" y="120" fill="#c2412d">เผาทิ้ง</text>
+                <text x="414" y="120" fill="#1f6e5a">ให้ validator</text>
+                <text x="584" y="120" fill="#6b655c">ไม่ต้องจ่าย</text>
+              </g>
+
+              <text x="40" y="156" font-size="12">โอน ETH ธรรมดาใช้ 21,000 gas: เผา 21,000 × 10 = 210,000 Gwei และให้ validator 21,000 × 2 = 42,000 Gwei</text>
+              <text x="40" y="178" font-size="12" font-weight="700">รวมจ่าย 252,000 Gwei = 0.000252 ETH</text>
+            </g>
+          </svg>
+          <figcaption>ราคาต่อ gas ที่จ่ายจริงคือ base fee บวก priority fee ผู้ส่งไม่ต้องจ่ายส่วนที่เหลือจนถึงเพดาน max fee ถ้าตั้ง max fee ไว้สูง ธุรกรรมจะยังเข้าบล็อกได้แม้ base fee ขึ้น และผู้ส่งก็ไม่ต้องจ่ายแพงเกินจริง</figcaption>
+        </figure>
+
+        <h3>ทดลอง: คำนวณค่าธรรมเนียม</h3>
+        <div class="hash-demo" id="gascalc">
+          <div class="mtx">
+            <div><label for="gUsed">gas ที่ใช้จริง</label><input id="gUsed" type="number" min="0" value="21000"></div>
+            <div><label for="gBase">base fee (Gwei)</label><input id="gBase" type="number" min="0" step="0.1" value="10"></div>
+            <div><label for="gTip">priority fee (Gwei)</label><input id="gTip" type="number" min="0" step="0.1" value="2"></div>
+            <div><label for="gMax">max fee per gas (Gwei)</label><input id="gMax" type="number" min="0" step="0.1" value="20"></div>
+          </div>
+          <div class="stat" id="gOut"></div>
+        </div>
+      </section>
+
+      <!-- ==================== 5.6 ==================== -->
+      <section id="s6">
+        <h2><span class="no">5.6</span>พื้นฐานภาษา Solidity: ชนิดข้อมูล, visibility, modifier และ event</h2>
+
+        <p>Solidity เป็นภาษาหลักสำหรับเขียน smart contract บน EVM ไวยากรณ์ (syntax) คล้าย JavaScript และ C++ ต่างกันตรงที่ต้องระบุชนิดข้อมูลของตัวแปรทุกตัว และทุกคำสั่งที่รันมีค่าใช้จ่ายเป็น gas ตัวอย่างต่อไปนี้คือ TipJar กล่องรับทิปที่รวมองค์ประกอบหลักของภาษาไว้ ส่วนบทที่ 6 จะเขียน Counter contract ทีละบรรทัด</p>
+
+<pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;                       // ใช้คอมไพเลอร์รุ่น 0.8.20 ขึ้นไป (ไม่ถึง 0.9)
+
+contract TipJar {
+    address public owner;                      // state variable: เก็บใน storage ถาวร
+    uint256 public total;                      // ยอดทิปสะสม (หน่วย wei)
+    mapping(address => uint256) public tipsBy; // ยอดทิปของแต่ละ address
+
+    event Tipped(address indexed from, uint256 amount, string message);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "not owner");
+        _;                                     // คอมไพเลอร์แทรกโค้ดของฟังก์ชันตรงนี้
+    }
+
+    constructor() {
+        owner = msg.sender;                    // ทำงานครั้งเดียวตอน deploy
+    }
+
+    function tip(string calldata message) external payable {
+        require(msg.value > 0, "send some ETH");
+        tipsBy[msg.sender] += msg.value;
+        total += msg.value;
+        emit Tipped(msg.sender, msg.value, message);
+    }
+
+    function withdraw() external onlyOwner {
+        (bool ok, ) = payable(owner).call{value: address(this).balance}("");
+        require(ok, "transfer failed");
+    }
+
+    function toGwei(uint256 weiAmount) public pure returns (uint256) {
+        return weiAmount / 1 gwei;
+    }
+}</code></pre>
+
+        <h3>ชนิดข้อมูลที่ใช้บ่อย</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>ชนิด</th><th>ความหมาย</th><th>ค่าเริ่มต้น</th></tr>
+            <tr><td><code>uint256</code> (<code>uint</code>)</td><td>จำนวนเต็มไม่ติดลบ 256 บิต ตรงกับขนาดช่องข้อมูลของ EVM</td><td>0</td></tr>
+            <tr><td><code>int256</code></td><td>จำนวนเต็มมีเครื่องหมาย</td><td>0</td></tr>
+            <tr><td><code>bool</code></td><td>true หรือ false</td><td>false</td></tr>
+            <tr><td><code>address</code></td><td>address 20 ไบต์ ถ้าประกาศเป็น <code>address payable</code> contract จะใช้คำสั่งส่ง ETH ไปยัง address นั้นได้ เช่น <code>.transfer</code> (ในตัวอย่างใช้ <code>payable(owner)</code>)</td><td><code>0x000…0</code></td></tr>
+            <tr><td><code>bytes32</code>, <code>string</code></td><td>ข้อมูลไบต์ขนาดตายตัว และข้อความ</td><td>ศูนย์ทั้งหมด / ข้อความว่าง</td></tr>
+            <tr><td><code>mapping(K =&gt; V)</code></td><td>ตารางค้นหาจาก key ไป value mapping ไม่เก็บรายชื่อ key ไว้ ตำแหน่งของ value คำนวณจากค่าแฮชของ key และ key ที่ไม่เคยเขียนจะอ่านได้ค่าเริ่มต้น contract จึงไม่รู้ว่าเคยเขียน key ใดไว้บ้าง และวนลูปดูทุก key ไม่ได้</td><td>ค่าเริ่มต้นของ V</td></tr>
+            <tr><td><code>T[]</code>, <code>struct</code>, <code>enum</code></td><td>array, โครงสร้างข้อมูลที่รวมหลายฟิลด์, ชุดค่าที่กำหนดไว้</td><td></td></tr>
+          </table>
+        </div>
+        <p>ตั้งแต่ Solidity 0.8 ถ้าผลบวกหรือผลลบล้นขอบเขตของชนิดข้อมูล (overflow/underflow) การทำงานจะ revert โดยอัตโนมัติ ก่อนรุ่น 0.8 ค่าจะวนกลับ เช่น <code>0 - 1</code> กลายเป็นค่าสูงสุดของ <code>uint256</code> ช่องโหว่นี้เคยทำให้เกิดการโจมตีหลายครั้ง</p>
+
+        <h3>Visibility: ใครเรียกได้</h3>
+        <p>ฟังก์ชันบางตัวตั้งใจให้ใช้ภายใน contract เท่านั้น เช่น ฟังก์ชันที่แก้ยอดเงิน ถ้าเปิดให้คนนอกเรียกได้ ใครก็ส่งธุรกรรมมาเรียกฟังก์ชันนั้นตรง ๆ และแก้ยอดเงินได้ Solidity รุ่นเก่าถือว่าฟังก์ชันที่ไม่ระบุ visibility เป็น <code>public</code> และเคยทำให้เกิดช่องโหว่จริง ตั้งแต่รุ่น 0.5 Solidity จึงบังคับให้ระบุ visibility ของทุกฟังก์ชัน</p>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>คำ</th><th>เรียกจากภายนอก</th><th>เรียกภายใน contract</th><th>contract ที่สืบทอด</th></tr>
+            <tr><td><code>public</code></td><td>ได้</td><td>ได้</td><td>ได้</td></tr>
+            <tr><td><code>external</code> (ใช้กับฟังก์ชันเท่านั้น)</td><td>ได้</td><td>ไม่ได้โดยตรง</td><td>ไม่ได้โดยตรง</td></tr>
+            <tr><td><code>internal</code></td><td>ไม่ได้</td><td>ได้</td><td>ได้</td></tr>
+            <tr><td><code>private</code></td><td>ไม่ได้</td><td>ได้</td><td>ไม่ได้</td></tr>
+          </table>
+        </div>
+        <p><code>external</code> ใช้กับฟังก์ชันที่มีไว้ให้คนนอกเรียกเท่านั้น เช่น <code>tip</code> ในตัวอย่าง ฟังก์ชันนี้รับข้อความเป็น <code>calldata</code> จึงอ่านจากข้อมูลที่ส่งมาได้โดยตรง ไม่ต้องคัดลอกลง memory และประหยัด gas</p>
+        <p>state variable ที่ประกาศเป็น <code>public</code> จะได้ฟังก์ชันสำหรับอ่านค่า (getter) โดยอัตโนมัติ เช่น <code>owner()</code> และ <code>tipsBy(address)</code> ในตัวอย่าง</p>
+
+        <div class="callout warn">
+          <span class="h">private ไม่ได้แปลว่าเป็นความลับ</span>
+          <code>private</code> ห้ามเพียง contract อื่นเรียกใช้ แต่ข้อมูลทุกอย่างบน blockchain เปิดให้ทุกคนอ่านได้ ใครก็อ่านค่าใน storage ของ contract ได้โดยตรงจากโหนด จึงห้ามเก็บรหัสผ่านหรือคำตอบของเกมไว้ในตัวแปร private
+        </div>
+
+        <h3>State mutability: ฟังก์ชันแก้สถานะหรือไม่</h3>
+        <ul>
+          <li><strong>(ไม่ระบุ)</strong> อ่านและแก้สถานะได้ การเรียกต้องส่งธุรกรรมและเสีย gas</li>
+          <li><code>view</code> อ่านสถานะได้แต่แก้ไม่ได้</li>
+          <li><code>pure</code> ไม่อ่านและไม่แก้สถานะ คำนวณจากพารามิเตอร์อย่างเดียว เช่น <code>toGwei</code></li>
+          <li><code>payable</code> รับ ETH มากับการเรียกได้ ถ้ามีคนส่ง ETH มากับการเรียกฟังก์ชันที่ไม่ได้ระบุคำนี้ ฟังก์ชันนั้นจะ revert เพื่อกันเงินเข้าผิดที่</li>
+        </ul>
+        <p>การเรียก <code>view</code> และ <code>pure</code> จากภายนอกไม่แก้สถานะ เครือข่ายจึงไม่ต้องตกลงผลร่วมกัน โหนดที่เราเชื่อมต่ออยู่รันฟังก์ชันให้ในเครื่องแล้วตอบกลับได้เลย ไม่ต้องส่งธุรกรรมและไม่เสีย gas รายละเอียดอยู่ในบทที่ 6</p>
+
+        <h3>ตัวแปรพิเศษที่มากับการเรียก</h3>
+        <p><code>msg.sender</code> คือ address ที่เรียกฟังก์ชันนี้โดยตรง <code>msg.value</code> คือจำนวน wei ที่ส่งมา และ <code>block.timestamp</code> คือเวลาของบล็อก contract ใช้ตัวแปรเหล่านี้เพื่อรู้ว่าใครเรียกและส่งอะไรมา โดยไม่ต้องตรวจลายเซ็นเอง เพราะเครือข่ายตรวจลายเซ็นของธุรกรรมให้แล้ว</p>
+
+        <h3>Modifier: ทำไมต้องมี</h3>
+        <p>ฟังก์ชันหลายตัวมักต้องตรวจเงื่อนไขเดียวกัน เช่น ต้องเป็นเจ้าของเท่านั้น ถ้าเขียน <code>require</code> ซ้ำทุกฟังก์ชัน วันหนึ่งนักพัฒนาอาจลืมใส่ในบางฟังก์ชัน และใน smart contract ความผิดพลาดแบบนี้ทำให้เงินถูกขโมยได้ modifier รวมเงื่อนไขไว้ที่เดียว แล้วนำไปติดกับฟังก์ชันใดก็ได้ เครื่องหมาย <code>_;</code> คือตำแหน่งที่คอมไพเลอร์แทรกโค้ดของฟังก์ชันเข้าไป ในตัวอย่าง <code>withdraw</code> จึงตรวจ <code>msg.sender == owner</code> ก่อนทำงานเสมอ</p>
+
+        <h3>Event: ทำไมต้องมี</h3>
+        <p>หน้าเว็บของแอปต้องการรู้ว่ามีใครให้ทิปบ้าง แต่ storage แพงและไม่เหมาะกับการเก็บประวัติยาว ๆ <code>event</code> บันทึกข้อมูลลงใน log ของธุรกรรมแทน log เก็บอยู่ใน receipt (ผูกกับ <code>receiptsRoot</code> ในหัวข้อ 5.4) ไม่ได้อยู่ใน world state โหนดไม่ต้องเตรียม log ไว้ให้ contract อ่านระหว่างรัน ค่า gas ของ log จึงถูกกว่า storage มาก แอปภายนอกติดตามและค้นหา log ได้ และใช้พารามิเตอร์ที่ระบุ <code>indexed</code> เป็นตัวกรอง เช่น ค้นทิปทั้งหมดจาก address หนึ่ง ข้อจำกัดที่มาจากเหตุผลเดียวกันคือ <strong>contract อ่าน log ไม่ได้</strong> event จึงมีไว้สื่อสารกับโลกภายนอกเท่านั้น</p>
+      </section>
+
+      <!-- ==================== 5.7 ==================== -->
+      <section id="s7">
+        <h2><span class="no">5.7</span>เครื่องมือที่ใช้: Remix, MetaMask และ Sepolia testnet</h2>
+
+        <h3>ทำไมต้องใช้เครื่องมือหลายตัว</h3>
+        <p>เหตุผลเหมือนในบทที่ 4 คือ contract ที่ deploy บน mainnet แล้วแก้ไม่ได้ และทุกธุรกรรมเสีย ETH จริง นักพัฒนาจึงทดสอบเป็นขั้น เริ่มจากเครือข่ายจำลองในเบราว์เซอร์ซึ่งเร็วและไม่มีค่าใช้จ่าย จากนั้นย้ายไปเครือข่ายทดสอบสาธารณะ (testnet) แล้วจึงขึ้นเครือข่ายจริง (mainnet)</p>
+
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>เครื่องมือ</th><th>หน้าที่</th><th>เทียบกับ Bitcoin (บทที่ 4)</th></tr>
+            <tr><td><strong>Remix IDE</strong> (remix.ethereum.org)</td><td>เขียน คอมไพล์ deploy และเรียกฟังก์ชันของ contract ผ่านเบราว์เซอร์ ไม่ต้องติดตั้ง</td><td>คล้าย bitcoin-cli ที่มีหน้าจอ</td></tr>
+            <tr><td><strong>Remix VM</strong></td><td>blockchain จำลองในเบราว์เซอร์ มีบัญชีทดสอบให้พร้อม ETH ปลอม ธุรกรรมยืนยันทันที</td><td>Regtest</td></tr>
+            <tr><td><strong>MetaMask</strong></td><td>wallet แบบ browser extension เก็บ private key ลงลายเซ็นธุรกรรม และเชื่อมเว็บแอปเข้ากับเครือข่าย</td><td>wallet ของ Bitcoin Core</td></tr>
+            <tr><td><strong>Sepolia</strong> (chain ID 11155111)</td><td>testnet สาธารณะหลักสำหรับทดสอบแอป ได้ SepoliaETH ฟรีจาก faucet เพราะ ETH บน testnet ไม่มีมูลค่า ถ้าเปิดให้ใครก็เป็น validator ได้ ผู้ไม่หวังดีจะสะสม stake ได้ง่ายแล้วยึดเครือข่ายหรือย้อนบล็อก Sepolia จึงจำกัดว่าใครเป็น validator ได้</td><td>Signet</td></tr>
+            <tr><td><strong>Etherscan</strong> (sepolia.etherscan.io)</td><td>ดูธุรกรรม บล็อก และ contract บนเครือข่าย</td><td>block explorer</td></tr>
+          </table>
+        </div>
+
+        <div class="callout">
+          <span class="h">testnet เปลี่ยนได้ตามเวลา</span>
+          Ethereum Foundation วางแผนให้ testnet ใหม่มาแทน Sepolia และจะรันคู่กันช่วงหนึ่ง ก่อนทดลองควรตรวจสถานะล่าสุดที่ ethereum.org/developers/docs/networks
+        </div>
+
+        <h3>ขั้นตอนการทดลอง</h3>
+        <ol>
+          <li>เปิด Remix สร้างไฟล์ <code>TipJar.sol</code> แล้วคอมไพล์ในแท็บ Solidity Compiler</li>
+          <li>ในแท็บ Deploy &amp; Run เลือก Environment เป็น <strong>Remix VM</strong> แล้วกด Deploy ทดลองเรียก <code>tip</code> โดยใส่จำนวนในช่อง Value และลองเรียก <code>withdraw</code> จากบัญชีอื่นเพื่อดูว่า modifier ปฏิเสธจริง</li>
+          <li>ติดตั้ง MetaMask สร้างบัญชีสำหรับทดสอบโดยเฉพาะ เลือกเครือข่าย Sepolia และขอ SepoliaETH จาก faucet</li>
+          <li>ใน Remix เปลี่ยน Environment เป็น <strong>Injected Provider - MetaMask</strong> แล้ว Deploy อีกครั้ง MetaMask จะขึ้นหน้าต่างให้ยืนยันและแสดงค่า gas</li>
+          <li>นำ address ของ contract หรือ transaction hash (Etherscan เรียกว่า Txn Hash ส่วน Bitcoin เรียกว่า txid) ไปค้นใน sepolia.etherscan.io เพื่อดูธุรกรรมและ event ที่เกิดขึ้น</li>
+        </ol>
+
+        <div class="callout warn">
+          <span class="h">แยกบัญชีทดสอบออกจากบัญชีจริง</span>
+          ใช้ MetaMask บัญชีที่สร้างขึ้นเพื่อทดสอบเท่านั้น อย่านำ seed phrase ของบัญชีที่มีเงินจริงมาใช้กับการทดลอง และอย่าวาง seed phrase ลงในเว็บไซต์ใด เพราะผู้ที่ได้ seed phrase ไปควบคุมเงินทั้งหมดได้ทันที
+        </div>
+      </section>
+
+      <!-- ==================== สรุป ==================== -->
+      <section id="summary">
+        <h2>สรุปท้ายบท</h2>
+        <ul>
+          <li><strong>โจทย์:</strong> Bitcoin Script ทำได้จำกัด แอปใหม่จึงต้องสร้าง chain ของตัวเอง และ chain เล็กเหล่านั้นมีความปลอดภัยต่ำ Ethereum ให้ทุกแอปอยู่บน chain เดียวที่เขียนโปรแกรมได้ จึงใช้ความปลอดภัยร่วมกัน</li>
+          <li><strong>5.1:</strong> Account model เก็บยอดและสถานะที่แก้ทับได้ เหมาะกับโปรแกรม และใช้ nonce ของบัญชีป้องกัน replay attack</li>
+          <li><strong>5.2:</strong> EOA ควบคุมด้วย private key และเริ่มธุรกรรมได้ Contract account ควบคุมด้วยโค้ด มี storage และทำงานเมื่อมีผู้เรียกเท่านั้น</li>
+          <li><strong>5.3:</strong> ทุกโหนดรันทุก contract บน EVM และต้องได้ผลตรงกัน contract จึงเรียก API ภายนอกหรือสุ่มเลขอย่างปลอดภัยไม่ได้ นอกจากนี้ contract ยังแก้โค้ดหลัง deploy ไม่ได้</li>
+          <li><strong>5.4:</strong> ธุรกรรมมี nonce, chainId, to, value, data, ค่า gas และลายเซ็น แต่ไม่มีฟิลด์ from เพราะเครือข่ายคำนวณผู้ส่งจากลายเซ็น data เริ่มด้วย function selector 4 ไบต์ header ผูกกับธุรกรรม world state และผลการรันผ่าน root หลักสามค่า เมื่อเกิด fork ในยุค PoS โหนดใช้ LMD-GHOST เลือกกิ่งตามน้ำหนัก attestation และใช้ Casper FFG ทำให้บล็อกที่ finalized ย้อนไม่ได้</li>
+          <li><strong>5.5:</strong> Ethereum คิดราคาทุกขั้นของการคำนวณเป็น gas เพื่อหยุดโปรแกรมที่ไม่จบและทำให้การโจมตีมีต้นทุน ค่าธรรมเนียม = gas ที่ใช้ × (base fee + priority fee) โดยราคาต่อ gas ไม่เกิน max fee per gas ถ้าผลรวมเกินเพดาน priority fee จะลดลงให้พอดี โปรโตคอลเผา base fee ทิ้ง ส่วน priority fee เป็นของ validator</li>
+          <li><strong>5.6:</strong> องค์ประกอบหลักของ Solidity ได้แก่ ชนิดข้อมูล, visibility, state mutability, modifier ที่รวมเงื่อนไขไว้ที่เดียว และ event ที่บันทึกข้อมูลให้โลกภายนอกอ่านได้ในราคาถูก</li>
+          <li><strong>5.7:</strong> ทดลองใน Remix VM ก่อน แล้วจึง deploy บน Sepolia ผ่าน MetaMask</li>
+        </ul>
+
+        <h3>ตัวเลขที่ควรจำ</h3>
+        <div class="table-wrap">
+          <table class="t">
+            <tr><th>รายการ</th><th>ค่า</th></tr>
+            <tr><td>1 ETH</td><td>10<sup>18</sup> wei = 10<sup>9</sup> Gwei</td></tr>
+            <tr><td>1 Gwei</td><td>10<sup>9</sup> wei</td></tr>
+            <tr><td>gas ของการโอน ETH ธรรมดา</td><td>21,000</td></tr>
+            <tr><td>base fee ปรับได้ต่อบล็อก</td><td>ไม่เกิน 12.5%</td></tr>
+            <tr><td>ขนาด address</td><td>20 ไบต์ (0x + 40 ตัวอักษรฐานสิบหก)</td></tr>
+            <tr><td>ขนาดช่องข้อมูลของ EVM</td><td>256 บิต</td></tr>
+            <tr><td>เวลาต่อ slot / ต่อ epoch</td><td>12 วินาที / 32 slot = 6.4 นาที</td></tr>
+            <tr><td>เวลาจนถึง finality</td><td>ราว 2 epoch = 12.8 นาที</td></tr>
+            <tr><td>ขนาด function selector</td><td>4 ไบต์แรกของ Keccak-256 ของ function signature</td></tr>
+            <tr><td>chain ID ของ mainnet / Sepolia</td><td>1 / 11155111</td></tr>
+            <tr><td>Ethereum เปิดใช้งาน / London (EIP-1559)</td><td>กรกฎาคม 2015 / สิงหาคม 2021</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== แบบฝึกหัด ==================== -->
+      <section id="quiz" class="quiz">
+        <h2>แบบฝึกหัด</h2>
+
+        <div class="q">
+          <p>1. ทำไมบัญชีใน Ethereum ต้องมี nonce ทั้งที่ Bitcoin ไม่ต้องมีตัวนับในลักษณะนี้</p>
+          <details><summary>ดูเฉลย</summary><div>ใน Bitcoin ธุรกรรมใช้ UTXO จนหมด ธุรกรรมเดิมจึงส่งซ้ำไม่ได้เพราะ UTXO นั้นไม่อยู่แล้ว แต่ใน Account model ธุรกรรมแก้เพียงยอดเงิน ถ้าไม่มี nonce ผู้อื่นก็นำธุรกรรมที่ลงลายเซ็นแล้วไปส่งซ้ำได้ (replay attack) nonce บังคับให้แต่ละธุรกรรมใช้ได้ครั้งเดียวและเรียงตามลำดับ</div></details>
+        </div>
+
+        <div class="q">
+          <p>2. ข้อใดที่ Contract account ทำไม่ได้</p>
+          <ol><li>ก. ถือ ETH</li><li>ข. เก็บข้อมูลใน storage</li><li>ค. เริ่มธุรกรรมด้วยตัวเอง</li><li>ง. เรียก contract อื่น</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> contract ไม่มี private key จึงลงลายเซ็นธุรกรรมไม่ได้ และทำงานเมื่อมีผู้เรียกเท่านั้น แต่ระหว่างทำงานก็เรียก contract อื่นต่อได้ (ข้อ ง)</div></details>
+        </div>
+
+        <div class="q">
+          <p>3. ธุรกรรมใช้ gas 50,000 ขณะที่ base fee 20 Gwei ผู้ส่งตั้ง priority fee 1.5 Gwei และ max fee 30 Gwei ค่าธรรมเนียมรวมเป็นเท่าใด เผาไปเท่าใด และ validator ได้เท่าใด</p>
+          <details><summary>ดูเฉลย</summary><div>ราคาต่อ gas จริง = 20 + 1.5 = 21.5 Gwei (ไม่เกิน 30) ค่าธรรมเนียมรวม = 50,000 × 21.5 = 1,075,000 Gwei = <strong>0.001075 ETH</strong> เผา 50,000 × 20 = 1,000,000 Gwei (0.001 ETH) validator ได้ 50,000 × 1.5 = 75,000 Gwei (0.000075 ETH)</div></details>
+        </div>
+
+        <div class="q">
+          <p>4. 1 Gwei เท่ากับกี่ ETH</p>
+          <ol><li>ก. 10<sup>-6</sup> ETH</li><li>ข. 10<sup>-9</sup> ETH</li><li>ค. 10<sup>-12</sup> ETH</li><li>ง. 10<sup>-18</sup> ETH</li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ข.</strong> 1 Gwei = 10<sup>9</sup> wei และ 1 ETH = 10<sup>18</sup> wei ดังนั้น 1 Gwei = 10<sup>-9</sup> ETH ข้อ ง คือค่าของ 1 wei</div></details>
+        </div>
+
+        <div class="q">
+          <p>5. นักพัฒนาเก็บคำตอบของเกมทายคำไว้ในตัวแปร <code>string private answer</code> ผู้เล่นจะรู้คำตอบได้หรือไม่</p>
+          <details><summary>ดูเฉลย</summary><div><strong>ได้</strong> <code>private</code> ห้ามเพียง contract อื่นเรียกใช้ แต่ข้อมูลใน storage เปิดให้ทุกคนอ่านได้ผ่านโหนด และค่าที่ส่งมาตอน deploy ก็อยู่ในธุรกรรมที่ทุกคนเห็น</div></details>
+        </div>
+
+        <div class="q">
+          <p>6. ทำไม smart contract จึงเรียก API ภายนอกเพื่อดึงราคาหุ้นโดยตรงไม่ได้</p>
+          <details><summary>ดูเฉลย</summary><div>ทุกโหนดต้องรัน contract แล้วได้ผลตรงกัน แต่แต่ละโหนดเรียก API ในเวลาต่างกันและอาจได้ค่าต่างกัน หรือ API อาจล่มระหว่างนั้น ถ้าเป็นเช่นนั้น เครือข่ายจะตกลงเรื่องสถานะกันไม่ได้ ข้อมูลภายนอกจึงต้องส่งเข้ามาด้วยธุรกรรมผ่าน Oracle (บทที่ 13)</div></details>
+        </div>
+
+        <div class="q">
+          <p>7. ทำไม EIP-1559 จึงเผา base fee แทนที่จะมอบให้ validator</p>
+          <details><summary>ดูเฉลย</summary><div>ถ้า validator ได้ base fee ก็จะมีแรงจูงใจใส่ธุรกรรมปลอมของตัวเองให้บล็อกเต็ม เพื่อดัน base fee ให้สูงขึ้นและเก็บเงินจากผู้ใช้มากขึ้น เมื่อเผา base fee ทิ้ง การปั่นแบบนี้ก็ไม่มีประโยชน์ ส่วน priority fee ยังเป็นของ validator เพื่อจูงใจให้รวมธุรกรรมเข้าบล็อก</div></details>
+        </div>
+
+        <div class="q">
+          <p>8. ใน modifier ด้านล่าง เครื่องหมาย <code>_;</code> มีความหมายว่าอะไร และถ้าลบบรรทัดนั้นทิ้งจะเกิดอะไรขึ้น</p>
+<pre><code>modifier onlyOwner() {
+    require(msg.sender == owner, "not owner");
+    _;
+}</code></pre>
+          <details><summary>ดูเฉลย</summary><div><code>_;</code> คือตำแหน่งที่คอมไพเลอร์แทรกโค้ดของฟังก์ชันที่ใช้ modifier นี้ ถ้าลบบรรทัดนั้นทิ้ง ฟังก์ชันจะตรวจ <code>require</code> แล้วจบไปโดยไม่ได้ทำงานส่วนของตัวเองเลย</div></details>
+        </div>
+        <div class="q">
+          <p>9. ทำไม Ethereum ยุค PoS จึงไม่ใช้กฎ "เชื่อสายที่ยาวที่สุด" แบบ Bitcoin</p>
+          <details><summary>ดูเฉลย</summary><div>กฎของ Bitcoin ใช้ได้เพราะแต่ละบล็อกต้องลงงานจริง ความยาวจึงปลอมไม่ได้ ใน PoS การสร้างบล็อกไม่ต้องลงงานแล้วและแทบไม่มีต้นทุน ความยาวของสายจึงไม่สะท้อนต้นทุนที่ผู้สร้างลงไปเหมือนใน PoW Ethereum เลือกกิ่งตามน้ำหนัก attestation ของ validator ซึ่งผูกกับ stake (LMD-GHOST) และใช้ Casper FFG กำหนดจุด finalized ผู้ที่จะย้อนกลับไปก่อนจุดนั้นต้องยอมให้ validator ที่ถือ stake รวมกันอย่างน้อยหนึ่งในสามโดน slashing</div></details>
+        </div>
+
+        <div class="q">
+          <p>10. ธุรกรรมของ Ethereum มีทั้ง nonce และ chainId ทั้งสองป้องกันการโจมตีต่างกันอย่างไร</p>
+          <details><summary>ดูเฉลย</summary><div>nonce ป้องกันการนำธุรกรรมเดิมไปส่งซ้ำ <strong>บนเครือข่ายเดียวกัน</strong> เพราะใช้ได้เฉพาะเมื่อตรงกับลำดับปัจจุบันของบัญชี chainId ป้องกันการนำธุรกรรมไปส่งซ้ำ <strong>บนเครือข่ายอื่น</strong> ที่มีบัญชีและ nonce เหมือนกัน เช่น Ethereum กับ Ethereum Classic หลังการแยก chain ในปี 2016</div></details>
+        </div>
+
+        <div class="q">
+          <p>11. light client ต้องการพิสูจน์ว่าบัญชีหนึ่งมียอด 5 ETH จริง ต้องใช้ root ใดใน header และทำไมวิธีนี้ทำกับ Bitcoin ไม่ได้</p>
+          <ol><li>ก. <code>parentHash</code></li><li>ข. <code>transactionsRoot</code></li><li>ค. <code>stateRoot</code></li><li>ง. <code>receiptsRoot</code></li></ol>
+          <details><summary>ดูเฉลย</summary><div><strong>ค.</strong> <code>stateRoot</code> ผูกกับ world state ซึ่งรวมยอดเงินของทุกบัญชี light client ขอเส้นทางพิสูจน์ (Merkle proof) จาก full node แล้วคำนวณขึ้นไปจนถึง root ได้ header ของ Bitcoin ผูกกับธุรกรรมเท่านั้น ไม่มีค่าใดผูกกับ UTXO set จึงพิสูจน์ยอดคงเหลือด้วยวิธีนี้ไม่ได้</div></details>
+        </div>
+      </section>
+    </article>
+
+    <nav class="chapter-nav" id="chapter-nav"></nav>
+  </main>
+
+  <script src="../assets/toc.js"></script>
+  <script src="../assets/chapter.js"></script>
+  <script>
+    // คำนวณค่าธรรมเนียมตาม EIP-1559
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const ids = ["gUsed", "gBase", "gTip", "gMax"];
+      const out = $("gOut");
+      const fmt = (n) => n.toLocaleString("en-US", { maximumFractionDigits: 4 });
+      const eth = (gwei) => (gwei / 1e9).toFixed(9).replace(/0+$/, "").replace(/\.$/, "");
+
+      function render() {
+        const [used, base, tip, max] = ids.map((id) => Math.max(0, Number($(id).value) || 0));
+        if (tip > max) {
+          out.innerHTML = `priority fee (${fmt(tip)} Gwei) สูงกว่า max fee per gas (${fmt(max)} Gwei) ธุรกรรมแบบนี้ <strong>ใช้ไม่ได้</strong> โหนดจะปฏิเสธ`;
+          return;
+        }
+        if (max < base) {
+          out.innerHTML = `max fee per gas (${fmt(max)} Gwei) ต่ำกว่า base fee (${fmt(base)} Gwei) ธุรกรรมนี้ <strong>ยังเข้าบล็อกไม่ได้</strong> จนกว่า base fee จะลดลง`;
+          return;
+        }
+        const tipPaid = Math.min(tip, max - base);
+        const price = base + tipPaid;
+        const burned = used * base, toValidator = used * tipPaid, total = used * price;
+        const unused = used * (max - price);
+        out.innerHTML =
+          `ราคาต่อ gas ที่จ่ายจริง <strong>${fmt(price)} Gwei</strong>` +
+          (tipPaid < tip ? ` (priority fee ลดเหลือ ${fmt(tipPaid)} Gwei เพราะชนเพดาน max fee)` : "") +
+          `<br>เผาทิ้ง ${fmt(burned)} Gwei · ให้ validator ${fmt(toValidator)} Gwei` +
+          `<br>รวมจ่าย <strong>${fmt(total)} Gwei = ${eth(total)} ETH</strong>` +
+          `<br>ส่วนที่ไม่ต้องจ่ายเมื่อเทียบกับเพดาน max fee: ${fmt(unused)} Gwei`;
+      }
+
+      ids.forEach((id) => $(id).addEventListener("input", render));
+      render();
+    })();
+  </script>
+</body>
+</html>
