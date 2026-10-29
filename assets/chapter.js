@@ -23,10 +23,13 @@
     const sec = document.getElementById(`s${i + 1}`);
     if (!sec) return null;
     const key = `${id}-${i}`;
-    const no = title.split(" ")[0];
+    const [no, ...rest] = title.split(" ");
+    // แถบปิดท้ายหัวข้อ: ทั้งแถบกดได้ ช่องติ๊กอยู่ด้านขวา
     const label = document.createElement("label");
     label.className = "mark-read";
-    label.innerHTML = `<input type="checkbox" data-key="${key}"><span class="off">ทำเครื่องหมายว่าอ่านหัวข้อ ${no} แล้ว</span><span class="on">อ่านหัวข้อ ${no} แล้ว</span>`;
+    label.innerHTML = `
+      <span class="end"><small>จบหัวข้อ ${no}</small>${rest.join(" ")}</span>
+      <span class="tick"><input type="checkbox" data-key="${key}"><span class="off">อ่านจบแล้ว กดติ๊ก</span><span class="on">อ่านแล้ว</span></span>`;
     sec.appendChild(label);
     return { key, sec, box: label.querySelector("input"), toc: document.querySelector(`.mini-toc a[href="#s${i + 1}"]`) };
   }).filter(Boolean);
