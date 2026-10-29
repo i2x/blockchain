@@ -13,7 +13,13 @@
 
 // ช่องติ๊ก "อ่านหัวข้อนี้แล้ว" ท้ายแต่ละหัวข้อ และเครื่องหมายในกล่อง "ในบทนี้"
 // ใช้สถานะชุดเดียวกับสารบัญ ติ๊กในหน้านี้แล้วสารบัญจะเห็นด้วย
+//
+// เก็บใน localStorage key เดียวกับ index.html: "chXX-i" โดย i เริ่มที่ 0 และตรงกับ <section id="s{i+1}">
+// ฟังก์ชันอ่าน/เขียนอยู่ในไฟล์นี้เอง ไม่ย้ายไป toc.js เพราะเบราว์เซอร์อาจยังใช้ toc.js รุ่นเก่าจาก cache
 (function () {
+  const CHECK_KEY = "bc-final-checked";
+  const loadChecked = () => { try { return JSON.parse(localStorage.getItem(CHECK_KEY)) || {}; } catch (e) { return {}; } };
+  const saveChecked = (c) => { try { localStorage.setItem(CHECK_KEY, JSON.stringify(c)); } catch (e) {} };
   const id = document.body.dataset.chapter;
   const { current } = findNeighbors(id);
   if (!current) return;
